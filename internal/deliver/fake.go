@@ -19,20 +19,24 @@ type FakeForge struct {
 	Err       error // returned by every call when set
 	Labels    map[int][]string
 	Reviewers map[int][]string
-	Merges    map[int]string // auto-merge method requested per PR
-	CreateErr error          // returned by the next CreatePR, once
-	Peak      int            // the most PRs open at once
+	Merges    map[int]string     // auto-merge method requested per PR
+	CreateErr error              // returned by the next CreatePR, once
+	Peak      int                // the most PRs open at once
+	CI        map[string]core.CI // what CI made of a commit, by sha; none when missing
 
 	mu       sync.Mutex
 	prs      []*core.PR
 	comments map[int][]core.Comment
 	closer   map[int]string
 	nextID   int64
+	issues   []*core.Issue
 }
 
 var (
-	_ core.Forge = (*FakeForge)(nil)
-	_ Closer     = (*FakeForge)(nil)
+	_ core.Forge   = (*FakeForge)(nil)
+	_ Closer       = (*FakeForge)(nil)
+	_ core.Checks  = (*FakeForge)(nil)
+	_ core.Tracker = (*FakeForge)(nil)
 )
 
 // tendLogin is the account tend writes as on the fake forge.
@@ -44,6 +48,7 @@ func NewFake(owner, name, base string) *FakeForge {
 		Labels:    map[int][]string{},
 		Reviewers: map[int][]string{},
 		Merges:    map[int]string{},
+		CI:        map[string]core.CI{},
 		comments:  map[int][]core.Comment{},
 		closer:    map[int]string{},
 	}
@@ -284,4 +289,70 @@ func (f *FakeForge) find(n int) *core.PR {
 		return nil
 	}
 	return f.prs[n-1]
+}
+
+func (f *FakeForge) Checks(ctx context.Context, sha string) (core.CI, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return core.CI{}, f.Err
+	}
+	if ci, ok := f.CI[sha]; ok {
+		return ci, nil
+	}
+	return core.CI{State: "none"}, nil
+}
+
+func (f *FakeForge) FindIssue(ctx context.Context, marker string) (*core.Issue, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	for i := len(f.issues) - 1; i >= 0; i-- {
+		if strings.Contains(f.issues[i].Body, marker) {
+			res := *f.issues[i]
+			return &res, nil
+		}
+	}
+	return nil, nil
+}
+
+func (f *FakeForge) CreateIssue(ctx context.Context, title, body string, labels []string) (*core.Issue, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	is := &core.Issue{Number: 1000 + len(f.issues), Title: title, Body: body, Open: true}
+	f.issues = append(f.issues, is)
+	res := *is
+	return &res, nil
+}
+
+func (f *FakeForge) EditIssue(ctx context.Context, number int, body string, open bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return f.Err
+	}
+	for _, is := range f.issues {
+		if is.Number == number {
+			is.Body, is.Open = body, open
+			return nil
+		}
+	}
+	return fmt.Errorf("fake forge: no issue #%d", number)
+}
+
+// Issues returns copies of every issue in creation order. Their numbers
+// start at 1000, apart from the PRs'.
+func (f *FakeForge) Issues() []core.Issue {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	res := make([]core.Issue, len(f.issues))
+	for i, is := range f.issues {
+		res[i] = *is
+	}
+	return res
 }

@@ -21,7 +21,8 @@ func TestChangeID(t *testing.T) {
 		{"one image on two lines", Change{Deps: []Dep{{Ecosystem: Docker, Name: "library/node", Line: 1}, {Ecosystem: Docker, Name: "library/node", Line: 7}}, To: "24-alpine"}, "docker/library/node@24-alpine"},
 		{"one package in two manifests", Change{Deps: []Dep{dep(Npm, "stripe"), dep(Npm, "stripe")}, To: "16.1.0"}, "npm/stripe@16.1.0"},
 		{"no deps keeps id", Change{ID: "npm/moment@"}, "npm/moment@"},
-		{"tidy whatever its deps", Change{Kind: Tidy, Deps: []Dep{dep(Npm, "left-pad")}}, "tidy-up"},
+		{"the first PR whatever its deps", Change{Kind: First, Deps: []Dep{dep(Npm, "left-pad")}}, "tidy-up"},
+		{"a later stage", Change{ID: StageID(3), Kind: First}, "catch-up-3"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,5 +79,16 @@ func TestSubject(t *testing.T) {
 		if got := TargetOf(tt.in); got != tt.target {
 			t.Errorf("TargetOf(%s) = %q", tt.in, got)
 		}
+	}
+}
+
+func TestStageOf(t *testing.T) {
+	for id, want := range map[string]int{"catch-up-2": 2, "catch-up-4": 4, FirstID: 0, "catch-up-": 0, "catch-up-x": 0, "npm/catch-up-2@1.0.0": 0} {
+		if got := StageOf(id); got != want {
+			t.Errorf("StageOf(%q) = %d, want %d", id, got, want)
+		}
+	}
+	if !CatchUp(FirstID) || !CatchUp(StageID(2)) || CatchUp("npm/a@1.0.0") {
+		t.Error("CatchUp")
 	}
 }

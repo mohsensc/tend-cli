@@ -357,6 +357,6 @@ func lockEngines(p, from, to string) error {
 
 func (toolchain) Commands(root string, m core.Manifest) core.Commands { return core.Commands{} }
 
-func (toolchain) Traits() core.Traits { return core.Traits{} }
+func (toolchain) Traits() core.Traits { return core.Traits{Tooling: true} }
 
 func (toolchain) Imports(d core.Dep) []string { return nil }

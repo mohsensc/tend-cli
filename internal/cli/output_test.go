@@ -33,21 +33,23 @@ func TestSubjectWithoutDeps(t *testing.T) {
 	}
 }
 
-// check shows the tidy-up as what it would do, not as a dep and a target.
-func TestTidyLine(t *testing.T) {
+// check shows the first PR as what it would do, not as a dep and a target.
+func TestFirstLine(t *testing.T) {
 	d := core.Dep{Ecosystem: core.Npm, Name: "left-pad", Version: "1.3.0"}
 	open := &core.PR{Number: 1, Body: `<!-- tend id="tidy-up" base="abc" rev="1" -->`}
+	api := &core.APIChange{Provider: "stripe"}
 	tests := []struct {
-		c    core.Cleanup
+		b    core.Batch
 		open *core.PR
 		want string
 	}{
-		{core.Cleanup{Unused: []core.Dep{d, d, d}, Moves: []core.Change{{}}, Kept: []core.Aside{{}}}, nil, "remove 3 unused · move off 1 deprecated · 1 to look at"},
-		{core.Cleanup{Left: []core.Aside{{}, {}}}, open, "2 to look at · open PR #1"},
-		{core.Cleanup{}, nil, "nothing to tidy; adds tend.yml"},
+		{core.Batch{Unused: []core.Dep{d, d, d}, Changes: []core.Change{{Kind: core.Security}, {Kind: core.Security}, {Kind: core.Deprecation, API: api}, {Kind: core.Deprecation}}, Kept: []core.Aside{{}}},
+			nil, "fix 2 security · 1 API · move off 1 deprecated · remove 3 unused · 1 to look at"},
+		{core.Batch{Next: []core.Later{{}, {}}}, open, "2 in later stages · open PR #1"},
+		{core.Batch{}, nil, "nothing to catch up on; adds tend.yml"},
 	}
 	for _, tt := range tests {
-		ch := core.Change{ID: core.TidyID, Kind: core.Tidy, Deps: []core.Dep{d}, Cleanup: &tt.c}
+		ch := core.Change{ID: core.FirstID, Kind: core.First, Deps: []core.Dep{d}, Batch: &tt.b}
 		if got := subject(&ch) + "|" + target(&ch) + "|" + detail(&ch, plan.OpenID(tt.open, nil), tt.open); got != "first PR||"+tt.want {
 			t.Errorf("line = %q, want %q", got, tt.want)
 		}

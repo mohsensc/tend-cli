@@ -12,9 +12,7 @@
 
 {{.}}
 {{- end}}
-{{- with .Changed}}
-
-### What changed
+{{- with .Batch}}
 
 {{.}}
 {{- end}}
@@ -50,4 +48,4 @@
 {{- end}}
 
 <sub>{{.Footer}}</sub>
-<!-- tend id="{{.ID}}" base="{{.Base}}" rev="{{.Rev}}"{{with .Tidy}} tidy="{{.}}"{{end}} -->
+<!-- tend id="{{.ID}}" base="{{.Base}}" rev="{{.Rev}}"{{with .Due}} tidy="{{.}}"{{end}}{{with .Stage}} stage="{{.}}"{{end}} -->

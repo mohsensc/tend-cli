@@ -3,6 +3,7 @@ package api
 import (
 	_ "embed"
 	"slices"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -19,6 +20,7 @@ type SDK struct {
 
 type Provider struct {
 	Name      string            `yaml:"name"`
+	Title     string            `yaml:"title"` // the name as the provider writes it: "GitHub"
 	Hosts     []string          `yaml:"hosts"`
 	Spec      string            `yaml:"spec"`      // URL, or a path relative to the repo root
 	Changelog string            `yaml:"changelog"` // RSS, Atom or HTML page, for a provider without a spec
@@ -35,6 +37,19 @@ func Catalog() []Provider {
 		panic("api: providers.yml: " + err.Error())
 	}
 	return res
+}
+
+var catalog = sync.OnceValue(Catalog)
+
+// Title is the name a provider goes by in a PR: the catalog's spelling, or the
+// name as tend.yml gives it.
+func Title(name string) string {
+	for _, p := range catalog() {
+		if p.Name == name && p.Title != "" {
+			return p.Title
+		}
+	}
+	return name
 }
 
 // Merge applies the apis entries of tend.yml to the catalog: an entry with a

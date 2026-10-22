@@ -208,6 +208,14 @@ func TestInstallScript(t *testing.T) {
 		})
 	}
 
+	t.Run("the newest of a major still uploading", func(t *testing.T) {
+		fx := newInstallFixture(t)
+		fx.add(t, "v1.10.0").noSig = true
+		fx.add(t, "v1.9.5")
+		fx.start(t)
+		runInstall(t, fx, []string{"GITHUB_ACTION_REF=v1"}, "ok", "1.9.5")
+	})
+
 	t.Run("token goes to the API and not to downloads", func(t *testing.T) {
 		fx := newInstallFixture(t)
 		fx.add(t, "v1.2.0")

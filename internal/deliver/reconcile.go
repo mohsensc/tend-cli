@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/plan"
 	"github.com/mohsensc/tend-cli/internal/state"
 )
 
@@ -87,6 +88,9 @@ func finish(ctx context.Context, forge core.Forge, st *state.State, pr *core.PR)
 		s := st.Seen[o.ID]
 		s.Verdict = "delivered"
 		st.Seen[o.ID] = s
+		if core.CatchUp(o.ID) {
+			st.Stage = max(st.Stage, o.Stage, StageOf(pr.Body))
+		}
 		st.Open = nil
 		return nil
 	}
@@ -108,6 +112,11 @@ func finish(ctx context.Context, forge core.Forge, st *state.State, pr *core.PR)
 		st.Parked = map[string]state.Parked{}
 	}
 	st.Parked[o.ID] = state.Parked{PR: o.PR, Reason: "rejected", To: core.TargetOf(o.ID), At: now()}
+	// A later catch-up PR closed unmerged ends the catch-up: what it held
+	// comes back one change at a time.
+	if core.StageOf(o.ID) > 0 {
+		st.Stage = plan.Last
+	}
 	st.Open = nil
 	return nil
 }

@@ -78,6 +78,7 @@
         {
           "detail": "Stay on 1.4.0 and have tend stop proposing 2.0.0.\n\nThis goes into tend.yml:\n\n```yaml\nignore:\n  - name: \"@fixture/pay\"\n    versions: [\">=2.0.0\"]\n    reason: staying on 1.4.0\n```",
           "safe": false,
+          "stay": true,
           "title": "Pin to 1.4.0 and ignore",
           "to": "1.4.0"
         }

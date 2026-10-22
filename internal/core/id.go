@@ -2,6 +2,7 @@ package core
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -13,10 +14,13 @@ import (
 //	api:          api/<provider>/<METHOD> <path>[#<field>]
 //
 // A group change carries its group name in c.ID; when it has none yet, the
-// name is the longest common prefix of the dep names. A tidy change is TidyID.
+// name is the longest common prefix of the dep names. The first PR is FirstID.
 func ChangeID(c *Change) string {
-	if c.Kind == Tidy {
-		return TidyID
+	if c.Kind == First {
+		if c.ID != "" && StageOf(c.ID) > 0 {
+			return c.ID
+		}
+		return FirstID
 	}
 	if c.API != nil {
 		a := c.API
@@ -39,8 +43,25 @@ func ChangeID(c *Change) string {
 	return d.Ecosystem + "/" + d.Name + "@" + c.To
 }
 
-// TidyID is the id of tend's first PR on a repo, whatever it clears out.
-const TidyID = "tidy-up"
+// FirstID is the id of tend's first PR on a repo, whatever it carries. It
+// keeps the name the first PR had when it only tidied up, so a first PR an
+// earlier tend opened is updated in place.
+const FirstID = "tidy-up"
+
+// StageID is the id of a catch-up PR after the first, for stage k.
+func StageID(k int) string { return "catch-up-" + strconv.Itoa(k) }
+
+// StageOf is the stage a later catch-up PR's id names, 0 for any other id.
+func StageOf(id string) int {
+	n, err := strconv.Atoi(strings.TrimPrefix(id, "catch-up-"))
+	if err != nil || !strings.HasPrefix(id, "catch-up-") || n < 1 {
+		return 0
+	}
+	return n
+}
+
+// CatchUp reports whether id is a catch-up PR's, the first or a later one.
+func CatchUp(id string) bool { return id == FirstID || StageOf(id) > 0 }
 
 // Names lists the packages a change moves, each once, in the order of its
 // deps. One package written in two manifests, or on two lines of one, is one

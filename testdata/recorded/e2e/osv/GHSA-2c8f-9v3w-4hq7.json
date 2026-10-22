@@ -1,0 +1,14 @@
+{
+  "id": "GHSA-2c8f-9v3w-4hq7",
+  "summary": "Path traversal in pack",
+  "details": "pack keeps ../ in the names it writes, so an archive can write outside the directory it is unpacked into. 1.1.0 strips it.",
+  "published": "2026-10-17T12:00:00Z",
+  "modified": "2026-10-17T12:00:00Z",
+  "database_specific": {"severity": "HIGH"},
+  "affected": [
+    {
+      "package": {"name": "@fixture/archive", "ecosystem": "npm"},
+      "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.1.0"}]}]
+    }
+  ]
+}

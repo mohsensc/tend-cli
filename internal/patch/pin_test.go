@@ -91,3 +91,40 @@ func TestPinWholePackage(t *testing.T) {
 		t.Errorf("tend.yml:\n%s", got)
 	}
 }
+
+// The baseline's line goes after the project's own test lines, into the
+// list tend.yml has or a new one, and every other line stays.
+func TestAddTest(t *testing.T) {
+	line := "node --test test/tend/smoke.js"
+	tests := []struct {
+		name, in, want string
+		own            []string
+	}{
+		{"no file", "", "verify:\n  test:\n    - node --test test/tend/smoke.js\n", nil},
+		{"own lines", "cooldown: 5d\n", "cooldown: 5d\nverify:\n  test:\n    - npm test\n    - node --test test/tend/smoke.js\n", []string{"npm test"}},
+		{"verify without test", "verify:\n  timeout: 30m\n# done\n", "verify:\n  test:\n    - node --test test/tend/smoke.js\n  timeout: 30m\n# done\n", nil},
+		{"a test list", "verify:\n  test:\n    - npm test\n  timeout: 30m\n", "verify:\n  test:\n    - npm test\n    - node --test test/tend/smoke.js\n  timeout: 30m\n", []string{"npm test"}},
+		{"a line that needs quotes", "", "verify:\n  test:\n    - '- node --test x.js'\n", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := line
+			if tt.name == "a line that needs quotes" {
+				l = "- node --test x.js"
+			}
+			got, err := addTest([]byte(tt.in), tt.own, l)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("got\n%s\nwant\n%s", got, tt.want)
+			}
+			if _, err := config.Parse(got); err != nil {
+				t.Errorf("does not parse: %v", err)
+			}
+		})
+	}
+	if _, err := addTest([]byte("verify: {test: [npm test]}\n"), nil, line); err == nil {
+		t.Error("an inline verify was rewritten")
+	}
+}

@@ -12,9 +12,9 @@
 
 ### Touched in this repo
 
-- `src/billing.js:12` `return pay.charges.create({ amount, currency: 'usd', customer })` → `return pay.paymentIntents.create({ amount, currency: 'usd', customer })`
-- `src/billing.js:20` `return pay.charges.retrieve(id)` → `return pay.paymentIntents.retrieve(id)`
-- `package-lock.json`, `package.json`
+- `src/billing.js:12` `return pay.charges.create({ amount, currency: 'usd', customer })`
+- `src/billing.js:20` `return pay.charges.retrieve(id)`
+- `tend.yml`
 
 ### Proof
 
@@ -32,18 +32,16 @@
 
 ### Vetting
 
-- scope: 3 files, all explained by this change
-- symbols: 2/2 changed calls resolve in @fixture/pay@2.0.0 typings
-- leftovers: no remaining references to `charges.`
-- lockfile: only @fixture/pay changed
-- debug: nothing added
-- dead: nothing left unreferenced
-- not applicable: fields, comments, question
+- scope: 1 file, explained by this change
+- symbols: 2/2 calls resolve in @fixture/pay@1.4.0 typings
+- leftovers: not run: the patch stays on the version in use
+- question: not run: no model configured
+- not applicable: fields, lockfile, debug, comments, dead
 
 ### Options
 
-1. **Apply the rename hinted by the deprecation notice (charges.* -> paymentIntents.*)** (not mechanical) — Move to @fixture/pay 2.0.0 and rename the calls the notice names. The notice is prose, not a migration guide, so the proof decides whether the rename is all it takes. Applied in this PR.
-2. **Pin to 1.4.0 and ignore** — Stay on 1.4.0 and have tend stop proposing 2.0.0. `tend apply 2`
+1. **Apply the rename hinted by the deprecation notice (charges.* -> paymentIntents.*)** (not mechanical) — Move to @fixture/pay 2.0.0 and rename the calls the notice names. The notice is prose, not a migration guide, so the proof decides whether the rename is all it takes. `tend apply 1`
+2. **Pin to 1.4.0 and ignore** — Stay on 1.4.0 and have tend stop proposing 2.0.0. Applied in this PR.
 
    This goes into tend.yml:
 

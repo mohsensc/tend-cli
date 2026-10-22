@@ -535,18 +535,21 @@ func lockTool(t *testing.T, name, from, to string) func(root string) []string {
 	}
 }
 
-// A targeted update that locks anything but the chosen release fails the
-// bump and leaves the files as they were.
+// A targeted update may lock the chosen release or a later one of its
+// major, and says which; anything else fails the bump and leaves the files
+// as they were.
 func TestNpmTargetedLockChecked(t *testing.T) {
 	tests := []struct {
 		fixture, tool, to, locks string
-		err                      string
+		landed, err              string
 	}{
-		{"npm/lock-v3", "npm", "2.1.4", "2.1.4", ""},
-		{"npm/lock-v3", "npm", "2.1.4", "2.1.9", "locked ms at 2.1.9, not 2.1.4"},
-		{"npm/lock-v3", "npm", "2.1.4", "2.1.3", "did not lock ms at 2.1.4"},
-		{"npm/pnpm-v9", "pnpm", "2.1.4", "2.1.9", "locked ms at 2.1.9, not 2.1.4"},
-		{"npm/yarn-berry", "yarn", "2.1.4", "2.1.9", "locked ms at 2.1.9, not 2.1.4"},
+		{"npm/lock-v3", "npm", "2.1.4", "2.1.4", "", ""},
+		{"npm/lock-v3", "npm", "2.1.4", "2.1.9", "2.1.9", ""},
+		{"npm/lock-v3", "npm", "2.1.4", "3.0.0", "", "locked ms at 3.0.0, not 2.1.4 or a later 2.x"},
+		{"npm/lock-v3", "npm", "2.1.4", "2.1.3", "", "did not lock ms at 2.1.4 or a later 2.x"},
+		{"npm/pnpm-v9", "pnpm", "2.1.4", "2.1.9", "2.1.9", ""},
+		{"npm/pnpm-v9", "pnpm", "2.1.4", "3.0.0", "", "locked ms at 3.0.0, not 2.1.4 or a later 2.x"},
+		{"npm/yarn-berry", "yarn", "2.1.4", "2.1.9", "2.1.9", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture+"/"+tt.locks, func(t *testing.T) {
@@ -556,8 +559,8 @@ func TestNpmTargetedLockChecked(t *testing.T) {
 			before := treeSnapshot(t, root)
 			res, err := (npm{}).Bump(context.Background(), root, d, tt.to, "")
 			if tt.err == "" {
-				if err != nil || !res.Locked {
-					t.Fatalf("bump = %+v, %v", res, err)
+				if err != nil || !res.Locked || res.Landed != tt.landed {
+					t.Fatalf("bump = %+v, %v; want landed %q", res, err, tt.landed)
 				}
 				return
 			}

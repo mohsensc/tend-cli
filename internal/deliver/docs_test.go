@@ -24,7 +24,7 @@ func repoFile(t *testing.T, rel string) string {
 
 func TestAnatomyShowsTheGoldenBodies(t *testing.T) {
 	doc := repoFile(t, "docs/pr-anatomy.md")
-	for _, name := range []string{"breaking_bump_model", "decision", "tidy"} {
+	for _, name := range []string{"breaking_bump_model", "decision", "tidy", "catch_up_stage"} {
 		body := strings.TrimRight(repoFile(t, "internal/deliver/testdata/"+name+".golden.md"), "\n")
 		if !strings.Contains(doc, body) {
 			t.Errorf("docs/pr-anatomy.md does not contain testdata/%s.golden.md; regenerate the example", name)

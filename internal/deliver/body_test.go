@@ -295,37 +295,106 @@ diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
 			name: "tidy",
 			in: BodyInput{
 				Change: &core.Change{
-					ID: core.TidyID, Kind: core.Tidy,
-					Cleanup: &core.Cleanup{
+					ID: core.FirstID, Kind: core.First,
+					Batch: &core.Batch{
+						Stage: 1,
+						Changes: []core.Change{
+							{
+								ID: "npm/lodash@4.17.21", Kind: core.Security, Severity: "high", Level: "patch",
+								Deps: []core.Dep{dep("npm", "lodash", "4.17.20")}, To: "4.17.21",
+								Evidence: []core.Evidence{{Source: "osv", Title: "GHSA-35jh-r3h4-6jhm Command injection in lodash"}},
+							},
+							{
+								ID: "npm/tar@7.5.21", Kind: core.Security, Severity: "moderate", Level: "patch",
+								Deps: []core.Dep{{Ecosystem: "npm", Name: "tar", Version: "7.5.20", Manifest: core.Manifest{Path: "package.json", Lock: "package-lock.json", Tool: "npm"}}}, To: "7.5.21",
+								Evidence: []core.Evidence{{Source: "osv", Title: "GHSA-8qq5-rm4j-mr97 Arbitrary file overwrite in tar"}},
+							},
+							{
+								ID: "go/golang.org/x/net@0.38.0", Kind: core.Security, Severity: "moderate", Level: "minor",
+								Deps: []core.Dep{{Ecosystem: "go", Name: "golang.org/x/net", Version: "v0.36.0", Direct: true, Manifest: core.Manifest{Path: "go.mod"}}}, To: "v0.38.0",
+								Evidence: []core.Evidence{{Source: "osv", Title: "GO-2025-3595 Cross-site scripting in golang.org/x/net/html"}},
+							},
+							{
+								ID: "api/stripe/GET /v1/charges#source", Kind: core.Deprecation,
+								API:      &core.APIChange{Provider: "stripe", Method: "GET", Path: "/v1/charges", Field: "source", What: "response field deprecated"},
+								Evidence: []core.Evidence{{Source: "openapi", Title: "source is deprecated"}},
+							},
+							{
+								ID: "npm/stripe@16.0.0", Kind: core.Deprecation,
+								Deps: []core.Dep{dep("npm", "stripe", "14.2.0")}, To: "16.0.0", Sites: stripeSites,
+								Evidence: []core.Evidence{{Source: "registry", Title: "stripe 14.2.0 is deprecated", Text: "14.x is deprecated: charges.* was replaced by paymentIntents.*"}},
+							},
+						},
 						Unused: []core.Dep{
 							{Ecosystem: "npm", Name: "@acme/colors", Version: "1.2.0", Direct: true, Manifest: core.Manifest{Path: "package.json"}},
 							{Ecosystem: "npm", Name: "left-pad", Version: "1.3.0", Direct: true, Manifest: core.Manifest{Path: "package.json"}},
 						},
-						Moves: []core.Change{{
-							ID: "npm/stripe@16.0.0", Kind: core.Deprecation,
-							Deps: []core.Dep{dep("npm", "stripe", "14.2.0")}, To: "16.0.0", Sites: stripeSites,
-							Evidence: []core.Evidence{{Source: "registry", Title: "stripe 14.2.0 is deprecated", Text: "14.x is deprecated: charges.* was replaced by paymentIntents.*"}},
-						}},
 						Kept: []core.Aside{
 							{Dep: core.Dep{Ecosystem: "npm", Name: "eslint-plugin-acme", Version: "2.0.0", Manifest: core.Manifest{Path: "package.json"}},
 								Why: "a plugin eslint loads by a name its config gives"},
 							{Dep: core.Dep{Ecosystem: "npm", Name: "chalk", Version: "5.3.0", Manifest: core.Manifest{Path: "package.json"}}, Why: "with it removed, `npm test` fails (exit 1)"},
 						},
-						Left: []core.Aside{{Dep: dep("npm", "moment", "2.30.1"), Why: "No model is configured to move the 3 call sites.",
-							Options: []core.Option{{Title: "Migrate to `dayjs`"}, {Title: "Pin to 2.30.1 and ignore"}}}},
+						Next: []core.Later{
+							{Change: core.Change{
+								ID: "toolchain/nodejs@22.20.0", Kind: core.Deprecation,
+								Deps: []core.Dep{{Ecosystem: "toolchain", Name: "nodejs", Version: "18.20.4", Direct: true, Manifest: core.Manifest{Path: ".nvmrc"}}}, To: "22.20.0",
+								Evidence: []core.Evidence{{Source: "eol", Title: "Node.js 18 reached end of life on 2025-04-30"}},
+							}, Stage: 2},
+							{Change: core.Change{ID: "npm/vitest@3.2.4", Kind: core.Breaking, Level: "major", Deps: []core.Dep{dep("npm", "vitest", "1.6.0")}, To: "3.2.4"}, Stage: 3},
+							{Change: core.Change{ID: "npm/axios@1.12.0", Kind: core.Security, Level: "major", Deps: []core.Dep{dep("npm", "axios", "0.27.2")}, To: "1.12.0"},
+								Why: "with it in the batch, `npm test` fails (exit 1)", Stage: 2},
+							{Change: core.Change{ID: "npm/moment@", Kind: core.Deprecation, Deps: []core.Dep{dep("npm", "moment", "2.30.1")},
+								Options: []core.Option{{Title: "Switch to dayjs", ToName: "dayjs", To: "1.11.13"}, {Title: "Switch to luxon", ToName: "luxon", To: "3.7.2"}, {Title: "Pin to 2.30.1 and ignore", To: "2.30.1"}}},
+								Stage: 4},
+							{Change: core.Change{ID: "npm/uuid@9.0.1", Kind: core.Deprecation, Deps: []core.Dep{dep("npm", "uuid", "3.4.0")}, To: "9.0.1"},
+								Why: "making it changes no files"},
+						},
+						Baseline: &core.Baseline{
+							Why:   "there is no test command",
+							Files: []string{"test/tend/characterization.js", "test/tend/smoke.js"}, Modules: 4, Model: true,
+							Command: "node --test test/tend/characterization.js test/tend/smoke.js",
+						},
 					},
 				},
-				Patch: &core.Patch{Files: []string{"package-lock.json", "package.json", "src/billing.js"}, Diff: stripeDiff, Model: true,
-					Note: "4 steps: 1 read, 2 edits, 1 run; the commands passed the one time they ran"},
+				Patch: &core.Patch{Files: []string{".nvmrc", "go.mod", "go.sum", "package-lock.json", "package.json", "src/billing.js"}, Diff: stripeDiff, Model: true,
+					Note:   "4 steps: 1 read, 2 edits, 1 run; the commands passed the one time they ran",
+					Landed: map[string]string{"npm/tar": "7.5.22"}},
 				Proof:   npmProof,
-				Vetting: pass("scope: 3 files, all explained by this change", "symbols: 2/2 changed calls resolve", "lockfile", "debug", "comments"),
+				Vetting: pass("scope: 6 files, all explained by this change", "symbols: 2/2 changed calls resolve", "lockfile", "debug", "comments"),
+				Base:    "abc1234def", BaseRef: "main", Rev: 1,
+			},
+		},
+		{
+			name: "catch_up_stage",
+			in: BodyInput{
+				Change: &core.Change{
+					ID: core.StageID(4), Kind: core.First,
+					Batch: &core.Batch{
+						Stage: 4,
+						Changes: []core.Change{
+							{
+								ID: "npm/express@5.1.0", Kind: core.Breaking, Level: "major",
+								Deps: []core.Dep{dep("npm", "express", "3.21.2")}, To: "5.1.0", Steps: []string{"4.21.2"}, Via: []string{"4.21.2"},
+							},
+							{
+								ID: "npm/request@", Kind: core.Deprecation, Deps: []core.Dep{dep("npm", "request", "2.88.2")},
+								Options: []core.Option{{Title: "Switch to undici", ToName: "undici", To: "7.16.0"}, {Title: "Switch to axios", ToName: "axios", To: "1.12.2"}},
+								Choice:  &core.Choice{N: 2, Why: "the project already depends on axios"},
+								Sites:   []core.Site{{File: "src/client.js", Line: 3, Chain: []string{"request", "get"}, Text: "request.get(url, cb)"}},
+							},
+						},
+					},
+				},
+				Patch:   &core.Patch{Files: []string{"package-lock.json", "package.json", "src/app.js", "src/client.js"}, Model: true},
+				Proof:   npmProof,
+				Vetting: pass("scope: 4 files, all explained by this change"),
 				Base:    "abc1234def", BaseRef: "main", Rev: 1,
 			},
 		},
 		{
 			name: "tidy_welcome",
 			in: BodyInput{
-				Change:  &core.Change{ID: core.TidyID, Kind: core.Tidy, Cleanup: &core.Cleanup{}},
+				Change:  &core.Change{ID: core.FirstID, Kind: core.First, Batch: &core.Batch{}},
 				Patch:   &core.Patch{Files: []string{"tend.yml"}},
 				Proof:   &core.Proof{Base: passRun("abc1234", ok("go test ./...", 4, "")), Patched: passRun("bbb2222", ok("go test ./...", 4, "ok  example.com/app"))},
 				Vetting: pass("scope: 1 file, explained by this change"),
@@ -360,11 +429,13 @@ diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
 // The welcome is plain: a few sentences, no exclamation marks, no emoji, and
 // every way to steer tend named.
 func TestWelcome(t *testing.T) {
-	for _, c := range []*core.Cleanup{
+	for _, c := range []*core.Batch{
 		{},
 		{Unused: []core.Dep{{Name: "a"}}},
-		{Unused: []core.Dep{{Name: "a"}, {Name: "b"}}, Moves: []core.Change{{}}, Kept: []core.Aside{{}}},
-		{Left: []core.Aside{{}}},
+		{Unused: []core.Dep{{Name: "a"}, {Name: "b"}}, Changes: []core.Change{{Kind: core.Security}, {Kind: core.Deprecation}}, Kept: []core.Aside{{}}},
+		{Next: []core.Later{{}}},
+		{Stage: 1, Changes: []core.Change{{Kind: core.Security}}, Next: []core.Later{{Stage: 2}, {Stage: 4}}},
+		{Stage: 2, Next: []core.Later{{Stage: 3}}},
 	} {
 		w := welcome(c)
 		if n := strings.Count(w, ". ") + 1; n < 3 || n > 5 {
@@ -384,7 +455,7 @@ func TestWelcome(t *testing.T) {
 			}
 		}
 		// It never says it found nothing and then lists what it found.
-		if len(c.Kept)+len(c.Left) > 0 && strings.Contains(w, "found nothing to tidy up") {
+		if len(c.Kept)+len(c.Next) > 0 && strings.Contains(w, "found nothing to catch up on") {
 			t.Errorf("welcome contradicts itself:\n%s", w)
 		}
 	}
@@ -410,6 +481,7 @@ quoted
 		{"empty", "", "", "", 0, false},
 		{"bad rev", `<!-- tend id="x" base="y" rev="one" -->`, "", "", 0, false},
 		{"tidy-up owed", `<!-- tend id="npm/a@1.0.1" base="y" rev="2" tidy="due" -->`, "npm/a@1.0.1", "y", 2, true},
+		{"a catch-up stage", `<!-- tend id="catch-up-3" base="y" rev="1" stage="3" -->`, "catch-up-3", "y", 1, true},
 		{"other comment", `<!-- something else -->`, "", "", 0, false},
 	}
 	for _, tc := range tests {
@@ -422,16 +494,29 @@ quoted
 	}
 }
 
-func TestTidyDueMarker(t *testing.T) {
+func TestStageOfMarker(t *testing.T) {
+	for body, want := range map[string]int{
+		`<!-- tend id="tidy-up" base="y" rev="1" stage="1" -->`:    1,
+		`<!-- tend id="catch-up-3" base="y" rev="2" stage="3" -->`: 3,
+		`<!-- tend id="tidy-up" base="y" rev="1" -->`:              0,
+		"no marker": 0,
+	} {
+		if got := StageOf(body); got != want {
+			t.Errorf("StageOf(%q) = %d, want %d", body, got, want)
+		}
+	}
+}
+
+func TestFirstDueMarker(t *testing.T) {
 	ch := &core.Change{ID: "npm/a@1.0.1", Kind: core.Security, Deps: []core.Dep{{Ecosystem: "npm", Name: "a", Version: "1.0.0"}}, To: "1.0.1"}
-	body := Body(BodyInput{Change: ch, Base: "abc", TidyDue: true})
-	if !strings.Contains(body, `<!-- tend id="npm/a@1.0.1" base="abc" rev="1" tidy="due" -->`) || !TidyDue(body) {
-		t.Errorf("marker of a PR ahead of the tidy-up:\n%s", body)
+	body := Body(BodyInput{Change: ch, Base: "abc", FirstDue: true})
+	if !strings.Contains(body, `<!-- tend id="npm/a@1.0.1" base="abc" rev="1" tidy="due" -->`) || !FirstDue(body) {
+		t.Errorf("marker of a PR ahead of the first PR:\n%s", body)
 	}
 	if id, _, _, ok := ParseMarker(body); !ok || id != "npm/a@1.0.1" {
 		t.Errorf("ParseMarker = %q, %v", id, ok)
 	}
-	if body := Body(BodyInput{Change: ch, Base: "abc"}); TidyDue(body) || !strings.Contains(body, `rev="1" -->`) {
+	if body := Body(BodyInput{Change: ch, Base: "abc"}); FirstDue(body) || !strings.Contains(body, `rev="1" -->`) {
 		t.Errorf("marker of any other PR:\n%s", body)
 	}
 }

@@ -1,0 +1,6 @@
+{
+  "name": "axios",
+  "version": "1.12.2",
+  "main": "index.js",
+  "license": "MIT"
+}

@@ -1,0 +1,10 @@
+diff --git a/src/app.js b/src/app.js
+--- a/src/app.js
++++ b/src/app.js
+@@ -18,5 +18,5 @@ app.get('/order', function (query) {
+ module.exports = app
+ 
+ module.exports.server = function () {
+-  return web.createServer(app)
++  return app.createServer()
+ }

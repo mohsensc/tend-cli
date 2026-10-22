@@ -262,8 +262,8 @@ func npmPlugin(name string) (tool, short string, ok bool) {
 	return "", "", false
 }
 
-// npmFacts are what a lockfile records about installed packages that a
-// tidy-up needs: the commands each installs, and which packages need it as
+// npmFacts are what a lockfile records about installed packages that the
+// first PR needs: the commands each installs, and which packages need it as
 // a peer. known is false for a lockfile that does not record peers.
 type npmFacts struct {
 	known  bool

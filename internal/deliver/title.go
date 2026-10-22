@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mohsensc/tend-cli/internal/api"
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/ver"
 )
@@ -13,9 +14,9 @@ const branchMax = 100
 // Title is the PR title and commit subject, with prefix prepended verbatim. It
 // names what the PR carries: a decision asks, a pin pins, anything else moves.
 func Title(in BodyInput, prefix string) string {
-	ch := in.Change
-	if ch.Kind == core.Tidy && ch.Cleanup != nil {
-		return prefix + tidyTitle(ch.Cleanup)
+	ch := shown(in).Change
+	if ch.Kind == core.First && ch.Batch != nil {
+		return prefix + firstTitle(ch.Batch)
 	}
 	if p := in.Patch; p != nil && p.Decision && len(ch.Options) > 0 {
 		return prefix + decide(ch)
@@ -47,9 +48,14 @@ func decide(ch *core.Change) string {
 	return "Decide: migrate off " + depName(d)
 }
 
-// picked is the option the PR carries, if the maintainer picked one.
+// picked is the option the PR carries, if the maintainer picked one or tend
+// took one by its own rule.
 func picked(in BodyInput) *core.Option {
-	if n := in.Option; n > 0 && n <= len(in.Change.Options) {
+	n := in.Option
+	if c := in.Change.Choice; n == 0 && c != nil {
+		n = c.N
+	}
+	if n > 0 && n <= len(in.Change.Options) {
 		return &in.Change.Options[n-1]
 	}
 	return nil
@@ -57,7 +63,7 @@ func picked(in BodyInput) *core.Option {
 
 // pins reports whether o keeps the version in use rather than moving off it.
 func pins(ch *core.Change, o *core.Option) bool {
-	return len(ch.Deps) > 0 && o.ToName == "" && o.Codemod == nil && o.To != "" && o.To == ch.Deps[0].Version
+	return len(ch.Deps) > 0 && (o.Stay || o.ToName == "" && o.Codemod == nil && o.To != "" && o.To == ch.Deps[0].Version)
 }
 
 func title(ch *core.Change) string {
@@ -108,7 +114,7 @@ func apiTitle(a *core.APIChange) string {
 	subject := op
 	switch {
 	case a.Field != "" && op == "":
-		subject = noun + " " + a.Field + " of the " + a.Provider + " API"
+		subject = noun + " " + a.Field + " of the " + api.Title(a.Provider) + " API"
 	case a.Field != "":
 		subject = noun + " " + a.Field + " on " + op
 	}
@@ -170,10 +176,14 @@ func groupName(ch *core.Change) string {
 }
 
 // Branch is tend/<eco>-<name>-<to>, tend/<eco>-group-<group>-<to>,
-// tend/api-<provider>-<op>, or TidyBranch for tend's first PR.
+// tend/api-<provider>-<op>, FirstBranch for tend's first PR, or
+// StageBranch for a later catch-up PR.
 func Branch(ch *core.Change) string {
-	if ch.Kind == core.Tidy {
-		return TidyBranch
+	if ch.Kind == core.First {
+		if k := core.StageOf(ch.ID); k > 0 {
+			return StageBranch(k)
+		}
+		return FirstBranch
 	}
 	if a := ch.API; a != nil {
 		op := strings.TrimSpace(strings.ToUpper(a.Method) + " " + a.Path)

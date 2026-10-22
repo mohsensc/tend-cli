@@ -1,0 +1,14 @@
+{
+  "id": "GHSA-4q9w-7h3c-5vrx",
+  "summary": "Format string injection in money",
+  "details": "money passes its input to a format string. 1.1.1 changes the output it writes.",
+  "published": "2026-10-17T12:00:00Z",
+  "modified": "2026-10-17T12:00:00Z",
+  "database_specific": {"severity": "LOW"},
+  "affected": [
+    {
+      "package": {"name": "@fixture/format", "ecosystem": "npm"},
+      "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.1.1"}]}]
+    }
+  ]
+}

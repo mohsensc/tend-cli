@@ -30,6 +30,9 @@ func (b *builder) drop(ch *core.Change) (reason, detail string) {
 		return "cooldown", fmt.Sprintf("released %s, cooldown is %s", ch.Published.UTC().Format(time.DateOnly), cfg.Cooldown)
 	}
 	if p, ok := parked(st, ch); ok {
+		if p.Reason == "reverted" {
+			return "parked", p.Detail
+		}
 		return "parked", fmt.Sprintf("#%d was closed without merging", p.PR)
 	}
 	if why := transitiveOnly(ch); why != "" {
@@ -78,8 +81,9 @@ func subjects(ch *core.Change) []core.Dep {
 	return ch.Deps
 }
 
-// parked finds a rejection of this change at the same or a newer target. A
-// preempted change is not parked: it comes back by itself.
+// parked finds a rejection of this change at the same or a newer target, a
+// maintainer's or that of the CI that made tend revert it. A preempted
+// change is not parked: it comes back by itself.
 func parked(st *state.State, ch *core.Change) (state.Parked, bool) {
 	if st == nil {
 		return state.Parked{}, false
@@ -87,7 +91,7 @@ func parked(st *state.State, ch *core.Change) (state.Parked, bool) {
 	var res state.Parked
 	found := false
 	for id, p := range st.Parked {
-		if p.Reason != "rejected" || core.Subject(id) != core.Subject(ch.ID) || ver.Less(p.To, ch.To) {
+		if p.Reason == "preempted" || core.Subject(id) != core.Subject(ch.ID) || ver.Less(p.To, ch.To) {
 			continue
 		}
 		if !found || p.PR > res.PR {
@@ -181,8 +185,9 @@ func OpenID(pr *core.PR, st *state.State) string {
 var marker = regexp.MustCompile(`<!-- tend id="([^"]+)"`)
 
 // Pick chooses what this run works on. At most one of pick and wait is set;
-// preempt is the open PR the pick displaces: a non-security PR when security
-// work arrives, or the same change at an older target.
+// preempt is the open PR the pick displaces: any other PR when the first PR
+// is due, which folds its change in, a non-security PR when security work
+// arrives, or the same change at an older target.
 func Pick(p *Plan, st *state.State) (pick *core.Change, preempt *core.PR, wait *core.PR) {
 	if len(p.Queue) == 0 {
 		return nil, nil, p.Open
@@ -197,6 +202,8 @@ func Pick(p *Plan, st *state.State) (pick *core.Change, preempt *core.PR, wait *
 	}
 	top := &p.Queue[0]
 	switch {
+	case top.Kind == core.First && id != top.ID:
+		return top, p.Open, nil
 	case top.Kind == core.Security && (open == nil || open.Kind != core.Security):
 		return top, p.Open, nil
 	case open == nil:

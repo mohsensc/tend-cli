@@ -1,0 +1,14 @@
+diff --git a/src/app.js b/src/app.js
+--- a/src/app.js
++++ b/src/app.js
+@@ -5,9 +5,7 @@ var order = require('./order')
+ 
+ var app = web()
+ 
+-app.configure(function () {
+-  app.set('name', 'legacy-shop')
+-})
++app.set('name', 'legacy-shop')
+ 
+ app.get('/health', function () {
+   return 'ok'

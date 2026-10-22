@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mohsensc/tend-cli/internal/api"
+	"github.com/mohsensc/tend-cli/internal/config"
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/deliver"
 	"github.com/mohsensc/tend-cli/internal/eco"
@@ -29,7 +30,7 @@ import (
 
 // outcome is what one run did, for the final line and for --json.
 type outcome struct {
-	Action   string        `json:"action"` // opened|updated|committed|branch|dry-run|waiting|nothing|up-to-date|unproven|moved
+	Action   string        `json:"action"` // opened|updated|committed|branch|dry-run|waiting|nothing|up-to-date|unproven|moved|reverted
 	Change   *core.Change  `json:"change"`
 	PR       *core.PR      `json:"pr"`
 	Branch   string        `json:"branch"`
@@ -88,7 +89,12 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.settleCommit(ctx)
+	if res, err := s.settleCommit(ctx); err != nil || res != nil {
+		if res != nil {
+			s.save()
+		}
+		return res, err
+	}
 	baseRef, err := s.baseName(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("forge: %w", err)
@@ -120,10 +126,7 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 		}()
 	}
 
-	r := &runner{s: s, wt: wt, baseRef: baseRef, ecos: map[string]core.Ecosystem{}}
-	for _, e := range eco.For(s.cfg) {
-		r.ecos[e.Name()] = e
-	}
+	r := &runner{s: s, wt: wt, baseRef: baseRef, ecos: ecosFor(s.cfg)}
 	// The base commit's run comes first: what the runtimes say is deprecated
 	// while the project's own commands run is one more thing to plan from.
 	p, inv, err := s.plan(ctx, wt.Dir, wt.Base, func(inv *core.Inventory) []core.Warning {
@@ -162,8 +165,18 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 	if !s.o.dryRun {
 		s.snapshot(inv)
 	}
+	s.track(ctx, p, wt.Base)
 	s.save()
 	return res, nil
+}
+
+// ecosFor is every ecosystem tend.yml turns on, by name.
+func ecosFor(cfg *config.Config) map[string]core.Ecosystem {
+	res := map[string]core.Ecosystem{}
+	for _, e := range eco.For(cfg) {
+		res[e.Name()] = e
+	}
+	return res
 }
 
 // runner carries one pass from the pick to the delivery.
@@ -179,7 +192,31 @@ type runner struct {
 	pick     int       // the option the maintainer picked, 0 for none
 	cmdAt    time.Time // when the maintainer's command this run honors was made
 	comments []core.Comment
-	slug     string // the change being worked on, for its logs
+	slug     string        // the change being worked on, for its logs
+	tests    []string      // test lines the baseline added in this run
+	floor    string        // the baseline's files as a diff, which each part is made on top of
+	cmds     core.Commands // the project's commands as the base commit has them
+}
+
+// restart puts the worktree back on its base, with the baseline this run
+// added staged on top, for another go at making a part.
+func (r *runner) restart(ctx context.Context) error {
+	if err := reset(ctx, r.wt); err != nil || r.floor == "" {
+		return err
+	}
+	if err := patch.Put(ctx, r.wt.Dir, r.floor); err != nil {
+		return err
+	}
+	_, err := gitx.Run(ctx, r.wt.Dir, "add", "-A")
+	return err
+}
+
+// detect is the project's commands in the worktree, with the test lines
+// this run's baseline added.
+func (r *runner) detect() core.Commands {
+	c := verify.Detect(r.wt.Dir, r.inv.Manifests, r.ecos, r.s.cfg.Verify)
+	c.Test = append(c.Test, r.tests...)
+	return c
 }
 
 // option takes up `tend apply N`. An option the PR does not have gets one
@@ -222,7 +259,7 @@ func (r *runner) work(ctx context.Context) (*outcome, error) {
 	case hasCmd && cmd.Verb == "retry" && wait != nil && r.fresh(cmd):
 		r.requeue(id)
 	case wait != nil && !s.o.dryRun:
-		if why := cmp.Or(plan.Stale(p, r.inv, id), s.untidy(p, id)); why != "" {
+		if why := cmp.Or(plan.Stale(p, r.inv, id), s.unwanted(p, id)); why != "" {
 			if err := deliver.Close(ctx, s.forge, wait.Number, "Closing: "+why+"."); err != nil {
 				return nil, err
 			}
@@ -307,6 +344,9 @@ func (r *runner) declined(ctx context.Context, pick *core.Change, preempt, wait 
 			break
 		}
 		s.logf("#%d for %s was closed without merging, so tend leaves it", pr.Number, pick.ID)
+		if core.StageOf(pick.ID) > 0 {
+			s.st.Stage = plan.Last
+		}
 		s.st.Parked[pick.ID] = state.Parked{PR: pr.Number, Reason: "rejected", To: pick.To, At: s.e.Now()}
 		s.st.See(pick.ID, "parked", fmt.Sprintf("#%d was closed without merging", pr.Number), s.e.Now())
 		gone := pick.ID
@@ -338,19 +378,52 @@ func (r *runner) upToDate(pick *core.Change, preempt *core.PR, cmd plan.Command,
 		return false
 	}
 	id, base, _, ok := deliver.ParseMarker(open.Body)
-	if !ok || id != pick.ID || base != r.wt.Base {
+	if !ok || id != pick.ID || base != r.wt.Base || !holds(s.st.Open, open, pick) {
 		return false
 	}
 	return !hasCmd || s.st.Open == nil || !cmd.At.After(s.st.Open.At)
 }
 
+// holds reports whether the open PR was built from every queued change pick
+// carries. The first PR is built from the whole queue, so a change queued
+// after it opened, a new advisory say, rebuilds it on the same base.
+func holds(o *state.OpenPR, open *core.PR, pick *core.Change) bool {
+	b := pick.Batch
+	if b == nil {
+		return true
+	}
+	if o == nil || o.PR != open.Number {
+		return false
+	}
+	for _, id := range built(b) {
+		if !slices.Contains(o.Holds, id) {
+			return false
+		}
+	}
+	return true
+}
+
+// built lists the queued changes a batch was built from, made or left for
+// later.
+func built(b *core.Batch) []string {
+	var res []string
+	for _, ch := range b.Changes {
+		res = append(res, ch.ID)
+	}
+	for _, l := range b.Next {
+		res = append(res, l.Change.ID)
+	}
+	return res
+}
+
 func (r *runner) change(ctx context.Context, ch *core.Change, preempt *core.PR) (*outcome, error) {
-	if ch.Kind == core.Tidy {
-		return r.tidy(ctx, ch, preempt)
+	if ch.Kind == core.First {
+		return r.batch(ctx, ch, preempt)
 	}
 	s, wt := r.s, r.wt
 	r.slug = core.Slug(ch.ID)
-	cmds := verify.Detect(wt.Dir, r.inv.Manifests, r.ecos, s.cfg.Verify)
+	cmds := r.detect()
+	r.cmds = cmds
 	nothing := len(cmds.Install)+len(cmds.Build)+len(cmds.Test) == 0
 	proof := &core.Proof{Container: s.cfg.Verify.Container, Nothing: nothing}
 	if !nothing {
@@ -363,6 +436,20 @@ func (r *runner) change(ctx context.Context, ch *core.Change, preempt *core.PR) 
 			return nil, ctx.Err()
 		}
 		return r.unproven(ch, "patch: "+err.Error()), nil
+	}
+	// Before it asks, tend tries the other ways it may take by itself: up a
+	// major at a time, then each option its rule allows.
+	if (pt.Decision || !plan.Proven(proof)) && r.pick == 0 && !nothing {
+		tried := proof.Patched
+		c, cpt, err := r.further(ctx, ch, cmds, proof)
+		if err != nil {
+			return nil, err
+		}
+		if c != nil {
+			ch, pt = c, cpt
+		} else {
+			proof.Patched = tried
+		}
 	}
 	if !pt.Decision && !nothing && !plan.Proven(proof) {
 		if !plan.Decides(ch) {
@@ -405,22 +492,42 @@ func (r *runner) change(ctx context.Context, ch *core.Change, preempt *core.PR) 
 	return r.deliver(ctx, ch, pt, proof, vt, preempt)
 }
 
-// options are how this run makes a patch: its ecosystems, index and model,
-// and for a model that calls tools, the project's commands to run as it works.
-func (r *runner) options(cmds core.Commands, proof *core.Proof) patch.Options {
+// options are how this run makes a patch for ch: its ecosystems, index and
+// model, and for a model that calls tools, the project's commands to run as
+// it works and a budget that grows with what ch moves.
+func (r *runner) options(ch *core.Change, cmds core.Commands, proof *core.Proof) patch.Options {
 	s := r.s
 	o := patch.Options{Ecos: r.ecos, Index: r.inv.Index, Model: r.model, Attempts: s.cfg.Model.Attempts, Option: r.pick, Proven: !proof.Nothing, Log: s.logf}
 	if _, ok := r.model.(model.Agent); ok && !proof.Nothing {
 		o.Commands, o.Turns, o.Tokens = cmds, s.cfg.Model.Turns, s.cfg.Model.Tokens
 		o.Transcript = filepath.Join(s.dir, "logs", r.slug, "agent.jsonl")
 		o.Prove = func(ctx context.Context, c core.Commands) (*core.Run, error) { return r.prove(ctx, c, "patched") }
+		scale(&o, shares(ch))
 	}
 	return o
 }
 
+// further tries what tend may do by itself when making ch did not pass: up
+// its steps a major at a time, then each option plan.Ranked allows. It
+// returns the change as made and its patch, with proof.Patched the run that
+// passed it, or nil with the worktree back on the base.
+func (r *runner) further(ctx context.Context, ch *core.Change, cmds core.Commands, proof *core.Proof) (*core.Change, *core.Patch, error) {
+	if len(ch.Steps) > 0 {
+		c, pt, run, why, err := r.climb(ctx, ch, cmds, proof, nil)
+		if err != nil || c != nil {
+			if c != nil {
+				proof.Patched = run
+				r.s.logf("climbed %s to %s%s", name(&part{ch: ch}), c.To, strings.TrimSuffix("; "+why, "; "))
+			}
+			return c, pt, err
+		}
+	}
+	return r.decide(ctx, ch, cmds, proof, nil)
+}
+
 // attempt applies the change and proves it, once.
 func (r *runner) attempt(ctx context.Context, ch *core.Change, cmds core.Commands, proof *core.Proof) (*core.Patch, error) {
-	o := r.options(cmds, proof)
+	o := r.options(ch, cmds, proof)
 	var last *core.Run
 	lastTree := ""
 	if o.Prove != nil {
@@ -544,7 +651,8 @@ func (r *runner) vet(ctx context.Context, ch *core.Change, pt *core.Patch, proof
 			return nil, err
 		}
 	}
-	in := vet.Input{Dir: wt.Dir, Base: wt.Base, Change: ch, Patch: pt, Proof: proof, Index: idx, Ecos: r.ecos, Model: r.model, Fetch: s.fetch}
+	in := vet.Input{Dir: wt.Dir, Base: wt.Base, Change: ch, Patch: pt, Proof: proof, Index: idx, Ecos: r.ecos, Model: r.model, Fetch: s.fetch, Option: r.pick,
+		Commands: r.cmds, Detect: r.detect}
 	if ch.API != nil {
 		in.Spec, in.Hosts = r.spec(ch.API.Provider)
 	}
@@ -563,8 +671,7 @@ func (r *runner) vet(ctx context.Context, ch *core.Change, pt *core.Patch, proof
 	}
 	if !proof.Nothing {
 		s.logf("vetting changed the patch; proving it again")
-		cmds := verify.Detect(wt.Dir, r.inv.Manifests, r.ecos, s.cfg.Verify)
-		if proof.Patched, err = r.prove(ctx, cmds, "patched"); err != nil {
+		if proof.Patched, err = r.prove(ctx, r.cmds, "patched"); err != nil {
 			return nil, err
 		}
 		vt.Verdict = vet.Verdict(vt, proof)
@@ -590,7 +697,7 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 	in := deliver.BodyInput{
 		Change: ch, Patch: pt, Proof: proof, Vetting: vt, Base: wt.Base, BaseRef: r.baseRef,
 		Rev: 1, Option: r.pick, Meta: r.meta(ch),
-		TidyDue: ch.Kind != core.Tidy && s.st.Onboard == due,
+		FirstDue: ch.Kind != core.First && s.st.Onboard == due,
 	}
 	if s.forge == nil && cfg.Mode == "pr" {
 		in.Notes = append(in.Notes, "Prepared without a pull request: "+s.why+".")
@@ -600,6 +707,15 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 	if s.o.dryRun {
 		res.Action, res.line = "dry-run", "dry run; the worktree is kept at "+wt.Dir
 		return res, nil
+	}
+	// A commit goes in with nobody to read it first, so only a proven one does.
+	if cfg.Mode == "commit" {
+		switch {
+		case pt.Decision:
+			return r.unproven(ch, "commit mode pushes no decision: "+pt.Note), nil
+		case proof.Nothing:
+			return r.unproven(ch, "commit mode pushes only what a proof passed, and the project has no build or test command; set verify.test in tend.yml"), nil
+		}
 	}
 
 	author := verify.AuthorFrom(s.root, s.e.Getenv)
@@ -624,6 +740,9 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 			return r.undelivered(ch, res, err)
 		}
 		s.st.Open = &state.OpenPR{ID: ch.ID, Branch: branch, Base: r.baseRef, Commit: res.Commit, At: now}
+		if ch.Batch != nil {
+			s.st.Open.Stage = ch.Batch.Stage
+		}
 		res.Action, res.Branch = "committed", branch
 		res.line = fmt.Sprintf("committed %s to %s: %s", core.Short(res.Commit), branch, res.Title)
 	case s.forge == nil || s.remote == "":
@@ -653,6 +772,9 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 			res.Action = "updated"
 		}
 		s.st.Open = &state.OpenPR{ID: ch.ID, PR: pr.Number, Branch: pr.Branch, Base: pr.Base, Commit: cmp.Or(pr.Head, sha), At: now}
+		if ch.Batch != nil {
+			s.st.Open.Holds, s.st.Open.Stage = built(ch.Batch), ch.Batch.Stage
+		}
 		if p, ok := s.st.Parked[ch.ID]; ok && p.Reason == "preempted" {
 			delete(s.st.Parked, ch.ID)
 		}
@@ -752,30 +874,6 @@ func (s *session) reconcile(ctx context.Context) (*core.PR, error) {
 	return pr, nil
 }
 
-// settleCommit closes the books on a change delivered as a commit: it is on
-// the branch, or someone took it off again.
-func (s *session) settleCommit(ctx context.Context) {
-	o := s.st.Open
-	if o == nil || o.PR != 0 || s.o.dryRun {
-		return
-	}
-	if s.remote == "" || o.Commit == "" {
-		s.st.Open = nil
-		return
-	}
-	if err := s.push.Fetch(ctx, o.Branch); err != nil {
-		s.logf("cannot fetch %s to look for %s: %v", o.Branch, core.Short(o.Commit), err)
-		return
-	}
-	s.st.Open = nil
-	ref := "refs/remotes/" + s.remote + "/" + o.Branch
-	if _, err := gitx.Run(ctx, s.root, "merge-base", "--is-ancestor", o.Commit, ref); err != nil {
-		s.st.Parked[o.ID] = state.Parked{Reason: "rejected", To: core.TargetOf(o.ID), At: s.e.Now()}
-		return
-	}
-	s.st.See(o.ID, "delivered", "", s.e.Now())
-}
-
 func (r *runner) command(ctx context.Context, pr *core.PR) (plan.Command, bool) {
 	cs, err := r.s.forge.Comments(ctx, pr.Number)
 	if err != nil {
@@ -804,15 +902,18 @@ func (s *session) skip(ctx context.Context, pr *core.PR, id string, c plan.Comma
 }
 
 // displace closes the PR a new one is about to replace: the same change at an
-// older target is superseded; anything else gives way to security work and
-// comes back. It goes first, so tend never has two PRs open, and the state is
-// saved at once, so the displaced change returns even if the new PR never
-// opens.
+// older target is superseded; the first PR folds any other in; anything else
+// gives way to security work and comes back. It goes first, so tend never
+// has two PRs open, and the state is saved at once, so the displaced change
+// returns even if the new PR never opens.
 func (s *session) displace(ctx context.Context, old *core.PR, oldID string, ch *core.Change) error {
 	msg := "Closing to make room for a security fix. tend will reopen this after that merges."
 	same := core.Subject(oldID) == core.Subject(ch.ID) && !ver.Less(ch.To, core.TargetOf(oldID))
-	if same {
+	switch {
+	case same:
 		msg = fmt.Sprintf("Superseded by a newer change that moves to %s.", ch.To)
+	case ch.Kind == core.First:
+		msg = folded(ch.Batch, oldID)
 	}
 	if err := deliver.Close(ctx, s.forge, old.Number, msg); err != nil {
 		return err
@@ -825,6 +926,19 @@ func (s *session) displace(ctx context.Context, old *core.PR, oldID string, ch *
 	}
 	s.save()
 	return nil
+}
+
+// folded is the line that closes a PR the first PR folds in, saying where
+// its change went.
+func folded(b *core.Batch, id string) string {
+	at := func(ch core.Change) bool { return core.Subject(ch.ID) == core.Subject(id) }
+	switch {
+	case slices.ContainsFunc(b.Changes, at):
+		return "Folded into tend's first pull request, which makes this change with the rest."
+	case slices.ContainsFunc(b.Next, func(l core.Later) bool { return at(l.Change) }):
+		return "Folded into tend's first pull request, which plans this change for a later stage of its catch-up."
+	}
+	return "Folded into tend's first pull request; this comes back after that one if it is still needed."
 }
 
 // notice prints one line a day at most when a newer release of tend exists.

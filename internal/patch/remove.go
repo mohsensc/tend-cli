@@ -57,11 +57,11 @@ func Remove(ctx context.Context, wt string, deps []core.Dep, o Options, p *core.
 	return nil
 }
 
-// Redo makes ch's move on wt again: the bump through the native tool, then
-// code, the edits its first making put on top of the bump, as a diff. It is
-// how a tidy-up rebuilds a move next to other parts without asking a model
-// a second time.
-func Redo(ctx context.Context, wt string, ch *core.Change, code string, o Options) error {
+// Redo makes ch on wt again: the bump through the native tool, then code,
+// the edits its first making put on top of the bump, as a diff, and says
+// what it did in p. It is how tend's first PR builds a change next to the
+// others without asking a model a second time.
+func Redo(ctx context.Context, wt string, ch *core.Change, code string, o Options, p *core.Patch) error {
 	opt, err := choose(ch, o.Option)
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func Redo(ctx context.Context, wt string, ch *core.Change, code string, o Option
 	if opt != nil {
 		to, toName = cmp.Or(opt.To, to), cmp.Or(opt.ToName, toName)
 	}
-	if _, err := bump(ctx, wt, ch.Deps, to, toName, o, &core.Patch{}); err != nil {
+	if _, err := bump(ctx, wt, ch.Deps, to, toName, o, p); err != nil {
 		return err
 	}
 	if code == "" {

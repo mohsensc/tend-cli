@@ -28,9 +28,9 @@ var (
 )
 
 // Unused sorts the direct dependencies no code imports into those nothing in
-// the project uses, which a tidy-up removes, and those that only look unused,
-// which it names and leaves alone, each with why. keep holds a dependency
-// back from both, as an ignore entry in tend.yml does.
+// the project uses, which the first PR removes, and those that only look
+// unused, which it names and leaves alone, each with why. keep holds a
+// dependency back from both, as an ignore entry in tend.yml does.
 func Unused(inv *core.Inventory, keep func(core.Dep) bool) ([]core.Dep, []core.Aside, error) {
 	if inv.Index == nil {
 		return nil, nil, nil

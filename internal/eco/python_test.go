@@ -246,15 +246,24 @@ func TestPythonBumpCommands(t *testing.T) {
 	}
 }
 
-// poetry update takes the newest release the ranges allow; landing anything
-// but the chosen one fails the bump and leaves the files as they were.
+// poetry update takes the newest release the ranges allow. A later release
+// of the same major is taken and named; one past it fails the bump and
+// leaves the files as they were.
 func TestPoetryTargetedLockChecked(t *testing.T) {
 	lockTool(t, "poetry", "2024.8.30", "2024.12.14")
 	root := copyTestdata(t, "python/projects")
 	d := depIn(t, python{}, root, "poetry/pyproject.toml", "certifi", false)
+	res, err := python{}.Bump(context.Background(), root, d, "2024.9.1", "")
+	if err != nil || res.Landed != "2024.12.14" {
+		t.Fatalf("bump = %+v, %v", res, err)
+	}
+
+	lockTool(t, "poetry", "2024.8.30", "2025.1.31")
+	root = copyTestdata(t, "python/projects")
+	d = depIn(t, python{}, root, "poetry/pyproject.toml", "certifi", false)
 	before := treeSnapshot(t, root)
-	_, err := python{}.Bump(context.Background(), root, d, "2024.9.1", "")
-	if err == nil || !strings.Contains(err.Error(), "locked certifi at 2024.12.14, not 2024.9.1") {
+	_, err = python{}.Bump(context.Background(), root, d, "2024.9.1", "")
+	if err == nil || !strings.Contains(err.Error(), "locked certifi at 2025.1.31, not 2024.9.1 or a later 2024.x") {
 		t.Fatalf("err = %v", err)
 	}
 	if !reflect.DeepEqual(before, treeSnapshot(t, root)) {

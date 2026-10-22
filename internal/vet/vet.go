@@ -26,26 +26,49 @@ type Input struct {
 	Fetch  core.Fetcher
 	Spec   *api.Doc // API changes: the provider's current spec, nil when it could not be loaded
 	Hosts  []string // API changes: the provider's hosts, to find endpoint literals still in use
+	Option int      // the option a maintainer picked, 0 for none
+	// Commands are the project's install, build and test lines as the base
+	// has them, which the proof ran; Detect reads them again from the
+	// patched worktree. Nil skips the question.
+	Commands core.Commands
+	Detect   func() core.Commands
+}
+
+// applied is the option the patch carries: the maintainer's pick, else the
+// one tend took by its own rule, nil for none.
+func (in Input) applied() *core.Option {
+	ch, n := in.Change, in.Option
+	if n == 0 && ch.Choice != nil {
+		n = ch.Choice.N
+	}
+	if n < 1 || n > len(ch.Options) {
+		return nil
+	}
+	return &ch.Options[n-1]
 }
 
 // A check asks one question of the patch. It returns what it verified, or why
-// it could not run.
+// it could not run. A quiet check is left out of the list when it finds
+// nothing: its question rarely arises, and a line saying so on every PR is
+// noise.
 type check struct {
-	name string
-	fn   func(context.Context, *pass) (res []core.Finding, skip string)
+	name  string
+	fn    func(context.Context, *pass) (res []core.Finding, skip string)
+	quiet bool
 }
 
 // scope runs first, so no later check reports a file it reverts.
 var checks = []check{
-	{"scope", scope},
-	{"symbols", symbols},
-	{"fields", fields},
-	{"leftovers", leftovers},
-	{"lockfile", lockfile},
-	{"debug", debug},
-	{"comments", comments},
-	{"dead", dead},
-	{"question", questions},
+	{name: "scope", fn: scope},
+	{name: "symbols", fn: symbols},
+	{name: "fields", fn: fields},
+	{name: "leftovers", fn: leftovers},
+	{name: "lockfile", fn: lockfile},
+	{name: "debug", fn: debug},
+	{name: "comments", fn: comments},
+	{name: "commands", fn: commands, quiet: true},
+	{name: "dead", fn: dead},
+	{name: "question", fn: questions},
 }
 
 // pass is the state the checks share: the patch as a parsed diff, kept current
@@ -77,6 +100,9 @@ func Check(ctx context.Context, in Input) (*core.Vetting, error) {
 	for _, c := range checks {
 		p.note = ""
 		found, skip := c.fn(ctx, p)
+		if c.quiet && len(found) == 0 {
+			continue
+		}
 		switch {
 		case skip == na:
 			res.Checks = append(res.Checks, c.name+": "+na)

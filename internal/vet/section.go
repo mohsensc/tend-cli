@@ -9,7 +9,8 @@ import (
 
 // Verdict is reject when symbols, fields or scope found something left
 // unresolved and the patched proof fails; draft when symbols, fields,
-// leftovers or lockfile left a flag, or the baseline already fails; else pass.
+// leftovers, lockfile or commands left a flag, or the baseline already
+// fails; else pass.
 // Call it again after re-running the proof on a worktree that vetting changed.
 func Verdict(v *core.Vetting, proof *core.Proof) string {
 	hard, soft := false, false
@@ -22,7 +23,7 @@ func Verdict(v *core.Vetting, proof *core.Proof) string {
 			hard = true
 		}
 		switch f.Check {
-		case "symbols", "fields", "leftovers", "lockfile":
+		case "symbols", "fields", "leftovers", "lockfile", "commands":
 			soft = true
 		}
 	}

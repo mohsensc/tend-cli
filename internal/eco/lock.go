@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mohsensc/tend-cli/internal/core"
@@ -203,29 +204,57 @@ func lockedVersions(root, lock, ecosystem, name string) (map[string]bool, error)
 	return res, nil
 }
 
-// lockedTo checks a targeted update against what it actually locked. Left to
-// itself the tool takes the newest release the ranges allow, which need not
-// be the release tend chose and proves: every version of name it brought in
-// must be to, and to must be locked.
-func lockedTo(root, lock, ecosystem, name, to string, before map[string]bool) error {
+// lockedTo checks a targeted update of a dep only the lockfile names against
+// what it actually locked. The tool moves such a dep to the newest release
+// its ranges allow, so to is a floor: every version of name the update
+// brought in must be to or later on to's major, and one of them must be
+// locked. It returns the newest one when that is past to, else "".
+func lockedTo(root, lock, ecosystem, name, to string, before map[string]bool) (string, error) {
 	after, err := lockedVersions(root, lock, ecosystem, name)
 	if err != nil {
-		return err
+		return "", err
 	}
-	is := func(v string) bool { return sameVersion(v, to) }
-	var other []string
+	floor, ok := ver.Parse(to)
+	fits := func(v string) bool {
+		x, okX := ver.Parse(v)
+		if !ok || !okX {
+			return sameVersion(v, to)
+		}
+		return ver.Compare(x, floor) >= 0 && x.Major() == floor.Major()
+	}
+	var other, in []string
 	for _, v := range keys(after) {
-		if !before[v] && !is(v) {
+		switch {
+		case before[v] && !fits(v):
+		case fits(v):
+			in = append(in, v)
+		default:
 			other = append(other, v)
 		}
 	}
 	switch {
 	case len(other) > 0:
-		return fmt.Errorf("%s: the update locked %s at %s, not %s", lock, name, strings.Join(other, ", "), to)
-	case !slices.ContainsFunc(keys(after), is):
-		return fmt.Errorf("%s: the update did not lock %s at %s", lock, name, to)
+		return "", fmt.Errorf("%s: the update locked %s at %s, not %s or a later %s", lock, name, strings.Join(other, ", "), to, series(to))
+	case len(in) == 0:
+		return "", fmt.Errorf("%s: the update did not lock %s at %s or a later %s", lock, name, to, series(to))
 	}
-	return nil
+	slices.SortFunc(in, func(a, b string) int {
+		x, _ := ver.Parse(a)
+		y, _ := ver.Parse(b)
+		return ver.Compare(x, y)
+	})
+	if top := in[len(in)-1]; !sameVersion(top, to) {
+		return top, nil
+	}
+	return "", nil
+}
+
+// series names the major release line of v: "7.x" for 7.5.21.
+func series(v string) string {
+	if x, ok := ver.Parse(v); ok {
+		return strconv.Itoa(x.Major()) + ".x"
+	}
+	return "release"
 }
 
 // lockLanded checks that the lockfile at lock pins name at to. A targeted

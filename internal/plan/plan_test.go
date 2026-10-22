@@ -908,7 +908,7 @@ func TestRank(t *testing.T) {
 		{ID: "security-critical", Kind: core.Security, Severity: "critical"},
 		{ID: "security-high-sunset", Kind: core.Security, Severity: "high", Sunset: now},
 		{ID: "security-high", Kind: core.Security, Severity: "high"},
-		{ID: "tidy-up", Kind: core.Tidy},
+		{ID: "tidy-up", Kind: core.First},
 	}
 	Rank(chs, now)
 	var got []string
@@ -916,8 +916,8 @@ func TestRank(t *testing.T) {
 		got = append(got, ch.ID)
 	}
 	want := []string{
-		"security-critical", "security-high-sunset", "security-high", "security-low", "security-none",
-		"tidy-up", "deprecation-soon", "api-removed", "deprecation-far",
+		"tidy-up", "security-critical", "security-high-sunset", "security-high", "security-low", "security-none",
+		"deprecation-soon", "api-removed", "deprecation-far",
 		"breaking-sites", "breaking-old", "breaking-a", "breaking-b", "update",
 	}
 	if !slices.Equal(got, want) {
@@ -931,7 +931,7 @@ func TestPick(t *testing.T) {
 	brk := core.Change{ID: "npm/c@3.0.0", Kind: core.Breaking}
 	brkNewer := core.Change{ID: "npm/c@3.1.0", Kind: core.Breaking}
 	dep := core.Change{ID: "npm/d@1.0.0", Kind: core.Deprecation}
-	tidy := core.Change{ID: core.TidyID, Kind: core.Tidy}
+	first := core.Change{ID: core.FirstID, Kind: core.First}
 	pr := func(n int, id string) *core.PR {
 		return &core.PR{Number: n, Body: "body\n<!-- tend id=\"" + id + "\" base=\"abc\" rev=\"1\" -->\n"}
 	}
@@ -950,9 +950,11 @@ func TestPick(t *testing.T) {
 		{name: "security preempts a vanished change", queue: []core.Change{sec}, open: pr(4, "npm/q@1.0.0"), pick: "npm/a@1.0.1", preempt: "#4"},
 		{name: "security never preempts security", queue: []core.Change{sec, sec2}, open: pr(5, "npm/b@2.0.1"), pick: "npm/b@2.0.1"},
 		{name: "newer target replaces", queue: []core.Change{brkNewer}, open: pr(6, "npm/c@3.0.0"), pick: "npm/c@3.1.0", preempt: "#6"},
-		{name: "the tidy-up goes first", queue: []core.Change{tidy, brk}, pick: core.TidyID},
-		{name: "the open tidy-up holds the rest back", queue: []core.Change{tidy, brk}, open: pr(1, core.TidyID), pick: core.TidyID},
-		{name: "security preempts the tidy-up", queue: []core.Change{sec, tidy}, open: pr(1, core.TidyID), pick: "npm/a@1.0.1", preempt: "#1"},
+		{name: "the first PR goes first", queue: []core.Change{first, brk}, pick: core.FirstID},
+		{name: "the open first PR holds the rest back", queue: []core.Change{first, brk}, open: pr(1, core.FirstID), pick: core.FirstID},
+		{name: "security does not preempt the first PR", queue: []core.Change{first, sec}, open: pr(1, core.FirstID), pick: core.FirstID},
+		{name: "the first PR folds an open security fix in", queue: []core.Change{first, sec}, open: pr(4, "npm/a@1.0.1"), pick: core.FirstID, preempt: "#4"},
+		{name: "the first PR folds any open PR in", queue: []core.Change{first, brk}, open: pr(4, "npm/z@1.0.0"), pick: core.FirstID, preempt: "#4"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

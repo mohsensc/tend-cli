@@ -587,12 +587,13 @@ func (n npm) Bump(ctx context.Context, root string, d core.Dep, to, toName strin
 	if err := runIn(ctx, root, path.Dir(m.Lock), nil, line); err != nil {
 		return nil, err
 	}
+	landed := ""
 	if targeted {
-		if err := lockedTo(root, m.Lock, core.Npm, d.Name, to, before); err != nil {
+		if landed, err = lockedTo(root, m.Lock, core.Npm, d.Name, to, before); err != nil {
 			return nil, errors.Join(fmt.Errorf("%w; %s moves a transitive dep only to the newest release its ranges allow", err, m.Tool), snap.restore(root))
 		}
 	}
-	return &core.Bump{Files: snap.changed(root), Locked: true}, nil
+	return &core.Bump{Files: snap.changed(root), Locked: true, Landed: landed}, nil
 }
 
 // lockAt locks deps, all of one manifest, at exactly to. Left to itself the

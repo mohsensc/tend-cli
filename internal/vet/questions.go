@@ -210,16 +210,16 @@ func questionPrompt(p *pass, b batch) (string, map[int]string) {
 	return sb.String(), shown
 }
 
-// upstream joins what the change quotes from upstream, its moves' included,
+// upstream joins what the change quotes from upstream, its batch's included,
 // cut at notesChars.
 func upstream(ch *core.Change) string {
 	if ch == nil {
 		return ""
 	}
 	all := []*core.Change{ch}
-	if ch.Cleanup != nil {
-		for i := range ch.Cleanup.Moves {
-			all = append(all, &ch.Cleanup.Moves[i])
+	if ch.Batch != nil {
+		for i := range ch.Batch.Changes {
+			all = append(all, &ch.Batch.Changes[i])
 		}
 	}
 	var parts []string

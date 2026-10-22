@@ -1,6 +1,7 @@
 package deliver
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,11 +16,46 @@ func advisory(source, id, summary string) core.Evidence {
 	return core.Evidence{Source: source, Title: id + " " + summary}
 }
 
-func TestTitleAndBranch(t *testing.T) {
-	tidy := func(c core.Cleanup) core.Change {
-		return core.Change{ID: core.TidyID, Kind: core.Tidy, Deps: []core.Dep{dep("npm", "left-pad", "1.3.0")}, Cleanup: &c}
+// A dep only the lockfile names that landed past the release asked for is
+// titled with the release it landed on; its branch keeps the target.
+func TestTitleLanded(t *testing.T) {
+	ch := &core.Change{ID: "npm/tar@7.5.21", Kind: core.Security, Deps: []core.Dep{{Ecosystem: "npm", Name: "tar", Version: "7.5.20"}}, To: "7.5.21",
+		Evidence: []core.Evidence{advisory("osv", "GHSA-8qq5-rm4j-mr97", "file overwrite")}}
+	in := BodyInput{Change: ch, Patch: &core.Patch{Landed: map[string]string{"npm/tar": "7.5.22"}}}
+	if got := Title(in, ""); got != "Bump tar to 7.5.22 (fixes GHSA-8qq5-rm4j-mr97)" {
+		t.Errorf("title = %q", got)
 	}
+	if got := Branch(ch); got != "tend/npm-tar-7.5.21" {
+		t.Errorf("branch = %q", got)
+	}
+	ch.Deps[0].Manifest = core.Manifest{Path: "package.json", Lock: "package-lock.json", Tool: "npm"}
+	in.Patch.Files = []string{"package-lock.json"}
+	body := Body(in)
+	for _, want := range []string{
+		"## tar 7.5.20 → 7.5.22",
+		"fixed in 7.5.21",
+		"tend asked for 7.5.21; `package-lock.json` names `tar` only as a dependency of other packages, and `npm` moves such a dependency to the newest release their ranges allow, 7.5.22.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body lacks %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestTitleAndBranch(t *testing.T) {
+	first := func(b core.Batch) core.Change {
+		return core.Change{ID: core.FirstID, Kind: core.First, Deps: []core.Dep{dep("npm", "left-pad", "1.3.0")}, Batch: &b}
+	}
+	sec := core.Change{Kind: core.Security, Deps: []core.Dep{dep("npm", "a", "1.0.0")}}
+	lib := core.Change{Kind: core.Deprecation, Deps: []core.Dep{dep("npm", "a", "1.0.0")}}
+	pin := core.Change{Kind: core.Deprecation, Deps: []core.Dep{{Ecosystem: core.Toolchain, Name: "nodejs"}}}
+	act := core.Change{Kind: core.Deprecation, Deps: []core.Dep{{Ecosystem: core.Actions, Name: "actions/checkout"}}}
+	api := core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "stripe"}}
 	two := []core.Dep{dep("npm", "a", "1.0.0"), dep("npm", "b", "1.0.0")}
+	var twelve []core.Change
+	for range 12 {
+		twelve = append(twelve, sec)
+	}
 	tests := []struct {
 		name   string
 		ch     core.Change
@@ -28,33 +64,39 @@ func TestTitleAndBranch(t *testing.T) {
 		branch string
 	}{
 		{
-			name:   "tidy-up",
-			ch:     tidy(core.Cleanup{Unused: append(two, two...), Moves: []core.Change{{}}}),
-			title:  "Tidy up: remove 4 unused dependencies, move off 1 deprecated library",
+			name:   "first PR",
+			ch:     first(core.Batch{Unused: append(append(two, two...), two...), Changes: append(slices.Clone(twelve), lib)}),
+			title:  "Catch up: 12 security fixes, 1 deprecated library, 6 unused dependencies",
 			branch: "tend/tidy-up",
 		},
 		{
-			name:   "tidy-up that removes one",
-			ch:     tidy(core.Cleanup{Unused: two[:1]}),
+			name:   "first PR that removes one",
+			ch:     first(core.Batch{Unused: two[:1]}),
 			prefix: "chore: ",
-			title:  "chore: Tidy up: remove 1 unused dependency",
+			title:  "chore: Catch up: 1 unused dependency",
 			branch: "tend/tidy-up",
 		},
 		{
-			name:   "tidy-up that moves two",
-			ch:     tidy(core.Cleanup{Moves: []core.Change{{}, {}}}),
-			title:  "Tidy up: move off 2 deprecated libraries",
+			name:   "first PR of every kind, in the order of its sections",
+			ch:     first(core.Batch{Changes: []core.Change{act, api, sec}}),
+			title:  "Catch up: 1 security fix, 1 API change, 1 deprecated Action",
 			branch: "tend/tidy-up",
 		},
 		{
-			name:   "nothing to tidy",
-			ch:     tidy(core.Cleanup{}),
-			title:  "Set up tend: nothing to tidy up",
+			name:   "first PR whose kinds make a long title",
+			ch:     first(core.Batch{Changes: []core.Change{pin, lib, api, sec, act}, Unused: two}),
+			title:  "Catch up: 1 security fix, 1 API change, 3 deprecations, 2 unused dependencies",
 			branch: "tend/tidy-up",
 		},
 		{
-			name:   "nothing tidied, things to look at",
-			ch:     tidy(core.Cleanup{Kept: []core.Aside{{}}}),
+			name:   "nothing to catch up on",
+			ch:     first(core.Batch{}),
+			title:  "Set up tend: nothing to catch up on",
+			branch: "tend/tidy-up",
+		},
+		{
+			name:   "nothing made, things to look at",
+			ch:     first(core.Batch{Kept: []core.Aside{{}}}),
 			title:  "Set up tend",
 			branch: "tend/tidy-up",
 		},

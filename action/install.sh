@@ -25,7 +25,8 @@ tags() {
 }
 
 # An explicit version wins. Then a full tag in the action ref. Then the newest
-# release inside the ref's major (uses: ...@v1), else the newest release.
+# release inside the ref's major (uses: ...@v1), followed by the one before
+# it, else the newest release.
 resolve() {
 	local major list
 	if [ -n "${1:-}" ]; then
@@ -40,7 +41,7 @@ resolve() {
 	v[0-9]*)
 		major=${ref%%.*}
 		list=$(api_get "$api/repos/$repo/releases?per_page=100" | tags) || die "could not list releases of $repo"
-		{ echo "$list" | grep -E "^${major}\.[0-9]+\.[0-9]+\$" || true; } | sort -t. -k2,2n -k3,3n | tail -n 1
+		{ echo "$list" | grep -E "^${major}\.[0-9]+\.[0-9]+\$" || true; } | sort -t. -k2,2nr -k3,3nr | head -n 2
 		return
 		;;
 	esac
@@ -66,8 +67,17 @@ sha256_of() {
 	fi
 }
 
-tag=$(resolve "${1:-}")
+tags=$(resolve "${1:-}")
+tag=$(echo "$tags" | sed -n 1p)
 [ -n "$tag" ] || die "no release of $repo matches ${1:-${ref:-the latest release}}"
+# The newest release of a major may still be uploading its files when a
+# scheduled run starts; the one before it is installed instead. Either is
+# checked the same way below.
+older=$(echo "$tags" | sed -n 2p)
+if [ -n "$older" ] && ! curl -fsSL --retry 2 -o /dev/null "$dl/$repo/releases/download/$tag/checksums.txt.sig" 2>/dev/null; then
+	echo "tend install: $tag has no signed checksums yet; installing $older" >&2
+	tag=$older
+fi
 version=${tag#v}
 
 case "${RUNNER_OS:-$(uname -s)}" in

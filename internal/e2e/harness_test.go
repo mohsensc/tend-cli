@@ -176,6 +176,14 @@ func (w *world) commit(msg string, files map[string]string) {
 	w.base = w.git(w.dir, "rev-parse", "HEAD")
 }
 
+// pull brings the clone up to main on origin, as the Action's checkout of
+// the default branch is before each run, tend.yml included.
+func (w *world) pull() {
+	w.t.Helper()
+	w.git(w.dir, "fetch", "--quiet", "origin")
+	w.git(w.dir, "reset", "--quiet", "--hard", "origin/main")
+}
+
 func (w *world) git(dir string, args ...string) string {
 	w.t.Helper()
 	cmd := exec.Command("git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)

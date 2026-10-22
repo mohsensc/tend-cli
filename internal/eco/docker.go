@@ -674,7 +674,7 @@ func dockerSetArg(p string, r dockerRef, to string) (bool, error) {
 func (docker) Commands(root string, m core.Manifest) core.Commands { return core.Commands{} }
 
 func (docker) Traits() core.Traits {
-	return core.Traits{Page: dockerPage, KeepShape: true}
+	return core.Traits{Page: dockerPage, KeepShape: true, Tooling: true}
 }
 
 func dockerPage(name string) string {

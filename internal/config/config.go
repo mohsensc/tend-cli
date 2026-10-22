@@ -240,8 +240,8 @@ func Default() *Config {
 //go:embed sample.yml
 var Sample []byte
 
-// Starter is the tend.yml a first PR adds to a repo with nothing to tidy: a
-// few keys people change first, commented out, so it changes nothing.
+// Starter is the tend.yml a first PR adds to a repo with nothing to catch up
+// on: a few keys people change first, commented out, so it changes nothing.
 //
 //go:embed starter.yml
 var Starter []byte

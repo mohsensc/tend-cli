@@ -1,1 +1,1 @@
-Tidy up: remove 1 unused dependency
+Catch up: 1 security fix, 1 unused dependency

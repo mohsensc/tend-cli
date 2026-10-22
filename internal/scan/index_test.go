@@ -664,3 +664,46 @@ client.charges.create
 		t.Errorf("Uses\n got %q\nwant %q", got, want)
 	}
 }
+
+// A file counts as reached when a test names its path, imports its module or
+// shares its Go package; one no test touches does not.
+func TestReached(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"src/app.js":                       "module.exports = {}\n",
+		"src/lib/index.js":                 "module.exports = {}\n",
+		"src/alone.js":                     "module.exports = {}\n",
+		"test/app.test.js":                 "const app = require('../src/app')\nconst lib = require('../src/lib')\n",
+		"shop/billing.py":                  "def charge(): pass\n",
+		"shop/orders.py":                   "def order(): pass\n",
+		"tests/test_billing.py":            "from shop.billing import charge\n",
+		"pkg/a/a.go":                       "package a\n",
+		"pkg/a/a_test.go":                  "package a\n",
+		"pkg/b/b.go":                       "package b\n",
+		"src/main/java/shop/Cart.java":     "class Cart {}\n",
+		"src/test/java/shop/CartTest.java": "class CartTest {}\n",
+	}
+	for name, body := range files {
+		p := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	x, err := Build(Options{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]bool{
+		"src/app.js": true, "src/lib/index.js": true, "src/alone.js": false,
+		"shop/billing.py": true, "shop/orders.py": false,
+		"pkg/a/a.go": true, "pkg/b/b.go": false,
+		"src/main/java/shop/Cart.java": true,
+	} {
+		if got := x.Reached(p); got != want {
+			t.Errorf("Reached(%s) = %v, want %v", p, got, want)
+		}
+	}
+}
