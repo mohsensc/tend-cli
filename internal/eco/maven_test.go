@@ -244,7 +244,7 @@ func TestMavenImports(t *testing.T) {
 }
 
 // TestMavenBumpReal checks that a bumped multi-module build still validates.
-// The validate phase binds no plugins, so it runs offline.
+// The validate phase binds no plugins, but it does fetch the imported BOM.
 func TestMavenBumpReal(t *testing.T) {
 	if !have("mvn") {
 		t.Skip("mvn not found")
@@ -254,7 +254,7 @@ func TestMavenBumpReal(t *testing.T) {
 	if _, err := (maven{}).Bump(context.Background(), root, d, "2.17.0", ""); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := run(context.Background(), root, nil, "mvn -q -B -o validate"); err != nil {
+	if out, err := run(context.Background(), root, nil, "mvn -q -B validate"); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	if d := depIn(t, maven{}, root, "api/pom.xml", d.Name, true); d.Version != "2.17.0" {

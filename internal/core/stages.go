@@ -16,7 +16,7 @@ type Step struct {
 	Cmd     string
 	Exit    int
 	Took    time.Duration
-	Tail    string // last 40 lines of combined output
+	Tail    string // first failure and last 40 lines of combined output
 	Log     string // full log path under the state dir
 	Skipped string // reason it did not run, "" if it ran
 }

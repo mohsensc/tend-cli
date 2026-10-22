@@ -113,6 +113,29 @@ func TestTailBounds(t *testing.T) {
 	}
 }
 
+func TestTailKeepsFirstFailure(t *testing.T) {
+	var tl tail
+	fmt.Fprintln(&tl, "TAP version 13")
+	fmt.Fprintln(&tl, "not ok 1 - charge")
+	fmt.Fprintln(&tl, "  error: reading 'create'")
+	for i := range 100 {
+		fmt.Fprintf(&tl, "    at frame %d\n", i)
+	}
+	lines := strings.Split(tl.String(), "\n")
+	if lines[0] != "not ok 1 - charge" || lines[1] != "  error: reading 'create'" || lines[firstLines] != "..." {
+		t.Errorf("tail lost the first failure:\n%s", strings.Join(lines[:firstLines+1], "\n"))
+	}
+	if len(lines) != firstLines+1+tailLines || lines[len(lines)-1] != "    at frame 99" {
+		t.Errorf("tail kept %d lines, last %q", len(lines), lines[len(lines)-1])
+	}
+
+	var near tail
+	fmt.Fprint(&near, "ok\nnot ok 1\nmore")
+	if got := near.String(); got != "ok\nnot ok 1\nmore" {
+		t.Errorf("a failure inside the window was repeated: %q", got)
+	}
+}
+
 func TestRunStream(t *testing.T) {
 	var buf bytes.Buffer
 	_, err := Run(context.Background(), &Worktree{Dir: t.TempDir()}, Options{

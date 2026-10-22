@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -237,16 +238,23 @@ func logName(cmd string) string {
 }
 
 const (
-	tailLines = 40
-	lineMax   = 4096
+	tailLines  = 40
+	firstLines = 10
+	lineMax    = 4096
 )
 
+// failRe spots the line where a run first goes wrong.
+var failRe = regexp.MustCompile(`(?i)^\s*not ok\b|\b(error|fail|failed|failure|panic)\b`)
+
 // tail keeps the last tailLines lines written to it in a fixed ring, so a
-// multi-gigabyte build log costs the same memory as a short one.
+// multi-gigabyte build log costs the same memory as a short one. It also keeps
+// the first failure, which long stack traces can push out of the ring.
 type tail struct {
-	ring [tailLines]string
-	n    int
-	curr []byte
+	ring    [tailLines]string
+	n       int
+	curr    []byte
+	first   []string
+	firstAt int
 }
 
 func (t *tail) Write(p []byte) (int, error) {
@@ -258,11 +266,21 @@ func (t *tail) Write(p []byte) (int, error) {
 			return len(p), nil
 		}
 		t.add(rest[:i])
-		t.ring[t.n%tailLines] = string(t.curr)
-		t.n++
+		t.line(string(t.curr))
 		t.curr = t.curr[:0]
 		rest = rest[i+1:]
 	}
+}
+
+func (t *tail) line(s string) {
+	if t.first == nil && failRe.MatchString(s) {
+		t.firstAt = t.n
+	}
+	if (t.first != nil || failRe.MatchString(s)) && len(t.first) < firstLines {
+		t.first = append(t.first, s)
+	}
+	t.ring[t.n%tailLines] = s
+	t.n++
 }
 
 func (t *tail) add(b []byte) {
@@ -281,6 +299,14 @@ func (t *tail) String() string {
 	}
 	if len(res) > tailLines {
 		res = res[len(res)-tailLines:]
+	}
+	start := t.n + min(len(t.curr), 1) - len(res)
+	if t.first != nil && t.firstAt < start {
+		head := slices.Clone(t.first[:min(len(t.first), start-t.firstAt)])
+		if t.firstAt+len(head) < start {
+			head = append(head, "...")
+		}
+		res = append(head, res...)
 	}
 	return strings.Join(res, "\n")
 }
