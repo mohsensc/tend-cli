@@ -229,6 +229,9 @@ func (b *builder) swap(ctx context.Context, d core.Dep, m *core.Meta, ev core.Ev
 			ch.Options = []core.Option{*one}
 		case ok:
 			ch.Options = opts
+			for i := range ch.Options {
+				ch.Options[i].To = b.latest(ctx, d.Ecosystem, ch.Options[i].ToName)
+			}
 		}
 	}
 	if name == "" {
@@ -256,6 +259,31 @@ func (b *builder) latest(ctx context.Context, eco, name string) string {
 		return ""
 	}
 	return rel.Version
+}
+
+// steps are the rungs a major bump of more than one major can climb when
+// the jump to its target fails: the release candidate would pick within
+// each major in between, ascending. A runtime or an image is not climbed:
+// the lines in between are past their end of life too.
+func (b *builder) steps(ch *core.Change) []string {
+	if ch.API != nil || ch.ToName != "" || ch.To == "" || len(ch.Deps) == 0 || traits(ch.Deps[0]).Tooling {
+		return nil
+	}
+	d := ch.Deps[0]
+	cur, ok1 := ver.Parse(Current(d))
+	to, ok2 := ver.Parse(ch.To)
+	m := b.meta[pkg{d.Ecosystem, d.Name}]
+	if !ok1 || !ok2 || m == nil || to.Major()-cur.Major() < 2 {
+		return nil
+	}
+	var res []string
+	for major := cur.Major() + 1; major < to.Major(); major++ {
+		rel, ok := candidate(d, m, b.in.Now, b.cooldown(), major)
+		if v, _ := ver.Parse(rel.Version); ok && v.Major() == major {
+			res = append(res, rel.Version)
+		}
+	}
+	return res
 }
 
 // typesCap keeps @types/x on the major of x: the typings follow the package,

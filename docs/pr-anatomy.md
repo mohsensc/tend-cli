@@ -74,8 +74,8 @@ ok 1 - payment intents
 `Replace X with Y`, `Migrate off deprecated X 14.x`, `Migrate off deprecated GET /path`,
 `Handle removed field F on GET /path`, `Bump node base image to 24-alpine`,
 `Bump actions/checkout to v7`, `Move nodejs to 24.22.0`, `Fix deprecation warnings from X`,
-`Pin X to V` and `Decide: migrate off X 14.x`, and for the first PR on a repo
-`Tidy up: ...` or `Set up tend: nothing to tidy up`. `deliver.title_prefix` goes in front.
+`Pin X to V` and `Decide: migrate off X 14.x`, and for a catch-up PR
+`Catch up: ...` or `Set up tend: nothing to catch up on`. `deliver.title_prefix` goes in front.
 
 **Heading and Why.** The package and the move, then the reason in one line:
 the kind of change, the advisory and its severity, the fixed version, the
@@ -126,17 +126,38 @@ because the native tool is not installed, or auto-merge that GitHub refused.
 **Footer and marker.** The last line is a comment GitHub does not show:
 `<!-- tend id="..." base="..." rev="N" -->`. It holds the change id, the base
 commit the patch was built on and a revision that grows by one each time tend
-updates the PR. A PR that went ahead of tend's first PR also carries
-`tidy="due"`, so a lost state still owes the tidy-up. tend reads it back on the
-next run to know which change this PR carries. Do not edit it.
+updates the PR. A PR that went ahead of tend's first PR, which happens only
+while the first PR cannot be proven on the base, also carries `tidy="due"`, so
+a lost state still owes the first PR, which folds that PR in when it opens. A
+catch-up PR carries `stage="N"`, so a lost state still knows how far the
+catch-up got. tend reads the marker back on the next run to know which change
+this PR carries. Do not edit it.
 
-## When the PR is a decision
+## When tend chooses
 
-A deprecation with no single replacement, or a change that needs code edits no
-codemod covers when there is no model to make them, opens a PR that changes
-nothing. Its body lists where the code uses the thing, the output of the plain
-bump tend tried when one was worth trying, and the options. An option tend
-cannot prove without help is marked `not mechanical`.
+A deprecation with no single replacement, or a move that the bump alone
+does not carry, has options. tend takes one itself, by a fixed rule, and
+proves it:
+
+1. Only options that move are tried: a replacement package, a rename a
+   codemod makes, a release past the deprecated one. Pinning is never tried.
+2. A replacement must have a release to move to that is neither yanked nor
+   deprecated.
+3. A package the project already depends on comes first. Then the catalog's
+   order, which lists the recommended replacement first and the rest by how
+   widely each is used.
+4. Each is made (the swap or bump, codemods, the model) and proven in turn,
+   at most three, and the first that passes is taken.
+
+The PR applies it, says which rule picked it (`tend took option 1 on its
+own: the catalog's recommended replacement`), names any option that failed
+before it, and lists the others with the comment that applies each instead.
+
+When none of them passes, tend stays put, and the PR is a decision: it
+changes nothing, and its body lists where the code uses the thing, the output
+of the plain bump tend tried when one was worth trying, and the options. An
+option tend cannot prove without help is marked `not mechanical`. In commit
+mode nothing is pushed for it, and the tracking issue lists it instead.
 
 ````markdown
 ## moment: choose a replacement
@@ -171,7 +192,8 @@ Nothing was applied. Comment on this PR with the number you want.
 <!-- tend id="npm/moment@" base="abc1234" rev="1" -->
 ````
 
-Comment on the PR to choose. The newest matching comment from someone with the
+Comment on the PR to choose, on a decision or to have another option than the
+one tend took. The newest matching comment from someone with the
 `OWNER`, `MEMBER` or `COLLABORATOR` role wins. Comments from bots (logins
 ending in `[bot]`) are never commands, whatever their role.
 
@@ -181,51 +203,85 @@ ending in `[bot]`) are never commands, whatever their role.
 | `tend skip` | tend closes the PR and does not propose the same target again |
 | `tend retry` | tend throws away its worktree and redoes the change, once |
 
-When one option is mechanical (a rename, a path swap), tend applies it, proves
-it, and lists the others below. If the proof fails, the PR becomes a decision
-PR. A deprecation notice that names a rename (`charges.* was replaced by
+A deprecation notice that names a rename (`charges.* was replaced by
 paymentIntents.*`) gives an option to apply it; staying on the version in use
 is an option too, and applying it writes the `ignore` entry into `tend.yml` in
 the same PR, so the decision is reviewed and recorded like any other change.
 
 ## The first pull request
 
-The first run on a repo opens a tidy-up before any other change; only a
-security fix goes ahead of it. Its body starts with a short welcome instead
-of a heading: what tend does, what this PR does, what tend does from now on,
-and how to steer it. The usual sections follow. The golden file behind this
+The first run on a repo opens the first of a few catch-up PRs, before any
+other change; nothing goes ahead of it. Its body starts with a short
+welcome instead of a heading: what tend does, what this PR does, how many
+catch-up PRs follow, and how to steer it. Its own sections follow, then the
+proof and the vetting of the whole patch. The golden file behind this
 example is `internal/deliver/testdata/tidy.golden.md`.
 
 ````markdown
-Thanks for adding tend: it looks after the packages this repository depends on and the APIs its code calls. This first pull request tidies up: it removes 2 dependencies nothing in the project uses and moves the code off 1 deprecated library. What it found and left alone is listed below, for you to decide. From now on it opens one pull request at a time, only for changes that touch your code, and each one shows the build and test runs that prove it. Steer it with `tend.yml`, or comment `tend skip`, `tend retry` or `tend apply N` on its pull requests.
+Thanks for adding tend: it looks after the packages this repository depends on and the APIs its code calls. This first pull request starts catching the repository up: a test baseline, 3 security fixes, 1 API change, 1 deprecated library and 2 unused dependencies. The rest comes in 3 more pull requests, one stage at a time, listed under Next stages and each proven the same way. Once the catch-up is done it opens one pull request at a time, only for changes that touch your code, and each one shows the build and test runs that prove it. Steer it with `tend.yml`, or comment `tend skip`, `tend retry` or `tend apply N` on its pull requests.
 
-### What changed
+Part of this pull request was written by a model, in 4 steps: 1 read, 2 edits, 1 run; the commands passed the one time they ran. The vetting section below covers it.
+
+### Baseline
+
+This project's tests are too thin to prove the catch-up by: there is no test command. So this pull request first adds tests that pin down how the code behaves on main@abc1234, and every proof from here on runs them:
+
+- `test/tend/characterization.js`: tests a model wrote of the current behavior
+- `test/tend/smoke.js`: loads each of the 4 modules that load on the base commit, and exits
+- `node --test test/tend/characterization.js test/tend/smoke.js` in `verify.test` in `tend.yml`, after the project's own test lines
+
+They pass on main@abc1234: the base column of the proof below is that commit with these tests added.
+
+### Security
+
+npm:
+
+- `lodash` 4.17.20 → 4.17.21: GHSA-35jh-r3h4-6jhm (high)
+- `tar` 7.5.20 → 7.5.22 (transitive): GHSA-8qq5-rm4j-mr97 (moderate); 7.5.21 fixes it, and the lockfile took the newest release its ranges allow
+
+go:
+
+- `golang.org/x/net` v0.36.0 → v0.38.0: GO-2025-3595 (moderate)
+
+### Stripe API
+
+- `GET /v1/charges`: response field deprecated (source)
+
+### Deprecated
+
+- `stripe` 14.2.0 → 16.0.0: 14.x is deprecated: charges.* was replaced by paymentIntents.*
+  - `src/billing.js:42` `const c = await stripe.charges.create({ amount: order.total })` → `const c = await stripe.paymentIntents.create({ amount: order.total })`
+  - `src/billing.js:88` `return stripe.charges.retrieve(id)` → `return stripe.paymentIntents.retrieve(id)`
+
+### Unused
 
 Removed, since nothing in the project uses them:
 
 - `@acme/colors` 1.2.0 in `package.json`
 - `left-pad` 1.3.0 in `package.json`
 
-Moved off a deprecated library:
-
-- `stripe` 14.2.0 → 16.0.0: 14.x is deprecated: charges.* was replaced by paymentIntents.*
-  - `src/billing.js:42` `const c = await stripe.charges.create({ amount: order.total })` → `const c = await stripe.paymentIntents.create({ amount: order.total })`
-  - `src/billing.js:88` `return stripe.charges.retrieve(id)` → `return stripe.paymentIntents.retrieve(id)`
-
 Possibly unused, kept: these look unused, but tend cannot prove it, so they are yours to decide.
 
 - `eslint-plugin-acme` 2.0.0 in `package.json`: a plugin eslint loads by a name its config gives
 - `chalk` 5.3.0 in `package.json`: with it removed, `npm test` fails (exit 1)
 
-Deprecated, not moved: each gets a pull request of its own after this one.
+### Next stages
 
-- `moment` 2.30.1: no model is configured to move the 3 call sites. `tend apply N` on its pull request picks one of:
-  1. Migrate to `dayjs`
-  2. Pin to 2.30.1 and ignore
+Each comes as a pull request of its own once this one is merged, proven the same way.
 
-Files: `package-lock.json`, `package.json`, `src/billing.js`.
+2. Runtimes and build tooling
+   - `nodejs` 18.20.4 → 22.20.0 in `.nvmrc`: Node.js 18 reached end of life on 2025-04-30.
+   - `axios` 0.27.2 → 1.12.0: with it in the batch, `npm test` fails (exit 1).
+3. Major upgrades
+   - `vitest` 1.6.0 → 3.2.4: a new major release.
+4. Migrations and replacements
+   - `moment` 2.30.1: deprecated, with no single replacement. tend takes the first of `dayjs` and `luxon` its proof passes, in that order.
 
-Part of this change was written by a model, in 4 steps: 1 read, 2 edits, 1 run; the commands passed the one time they ran. The vetting section below covers it.
+### Not done
+
+These could not be made or proven here. Each comes back as a pull request of its own after the catch-up, and tend's tracking issue keeps the list.
+
+- `uuid` 3.4.0 → 9.0.1: making it changes no files.
 
 ### Proof
 
@@ -246,40 +302,107 @@ ok 1 - payment intents
 
 ### Vetting
 
-- scope: 3 files, all explained by this change
+- scope: 6 files, all explained by this change
 - symbols: 2/2 changed calls resolve
 - lockfile: only the bumped packages and their dependencies changed
 - debug: nothing added
 - comments: nothing added
 
 <sub>tend · comment `tend skip` or `tend retry`</sub>
-<!-- tend id="tidy-up" base="abc1234def" rev="1" -->
+<!-- tend id="tidy-up" base="abc1234def" rev="1" stage="1" -->
 ````
 
-**Title.** `Tidy up: remove 4 unused dependencies, move off 1 deprecated
-library`, naming only what the PR does. A repo with nothing to tidy gets
-`Set up tend: nothing to tidy up`, and a PR that adds a `tend.yml` with every
-key commented out, so it changes nothing. A repo that has a `tend.yml`
-already, committed or only written to the checkout tend runs in, as
-`tend init --now` does, gets no such PR.
+**Title.** `Catch up: 12 security fixes, 1 deprecated library, 6 unused
+dependencies`, counting only what the PR does, in the order of its sections.
+A title past 80 characters counts every deprecation as one kind, and past
+that the changes as one number. A repo with nothing to catch up on gets
+`Set up tend: nothing to catch up on`, and a PR that adds a `tend.yml` with
+every key commented out, so it changes nothing. A repo that has a
+`tend.yml` already, committed or only written to the checkout tend runs in,
+as `tend init --now` does, gets no such PR.
 
-**What changed.** Four lists, each left out when it is empty:
+**Sections.** In this order, each left out when it is empty:
 
-- Removed: the dependencies nothing in the project uses, with the manifest
-  that declared each. Each goes out through the native tool, so the lockfile
-  follows.
-- Moved off: each deprecated library the code calls, moved as its own PR
+- Baseline: when the project's tests are too thin to prove the catch-up,
+  why, and the tests the PR adds first: a smoke test of the modules that
+  load on the base commit, tests a model wrote of how the code behaves now,
+  and the line in `verify.test` that runs them.
+  [How it works](how-it-works.md#a-baseline-for-weak-tests) says how tend
+  decides the tests are thin.
+- Security: each advisory the PR fixes by a bump or a lockfile update,
+  under its ecosystem. A dependency only the lockfile names says
+  `(transitive)`; when the lockfile took a later release than the one that
+  fixes it, as npm does, the line names both.
+- One section per API provider, such as `Stripe API`: each breaking or
+  deprecated change to an API the code calls that the PR handles.
+- Deprecated: each deprecated library the code calls, moved as its own PR
   would move it (the bump, then codemods, then the model), with every call
-  site before and after.
-- Possibly unused, kept: what looks unused but tend cannot prove is, and
-  why; also a removal whose proof failed, with the step that failed.
-- Deprecated, not moved: a library whose move could not be made or proven
-  here, with its options. Each gets a decision PR of its own after this one.
+  site it changed, before and after, and the option tend took when it chose.
+- Runtimes and tooling, and Upgrades: what a later stage moves, when this
+  is that stage.
+- Unused: the dependencies nothing in the project uses, removed through the
+  native tool so the lockfile follows, with the manifest that declared each;
+  then what looks unused but tend cannot prove is, and why, with a removal
+  whose proof failed and the step that failed.
+- Next stages: the catch-up PRs still to come, stage by stage, with what
+  each will carry, and anything this PR left out, under the stage that tries
+  it again, with why.
+- Not done: what this PR left out with no later stage to go to. Each comes
+  back as a PR of its own after the catch-up, and the tracking issue lists
+  it.
 
-**Proof and vetting.** Every removal and move is proven by one run on the
+**Proof and vetting.** Everything the PR does is proven by one run on the
 patched tree. When it fails, tend leaves parts out until the rest passes
-([how it works](how-it-works.md#the-first-run)), and what it left out is
-listed with why. Vetting reads the patch like any other.
+([how it works](how-it-works.md#the-catch-up)), and lists each under Next
+stages, Not done or Unused with why. Vetting reads the patch like any other.
+
+### The stages after it
+
+Each later catch-up PR opens once the one before it merged, and carries one
+stage and whatever is left of the stages before it. It opens with a line
+saying which stage it is instead of the welcome. The golden file behind this
+example is `internal/deliver/testdata/catch_up_stage.golden.md`.
+
+````markdown
+This pull request carries on tend's catch-up with migrations and replacements: 1 replaced library and 1 major upgrade. It is the last stage; after it, tend opens one pull request at a time, only for changes that touch your code.
+
+Part of this pull request was written by a model. The vetting section below covers it.
+
+### Deprecated
+
+- `request` 2.88.2 → `axios` 1.12.2, picked from 2 options: the project already depends on axios
+
+### Upgrades
+
+- `express` 3.21.2 → 5.1.0, by way of 4.21.2, each proven: a new major release
+
+### Proof
+
+| step | base (main@abc1234) | patched |
+|---|---|---|
+| `npm ci` | ok · 12s | ok · 13s |
+| `npm test` | ok · 30s | ok · 31s |
+
+<details><summary>npm test (patched), end of its output</summary>
+
+```
+TAP version 13
+ok 1 - payment intents
+1..1
+# pass 1
+```
+</details>
+
+### Vetting
+
+- scope: 4 files, all explained by this change
+
+<sub>tend · comment `tend skip` or `tend retry`</sub>
+<!-- tend id="catch-up-4" base="abc1234def" rev="1" stage="4" -->
+````
+
+A major that the jump to its target failed is climbed a major at a time,
+each step proven; the line says which releases it climbed through.
 
 ### How tend decides that nothing uses a dependency
 
@@ -358,18 +481,18 @@ put back.
 ### After the first pull request
 
 It is the one open PR until it is merged or closed. A re-run refreshes it
-when the base moves, and `tend skip` and `tend retry` work as on any PR.
-Closing it unmerged is final: tend does not open it again, and goes on with
-its usual work, the deprecated libraries it held back included. A security
-fix that arrives while it is open closes it and takes its place, and it
-comes back once the fix merges; a comment left on it after tend closed it
-does not change that. The fix's marker says the first PR is still owed, so
-a state lost while the fix is open still brings it back. `onboarding: quiet` in `tend.yml` skips the first PR,
-and `off` also skips the look for unused dependencies. Set either while the
-first PR is open, or let the base reach a point with nothing left to tidy,
-and the next run closes it with a comment saying why. `tend check` shows
-whether the first PR is due but, since it reads the checkout with any local
-edits, does not decide it.
+when the base moves, or when a change joins the queue, such as a new
+advisory, which goes in it rather than ahead of it. `tend skip` and
+`tend retry` work as on any PR. Once it merges, the next stage opens, and so
+on until no stage has anything left; then tend opens one PR at a time again,
+security first. Closing a catch-up PR unmerged is final: tend does not open
+it again, ends the catch-up, and goes on with its usual work, what that PR
+carried included. `onboarding: quiet` in `tend.yml` skips the first PR and
+the stages, and `off` also skips the look for unused dependencies. Set either
+while the first PR is open, or let the base reach a point with nothing left
+to catch up on, and the next run closes it with a comment saying why.
+`tend check` shows whether the first PR is due but, since it reads the
+checkout with any local edits, does not decide it.
 
 ## Re-runs
 
@@ -381,6 +504,6 @@ tend's state: a PR on a `tend/` branch with tend's marker in its body, whose
 branch is one commit on the base the marker names, is tend's to update. A
 commit pushed on top of it, or a merge of the base branch, is someone else's;
 tend says so once on the PR and leaves it until it is merged or closed. A
-security fix that appears while another PR is open closes that
-PR with a comment and takes its place; the closed change returns to the queue
-after the fix merges.
+security fix that appears while another PR is open closes that PR with a
+comment and takes its place; the closed change returns to the queue after the
+fix merges. The first PR is the exception: the fix goes into it instead.

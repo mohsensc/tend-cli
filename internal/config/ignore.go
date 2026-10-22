@@ -27,7 +27,7 @@ func (c *Config) Ignored(d core.Dep, to string) (string, bool) {
 }
 
 // Keeps reports whether an ignore entry names d, whatever versions it covers:
-// a tidy-up never removes a dependency tend.yml mentions.
+// the first PR never removes a dependency tend.yml mentions.
 func (c *Config) Keeps(d core.Dep) bool {
 	for _, ig := range c.Ignore {
 		if (ig.Ecosystem == "" || ig.Ecosystem == d.Ecosystem) && Glob(ig.Name, d.Name) {

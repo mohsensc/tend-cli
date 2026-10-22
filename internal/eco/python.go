@@ -505,7 +505,7 @@ func pyPinned(spec string) string {
 // Imports has no project root, so Deps remembers what an installed virtualenv
 // says each distribution provides (top_level.txt) for Imports to prefer, and
 // the entry points and requirements it declares (entry_points.txt, METADATA)
-// for a tidy-up.
+// for the first PR.
 var (
 	pyTopLevel sync.Map // dist -> []string
 	pyPoints   sync.Map // dist -> pyEntryPoints
@@ -728,8 +728,8 @@ func (py python) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	targeted := !edited && !exact
 	line := pyLockLine(ctx, root, m, cmp.Or(toName, d.Name), to, targeted)
 	// Poetry's update takes the newest release the ranges allow, not the
-	// one tend chose; what a targeted run locked is checked for every lock
-	// that can be read back.
+	// one tend chose; what a targeted run locked is checked against it, as
+	// a floor, for every lock that can be read back.
 	check := targeted && slices.Contains([]string{"uv.lock", "poetry.lock"}, path.Base(m.Lock))
 	var before map[string]bool
 	if check {
@@ -746,12 +746,14 @@ func (py python) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	if err := runIn(ctx, root, path.Dir(m.Path), nil, line); err != nil {
 		return nil, err
 	}
+	landed := ""
 	if check {
-		if err := lockedTo(root, m.Lock, core.Pip, d.Name, to, before); err != nil {
+		var err error
+		if landed, err = lockedTo(root, m.Lock, core.Pip, d.Name, to, before); err != nil {
 			return nil, errors.Join(err, snap.restore(root))
 		}
 	}
-	return &core.Bump{Files: snap.changed(root), Locked: true}, nil
+	return &core.Bump{Files: snap.changed(root), Locked: true, Landed: landed}, nil
 }
 
 // lockAt locks name at exactly to with Poetry, which takes no version on the
@@ -896,22 +898,33 @@ func poetryLock(ctx context.Context, root, dir string) string {
 
 func (python) Commands(root string, m core.Manifest) core.Commands {
 	dir := path.Dir(m.Path)
-	var install, py string
+	install, py := "python3 -m venv .venv && .venv/bin/pip install "+pyPipArgs(root, m), pyRun(m)
 	switch m.Tool {
 	case "uv":
-		install, py = "uv sync --frozen", "uv run python"
+		install = "uv sync --frozen"
 	case "poetry":
-		install, py = "poetry install", "poetry run python"
+		install = "poetry install"
 	case "pipenv":
-		install, py = "pipenv sync --dev", "pipenv run python"
-	default:
-		install, py = "python3 -m venv .venv && .venv/bin/pip install "+pyPipArgs(root, m), ".venv/bin/python"
+		install = "pipenv sync --dev"
 	}
 	c := core.Commands{Install: []string{inDir(dir, install)}}
 	if t := pyTestLine(root, m); t != "" {
 		c.Test = []string{inDir(dir, py+" -m "+t)}
 	}
 	return c
+}
+
+// pyRun is the interpreter a manifest's tool runs the project's code with.
+func pyRun(m core.Manifest) string {
+	switch m.Tool {
+	case "uv":
+		return "uv run python"
+	case "poetry":
+		return "poetry run python"
+	case "pipenv":
+		return "pipenv run python"
+	}
+	return ".venv/bin/python"
 }
 
 func pyPipArgs(root string, m core.Manifest) string {

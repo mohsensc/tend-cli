@@ -219,6 +219,7 @@ func Build(ctx context.Context, in Input) (*Plan, error) {
 		}
 		b.workflowCommands(&all[i])
 		deprecationOptions(&all[i])
+		all[i].Steps = b.steps(&all[i])
 	}
 	b.mentions(ctx, all)
 

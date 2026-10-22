@@ -347,7 +347,7 @@ func actionPin(repo, tag string) (sha, name string, err error) {
 func (actions) Commands(root string, m core.Manifest) core.Commands { return core.Commands{} }
 
 func (actions) Traits() core.Traits {
-	return core.Traits{OSV: "GitHub Actions", Page: prefix("https://github.com/"), KeepShape: true}
+	return core.Traits{OSV: "GitHub Actions", Page: prefix("https://github.com/"), KeepShape: true, Tooling: true}
 }
 
 func (actions) Imports(d core.Dep) []string { return nil }

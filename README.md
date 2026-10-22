@@ -22,11 +22,23 @@ with the evidence. When an update touches nothing, it stays quiet.
 model: groq/openai/gpt-oss-120b
 ```
 
-Merge the workflow and tend runs once right away. Its first pull request is a
-tidy-up with a short welcome: it removes dependencies nothing in the project
-uses and moves the code off deprecated libraries, proven by your own tests.
+Merge the workflow and tend runs once right away. It catches the project
+up in at most four pull requests, one after another, each proven by your
+own build and tests:
+
+1. Fixes: security fixes, changes to the APIs your code calls, moves off
+   deprecated libraries, and the removal of dependencies nothing uses. When
+   your tests are too thin to prove the rest, this one first adds tests that
+   pin down how the code behaves today.
+2. Runtimes and build tooling: runtime pins past their end of life, base
+   images, Actions, compilers and bundlers.
+3. Major upgrades, a major at a time when the jump fails.
+4. Migrations and replacements: wide migrations, and deprecated libraries
+   with no single replacement, where tend picks one itself and proves it.
+
 After that, tend runs on a schedule and opens one PR at a time, only for
-changes that touch your code.
+changes that touch your code. What it could not do on its own it lists in
+one tracking issue.
 
 ## What a pull request looks like
 
@@ -69,11 +81,13 @@ the first one.
   uses get a PR. Plain version bumps do not, unless you turn them on.
 - There is never more than one tend PR open, and it holds the whole change:
   manifest, lockfile, every call site, and the tests that had to move.
-- Security comes first, then API changes that break your code, then
+- The catch-up comes first and carries what it can of the rest. After it,
+  security comes first, then API changes that break your code, then
   deprecations, then breaking releases.
-- When there is no single replacement, the PR changes nothing and lists the
-  options. Comment `tend apply 2` to pick one, `tend skip` to say no, or
-  `tend retry` to try again.
+- When there is more than one way off something, tend takes the first its
+  rule allows that passes the proof, and says why. Comment `tend apply 2` to
+  have another, `tend skip` to say no, or `tend retry` to try again. Only
+  when none passes does the PR change nothing and list the options.
 - Releases younger than three days wait, except security fixes, deprecations
   and API changes.
 
@@ -90,7 +104,9 @@ deliver: {automerge: security}
 ```
 
 [docs/config.md](docs/config.md) describes every key. `deliver: {mode: commit}`
-commits to the branch instead of opening PRs.
+commits to the branch instead of opening PRs, and keeps a repo current with
+no one watching: it pushes only what passed its proof, waits for your CI on
+each commit, and reverts its own commit when CI fails on it.
 
 ## Running it locally
 

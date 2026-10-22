@@ -22,8 +22,9 @@ import (
 // checkout keeps no token in the repository's config, where the project's
 // own commands could read it; tend is handed the token itself. PRs opened
 // with the default token do not trigger other workflows; a fine-grained or
-// App token changes that. TEND_MODEL_KEY holds the key for whichever model
-// provider tend.yml names.
+// App token changes that. Issues are for tend's tracking issue, and checks
+// and statuses for reading CI on what commit mode pushed. TEND_MODEL_KEY
+// holds the key for whichever model provider tend.yml names.
 const workflow = `name: tend
 on:
   push:
@@ -31,7 +32,7 @@ on:
     paths: [.github/workflows/tend.yml]
   schedule: [{cron: %q}]
   workflow_dispatch:
-permissions: {contents: write, pull-requests: write}
+permissions: {contents: write, pull-requests: write, issues: write, checks: read, statuses: read}
 concurrency: {group: tend, cancel-in-progress: false}
 jobs:
   tend:

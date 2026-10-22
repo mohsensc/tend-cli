@@ -18,6 +18,10 @@ func leftovers(ctx context.Context, p *pass) ([]core.Finding, string) {
 	if p.in.Patch.Decision {
 		return nil, "nothing was applied"
 	}
+	opt := p.in.applied()
+	if opt != nil && (opt.Stay || opt.ToName == "" && opt.Codemod == nil && len(ch.Deps) > 0 && opt.To == ch.Deps[0].Version) {
+		return nil, "the patch stays on the version in use"
+	}
 	if p.in.Index == nil {
 		return nil, "no scan index"
 	}
@@ -45,7 +49,7 @@ func leftovers(ctx context.Context, p *pass) ([]core.Finding, string) {
 	if slices.ContainsFunc(ch.Evidence, func(e core.Evidence) bool { return e.Source == "runtime" }) {
 		return warnedAgain(p)
 	}
-	swap := ch.ToName != "" && len(ch.Deps) > 0
+	swap := (ch.ToName != "" || opt != nil && opt.ToName != "") && len(ch.Deps) > 0
 	if !swap && len(renames) == 0 && len(paths) == 0 && len(flds) == 0 {
 		return nil, na
 	}

@@ -102,7 +102,7 @@ func TestRedo(t *testing.T) {
 		t.Fatal("the worktree is not back on its base")
 	}
 
-	if err := Redo(context.Background(), f.dir, f.ch, code, f.opts(nil)); err != nil {
+	if err := Redo(context.Background(), f.dir, f.ch, code, f.opts(nil), &core.Patch{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(readFile(t, f.dir, "package.json"), `"^2.0.0"`) || !strings.Contains(readFile(t, f.dir, "src/billing.js"), "paymentIntents") {
@@ -111,7 +111,7 @@ func TestRedo(t *testing.T) {
 
 	run(t, f.dir, "reset", "-q", "--hard", "HEAD")
 	writeFile(t, f.dir, "src/billing.js", "// rewritten since\n")
-	if err := Redo(context.Background(), f.dir, f.ch, code, f.opts(nil)); err == nil || !strings.Contains(err.Error(), "no longer apply") {
+	if err := Redo(context.Background(), f.dir, f.ch, code, f.opts(nil), &core.Patch{}); err == nil || !strings.Contains(err.Error(), "no longer apply") {
 		t.Errorf("redo onto a file that moved on: %v", err)
 	}
 }

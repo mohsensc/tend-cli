@@ -1,6 +1,7 @@
 package deliver
 
 import (
+	"cmp"
 	_ "embed"
 	"fmt"
 	"html"
@@ -44,16 +45,16 @@ type BodyInput struct {
 	Rev     int        // 1 for a new PR, bumped on every update
 	Option  int        // option the maintainer picked, 0 for tend's own choice
 	Notes   []string
-	// TidyDue marks a PR that went ahead of tend's first PR, so a lost state
-	// still finds the tidy-up owed.
-	TidyDue bool
+	// FirstDue marks a PR that went ahead of tend's first PR, so a lost state
+	// still finds the first PR owed.
+	FirstDue bool
 }
 
 type page struct {
 	Heading, Why, Level                      string
-	Welcome, Changed                         string // a tidy-up's, in place of the heading and Touched
+	Welcome, Batch                           string // the first PR's, in place of the heading and Touched
 	Upstream, Touched, Proof, Vetting, Notes string
-	Options, Footer, ID, Base, Tidy          string
+	Options, Footer, ID, Base, Due, Stage    string
 	Rev                                      int
 }
 
@@ -68,13 +69,20 @@ func Body(in BodyInput) string {
 		Base:   markerEscape.Replace(in.Base),
 		Rev:    max(in.Rev, 1),
 	}
-	if in.TidyDue {
-		p.Tidy = "due"
+	if in.FirstDue {
+		p.Due = "due"
 	}
-	if ch.Kind == core.Tidy && ch.Cleanup != nil {
-		p.Welcome, p.Changed = welcome(ch.Cleanup), cleaned(in)
+	if ch.Kind == core.First && ch.Batch != nil {
+		p.Welcome, p.Batch = welcome(ch.Batch), batched(in)
+		if ch.ID != core.FirstID {
+			p.Welcome = intro(ch.Batch)
+		}
+		if k := ch.Batch.Stage; k > 0 {
+			p.Stage = strconv.Itoa(k)
+		}
 	} else {
-		p.Heading, p.Why, p.Level = heading(ch), why(in), level(in)
+		at := shown(in)
+		p.Heading, p.Why, p.Level = heading(at.Change), why(in), level(at)
 		p.Upstream, p.Touched, p.Options = upstream(ch), touched(in), options(in)
 	}
 	if v := in.Vetting; v != nil {
@@ -85,7 +93,7 @@ func Body(in BodyInput) string {
 	}
 	res := render(p)
 	// The longest sections give way first; the marker always stays.
-	for _, f := range []*string{&p.Upstream, &p.Proof, &p.Touched, &p.Changed, &p.Options, &p.Notes, &p.Vetting} {
+	for _, f := range []*string{&p.Upstream, &p.Proof, &p.Touched, &p.Batch, &p.Options, &p.Notes, &p.Vetting} {
 		if len(res) <= bodyMax {
 			break
 		}
@@ -93,6 +101,23 @@ func Body(in BodyInput) string {
 		res = render(p)
 	}
 	return res
+}
+
+// shown is in with its change as the patch made it: a dep only the lockfile
+// names at the release it landed on, past the least one that would do, and
+// a replacement the option it applied moves to.
+func shown(in BodyInput) BodyInput {
+	if at := landedAt(in.Patch, in.Change); at != "" {
+		ch := *in.Change
+		ch.To = at
+		in.Change = &ch
+	}
+	if o := picked(in); o != nil && o.ToName != "" && (in.Patch == nil || !in.Patch.Decision) {
+		ch := *in.Change
+		ch.ToName, ch.To = o.ToName, o.To
+		in.Change = &ch
+	}
+	return in
 }
 
 func render(p page) string {
@@ -140,13 +165,25 @@ func tail(s string, n int) string {
 // markerEscape keeps an id from closing the comment or the attribute it sits in.
 var markerEscape = strings.NewReplacer("&", "&amp;", `"`, "&quot;", "-->", "--&gt;")
 
-var markerRe = regexp.MustCompile(`<!-- tend id="([^"]*)" base="([^"]*)" rev="(\d+)"(?: tidy="(\w+)")? -->`)
+var markerRe = regexp.MustCompile(`<!-- tend id="([^"]*)" base="([^"]*)" rev="(\d+)"(?: tidy="(\w+)")?(?: stage="(\d+)")? -->`)
 
-// TidyDue reports whether the marker of body says tend's first PR is still
-// owed: the PR went ahead of it.
-func TidyDue(body string) bool {
+// FirstDue reports whether the marker of body says tend's first PR is still
+// owed: the PR went ahead of it. The attribute is named for the tidy-up the
+// first PR once was, which markers on open PRs still carry.
+func FirstDue(body string) bool {
 	all := markerRe.FindAllStringSubmatch(body, -1)
 	return len(all) > 0 && all[len(all)-1][4] == "due"
+}
+
+// StageOf is the catch-up stage the marker of body names, 0 for a PR that
+// is not a catch-up PR or that an older tend opened.
+func StageOf(body string) int {
+	all := markerRe.FindAllStringSubmatch(body, -1)
+	if len(all) == 0 {
+		return 0
+	}
+	n, _ := strconv.Atoi(all[len(all)-1][5])
+	return n
 }
 
 // ParseMarker reads the marker Body ends with. The last one wins.
@@ -456,7 +493,7 @@ func touched(in BodyInput) string {
 		lines = append(lines, "- "+strings.Join(others, ", "))
 	}
 	res := strings.Join(lines, "\n")
-	for _, s := range []string{lockOnly(ch, p), goMoved(ch, p.Diff), raised(ch)} {
+	for _, s := range []string{lockOnly(ch, p), past(ch, p), goMoved(ch, p.Diff), raised(ch)} {
 		if s != "" {
 			res += "\n\n" + s
 		}
@@ -501,6 +538,18 @@ func lockOnly(ch *core.Change, p *core.Patch) string {
 		return ""
 	}
 	return fmt.Sprintf("%s in %s already allows %s, so only %s changed.", code(d.Req), code(m.Path), ch.To, code(m.Lock))
+}
+
+// past explains a dep only the lockfile names that landed past ch.To: the
+// tool moves such a dep to the newest release the ranges on it allow.
+func past(ch *core.Change, p *core.Patch) string {
+	at := landedAt(p, ch)
+	if at == "" {
+		return ""
+	}
+	d := ch.Deps[0]
+	tool := cmp.Or(d.Manifest.Tool, "the lock tool")
+	return fmt.Sprintf("tend asked for %s; %s names %s only as a dependency of other packages, and %s moves such a dependency to the newest release their ranges allow, %s.", ch.To, code(d.Manifest.Lock), code(d.Name), code(tool), at)
 }
 
 // raised explains a runtime minimum: it is what the project promises to
@@ -806,17 +855,24 @@ func options(in BodyInput) string {
 	if applied == 0 {
 		res = append(res, "", "Nothing was applied. Comment on this PR with the number you want.")
 	}
+	if c := ch.Choice; c != nil && in.Option == 0 && applied == c.N {
+		res = append([]string{fmt.Sprintf("tend took option %d on its own: %s. Comment `tend apply N` to have another instead.", c.N, Clause(c.Why)), ""}, res...)
+	}
 	return strings.Join(res, "\n")
 }
 
 // appliedOption is the option the patch carries: the maintainer's pick, else
-// the first mechanical one, which is what a patch without a decision applied.
+// the one tend took by its own rule, else the first mechanical one, which is
+// what a patch without a decision applied.
 func appliedOption(in BodyInput) int {
 	if in.Option > 0 {
 		return in.Option
 	}
 	if in.Patch == nil || in.Patch.Decision {
 		return 0
+	}
+	if c := in.Change.Choice; c != nil {
+		return c.N
 	}
 	for i, o := range in.Change.Options {
 		if o.Safe {

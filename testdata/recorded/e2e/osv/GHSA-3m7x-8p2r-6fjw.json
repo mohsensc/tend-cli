@@ -1,0 +1,14 @@
+{
+  "id": "GHSA-3m7x-8p2r-6fjw",
+  "summary": "Prototype pollution in parse",
+  "details": "parse copies __proto__ keys from its input onto the result. 1.0.1 checks its input.",
+  "published": "2026-10-17T12:00:00Z",
+  "modified": "2026-10-17T12:00:00Z",
+  "database_specific": {"severity": "MODERATE"},
+  "affected": [
+    {
+      "package": {"name": "@fixture/parser", "ecosystem": "npm"},
+      "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.0.1"}]}]
+    }
+  ]
+}

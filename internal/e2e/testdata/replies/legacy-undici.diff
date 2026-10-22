@@ -1,0 +1,20 @@
+diff --git a/src/client.js b/src/client.js
+--- a/src/client.js
++++ b/src/client.js
+@@ -1,10 +1,11 @@
+ 'use strict'
+ 
+-var request = require('request')
++var undici = require('undici')
+ 
+ exports.price = function (sku, cb) {
+-  request.get('https://prices.example.test/v1/' + sku, function (err, res, body) {
+-    if (err) return cb(err)
+-    cb(null, JSON.parse(body).cents)
+-  })
++  undici.request('https://prices.example.test/v1/' + sku).then(function (res) {
++    return res.body.json()
++  }).then(function (body) {
++    cb(null, body.cents)
++  }, cb)
+ }

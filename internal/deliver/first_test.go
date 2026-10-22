@@ -9,13 +9,13 @@ import (
 	"github.com/mohsensc/tend-cli/internal/core"
 )
 
-// A tidy-up tend closed for a security fix comes back; one a person closed,
+// A first PR tend closed for a security fix comes back; one a person closed,
 // or skipped, does not.
 func TestDisplaced(t *testing.T) {
 	ctx := context.Background()
 	f := NewFake("acme", "shop", "main")
 	open := func() int {
-		pr, err := f.CreatePR(ctx, core.PRInput{Branch: TidyBranch, Base: "main", Body: "<!-- tend id=\"tidy-up\" base=\"abc\" rev=\"1\" -->"})
+		pr, err := f.CreatePR(ctx, core.PRInput{Branch: FirstBranch, Base: "main", Body: "<!-- tend id=\"tidy-up\" base=\"abc\" rev=\"1\" -->"})
 		if err != nil {
 			t.Fatal(err)
 		}

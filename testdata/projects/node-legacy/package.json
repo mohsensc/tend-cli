@@ -1,0 +1,15 @@
+{
+  "name": "legacy-shop",
+  "version": "0.3.0",
+  "private": true,
+  "main": "src/app.js",
+  "engines": {
+    "node": ">=4"
+  },
+  "dependencies": {
+    "@fixture/colors": "^1.0.0",
+    "@fixture/parser": "^1.0.0",
+    "@fixture/web": "^1.0.0",
+    "request": "^2.88.2"
+  }
+}

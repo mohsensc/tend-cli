@@ -1,0 +1,61 @@
+diff --git a/package-lock.json b/package-lock.json
+index 0000000..0000000 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -9,7 +9,7 @@
+       "version": "0.3.0",
+       "dependencies": {
+         "@fixture/parser": "^1.0.0",
+-        "@fixture/web": "^1.0.0",
++        "@fixture/web": "^3.0.0",
+         "request": "^2.88.2"
+       },
+       "engines": {
+@@ -32,9 +32,9 @@
+       }
+     },
+     "node_modules/@fixture/web": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/web/-/web-1.0.0.tgz",
+-      "integrity": "sha512-4a4BjMHn+ug3sMbGm6y+Sw4QHxkJY5tnlUjKN079KuWdddUcVGzB+sg3jzaOXoW8A/v4mBzGSU31q+yG2dnPBQ==",
++      "version": "3.0.0",
++      "resolved": "http://registry.test/@fixture/web/-/web-3.0.0.tgz",
++      "integrity": "sha512-zfT6bLUWzyF+a5iPnn4A/faveqFoSBQzmEaLcxP0YgXOShv9koXI70fqLYIEybptdKNNEzATkmfx5ngsAy3RxQ==",
+       "license": "MIT"
+     },
+     "node_modules/request": {
+diff --git a/package.json b/package.json
+index 0000000..0000000 100644
+--- a/package.json
++++ b/package.json
+@@ -8,7 +8,7 @@
+   },
+   "dependencies": {
+     "@fixture/parser": "^1.0.0",
+-    "@fixture/web": "^1.0.0",
++    "@fixture/web": "^3.0.0",
+     "request": "^2.88.2"
+   }
+ }
+diff --git a/src/app.js b/src/app.js
+index 0000000..0000000 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -5,9 +5,7 @@ var order = require('./order')
+ 
+ var app = web()
+ 
+-app.configure(function () {
+-  app.set('name', 'legacy-shop')
+-})
++app.set('name', 'legacy-shop')
+ 
+ app.get('/health', function () {
+   return 'ok'
+@@ -20,5 +18,5 @@ app.get('/order', function (query) {
+ module.exports = app
+ 
+ module.exports.server = function () {
+-  return web.createServer(app)
++  return app.createServer()
+ }

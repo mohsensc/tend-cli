@@ -10,6 +10,9 @@ type Patch struct {
 	Edited   []string // files a model edited
 	Decision bool     // nothing applied; the PR asks the maintainer to choose
 	Note     string
+	// Landed maps "<eco>/<name>" to the release a dep only the lockfile names
+	// landed on, for each that went past the change's To.
+	Landed map[string]string `json:",omitempty"`
 }
 
 type Step struct {

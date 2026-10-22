@@ -1,0 +1,6 @@
+{
+  "name": "node-fetch",
+  "version": "3.3.2",
+  "main": "index.js",
+  "license": "MIT"
+}

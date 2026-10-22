@@ -1,0 +1,6 @@
+{
+  "name": "undici",
+  "version": "7.16.0",
+  "main": "index.js",
+  "license": "MIT"
+}

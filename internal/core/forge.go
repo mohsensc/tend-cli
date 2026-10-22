@@ -58,3 +58,31 @@ type Forge interface {
 	Comment(ctx context.Context, number int, body string) error
 	AutoMerge(ctx context.Context, pr *PR, method string) error // method: merge|squash|rebase
 }
+
+// CI is what a repository's own checks said about a commit.
+type CI struct {
+	State  string   // none|pending|success|failure
+	Failed []string // names of the checks that failed
+}
+
+// Checks is a forge that reports the CI result of a commit.
+type Checks interface {
+	Checks(ctx context.Context, sha string) (CI, error)
+}
+
+type Issue struct {
+	Number int
+	Title  string
+	Body   string
+	Open   bool
+}
+
+// Tracker is a forge that keeps tend's one tracking issue.
+type Tracker interface {
+	// FindIssue returns the newest issue, open or closed, whose body holds
+	// marker, nil if none.
+	FindIssue(ctx context.Context, marker string) (*Issue, error)
+	CreateIssue(ctx context.Context, title, body string, labels []string) (*Issue, error)
+	// EditIssue sets the body and opens or closes the issue.
+	EditIssue(ctx context.Context, number int, body string, open bool) error
+}

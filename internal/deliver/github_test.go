@@ -29,7 +29,7 @@ type step struct {
 	header map[string]string
 }
 
-type api struct {
+type stub struct {
 	g     *GitHub
 	warn  *bytes.Buffer
 	slept []time.Duration
@@ -37,7 +37,7 @@ type api struct {
 
 // newAPI starts a server that plays steps in order. Every deviation fails the
 // test; so does leaving steps unplayed.
-func newAPI(t *testing.T, steps []step) *api {
+func newAPI(t *testing.T, steps []step) *stub {
 	t.Helper()
 	var mu sync.Mutex
 	next := 0
@@ -68,7 +68,7 @@ func newAPI(t *testing.T, steps []step) *api {
 			t.Errorf("%d of %d expected requests were never made; next was %s", len(steps)-next, len(steps), steps[next].req)
 		}
 	})
-	res := &api{warn: &bytes.Buffer{}}
+	res := &stub{warn: &bytes.Buffer{}}
 	g := NewGitHub(fetch.New("", "test"), srv.Client(), "tok", "acme", "shop").(*GitHub)
 	g.api, g.warn = srv.URL, res.warn
 	g.sleep = func(_ context.Context, d time.Duration) error { res.slept = append(res.slept, d); return nil }

@@ -22,7 +22,7 @@ type Options struct {
 	Option   int  // 0 = tend's choice; N = maintainer picked option N
 	Proven   bool // the project's own build and tests will run on the result
 	// Strict makes a bump that would leave call sites for the proof to judge
-	// a decision instead: a tidy-up carries only moves that are made.
+	// a decision instead: the first PR carries only changes that are made.
 	Strict bool
 	// Bumped is called once the deps are bumped, before codemods or a model
 	// touch the code.
@@ -168,7 +168,7 @@ func sites(n int) string {
 // stays reports whether opt keeps the version in use: the way off a deprecation
 // that is no way off at all.
 func stays(ch *core.Change, opt *core.Option) bool {
-	return opt.ToName == "" && opt.Codemod == nil && opt.To != "" && opt.To == from(ch.Deps[0])
+	return opt.Stay || opt.ToName == "" && opt.Codemod == nil && opt.To != "" && opt.To == from(ch.Deps[0])
 }
 
 // reusable reports whether idx still describes the worktree: the bump only moved
@@ -181,8 +181,12 @@ func reusable(idx core.ScanIndex, bumped []string) bool {
 	return !slices.ContainsFunc(bumped, func(f string) bool { return slices.Contains(files, f) })
 }
 
-// choose returns the option to apply: the maintainer's pick, else the first safe one.
+// choose returns the option to apply: the maintainer's pick, else the one a
+// run took by its own rule, else the first safe one.
 func choose(ch *core.Change, n int) (*core.Option, error) {
+	if n == 0 && ch.Choice != nil {
+		n = ch.Choice.N
+	}
 	if n > 0 {
 		if n > len(ch.Options) {
 			return nil, fmt.Errorf("patch: option %d of %d", n, len(ch.Options))
@@ -195,6 +199,17 @@ func choose(ch *core.Change, n int) (*core.Option, error) {
 		}
 	}
 	return nil, nil
+}
+
+// Bare reports whether making ch is its bump and nothing more: there is a
+// release to move to, no option to apply, and no call site the bump could
+// leave for codemods or a model. Such a change is made again next to others
+// without being made on its own first.
+func Bare(ch *core.Change) bool {
+	if ch.API != nil || len(ch.Options) > 0 || ch.To == "" && ch.ToName == "" {
+		return false
+	}
+	return !needsCode(ch, nil) || len(core.Calls(ch)) == 0
 }
 
 // needsCode reports whether sites left untouched by the deterministic steps must change.

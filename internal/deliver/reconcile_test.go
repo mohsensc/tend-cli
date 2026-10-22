@@ -2,6 +2,7 @@ package deliver
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -80,7 +81,7 @@ func TestReconcile(t *testing.T) {
 					t.Fatalf("got %+v", got)
 				}
 				want := state.OpenPR{ID: "npm/a@2.0.0", PR: 1, Branch: "tend/npm-a-2.0.0", Base: "main", At: clock}
-				if st.Open == nil || *st.Open != want {
+				if st.Open == nil || !reflect.DeepEqual(*st.Open, want) {
 					t.Errorf("open = %+v, want %+v", st.Open, want)
 				}
 			},

@@ -4,7 +4,7 @@
 # base: ""                 # base branch; "" means the repo's default branch
 # cooldown: 3d             # skip releases younger than this; security fixes and deprecations do not wait
 # schedule: 1d             # how often watch runs and the workflow init --ci writes: 1h to 12h, 1d or 7d
-# onboarding: pr           # the first run: pr (a tidy-up PR with a welcome) | quiet (no PR, just start) | off
+# onboarding: pr           # the first run: pr (one catch-up PR with a welcome) | quiet (no PR, just start) | off
 # ecosystems: []           # read only these, e.g. [npm, docker, actions]; [] means all
 
 # updates:                 # which changes get a pull request; a breaking change always does

@@ -120,7 +120,7 @@ func TestQuestions(t *testing.T) {
 
 	// What upstream said, what earlier checks verified and the new
 	// declarations go in the prompt; overlapping context is shown once.
-	in.Change = &core.Change{Kind: core.Tidy, Cleanup: &core.Cleanup{Moves: []core.Change{{Evidence: []core.Evidence{{Title: "pay 1.4.0 is deprecated", Text: "charges.* was replaced by paymentIntents.*"}}}}}}
+	in.Change = &core.Change{Kind: core.First, Batch: &core.Batch{Changes: []core.Change{{Evidence: []core.Evidence{{Title: "pay 1.4.0 is deprecated", Text: "charges.* was replaced by paymentIntents.*"}}}}}}
 	in.Proof = &core.Proof{Patched: &core.Run{Pass: true}}
 	m = &quiz{}
 	in.Model = m

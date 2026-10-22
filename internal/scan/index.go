@@ -446,6 +446,50 @@ func (x *Index) Files() []string {
 	return res
 }
 
+// Reached reports whether a test reaches the file p: a JavaScript or
+// TypeScript test names a relative path that resolves to it, a Python test
+// imports the module it is, or a Go test sits in its package's directory.
+// In the other languages a test whose file name holds p's base name counts,
+// as FooTest.java does for Foo.java.
+func (x *Index) Reached(p string) bool {
+	stem := strings.TrimSuffix(p, path.Ext(p))
+	for _, f := range x.files {
+		if f.File == p || !IsTest(f.File) {
+			continue
+		}
+		switch strings.TrimSuffix(f.Lang, "?") {
+		case "go":
+			if path.Dir(f.File) == path.Dir(p) {
+				return true
+			}
+		case "js":
+			for _, l := range f.lits {
+				if !strings.HasPrefix(l.Text, ".") {
+					continue
+				}
+				r := path.Join(path.Dir(f.File), l.Text)
+				if r == p || r == stem || path.Join(r, "index") == stem {
+					return true
+				}
+			}
+		case "python":
+			for _, im := range f.imps {
+				for _, q := range im.quals {
+					m := strings.ReplaceAll(q, ".", "/")
+					if stem == m || strings.HasSuffix(stem, "/"+m) || stem == m+"/__init__" || strings.HasSuffix(stem, "/"+m+"/__init__") {
+						return true
+					}
+				}
+			}
+		default:
+			if strings.Contains(strings.ToLower(path.Base(f.File)), strings.ToLower(path.Base(stem))) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Notes lists the files left out or only partly read, and why.
 func (x *Index) Notes() []string { return x.notes }
 

@@ -183,15 +183,64 @@ func TestNodeAgent(t *testing.T) {
 	}
 }
 
-// S1 without a model: the bare bump breaks the tests, so the PR changes
-// nothing and lays out the ways forward. A maintainer's pick, and only a
-// maintainer's, turns it into the migration.
-func TestNodeDecision(t *testing.T) {
+// S1 without a model: the bare bump breaks the tests, so tend takes the way
+// off it its rule allows, the rename the deprecation names, proves it, and
+// says why it chose it. The other option stays one comment away, and only a
+// maintainer's comment takes it.
+func TestNodeChoice(t *testing.T) {
 	need(t, "node", "npm")
 	w := setup(t, "node-sdk")
 	res := w.tend("run").want(t, 0)
+	if !strings.HasPrefix(res.stdout, "tend: opened #1 Migrate off deprecated @fixture/pay 1.x ") {
+		t.Fatalf("run said %q\n%s", res.stdout, res.stderr)
+	}
+	pr := onlyPR(t, w)
+	w.goldenPR(pr)
+	if want := "tend took option 1 on its own: the rename the deprecation notice names. Comment `tend apply N` to have another instead."; !strings.Contains(pr.Body, want) {
+		t.Errorf("the body does not say why tend chose:\n%s", pr.Body)
+	}
+	if !strings.Contains(res.stderr, "trying option 1 of @fixture/pay on its own") {
+		t.Errorf("the choice is not logged:\n%s", res.stderr)
+	}
+
+	w.forge.Now = func() time.Time { return now.Add(time.Hour) }
+	w.say(1, "drive-by", "NONE", "tend apply 2")
+	if res := w.tend("run").want(t, 0); !strings.Contains(res.stdout, "waiting on PR #1") || rev(t, *w.forge.PR(1)) != 1 {
+		t.Fatalf("a comment from outside the repo was honored: %q", res.stdout)
+	}
+	w.forge.Now = func() time.Time { return now.Add(2 * time.Hour) }
+	w.say(1, "owner", "OWNER", "tend apply 2")
+	res = w.tend("run").want(t, 0)
+	if !strings.HasPrefix(res.stdout, "tend: updated #1 Pin @fixture/pay to 1.4.0 ") {
+		t.Fatalf("after tend apply 2: %q", res.stdout)
+	}
+	if d := w.diff("tend/npm-fixture-pay-2.0.0"); !strings.Contains(d, `versions: [">=2.0.0"]`) || strings.Contains(d, "package-lock.json") {
+		t.Errorf("the pin:\n%s", d)
+	}
+}
+
+// When no way off can be proven, tend stays put: the PR changes nothing and
+// lays out the options. A maintainer's pick, and only a maintainer's, turns
+// it into the migration.
+func TestNodeDecision(t *testing.T) {
+	need(t, "node", "npm")
+	w := setup(t, "node-sdk")
+	w.commit("Pin the endpoint", map[string]string{"test/endpoint.test.js": `'use strict'
+
+const test = require('node:test')
+const assert = require('node:assert')
+const { charge } = require('../src/billing')
+
+test('charges go to the charges endpoint', async () => {
+  let url
+  globalThis.fetch = async (u) => { url = u; return { ok: true, json: async () => ({}) } }
+  await charge(5, 'cus_1').catch(() => {})
+  assert.match(url, /\/v1\/charges$/)
+})
+`})
+	res := w.tend("run").want(t, 0)
 	if !strings.HasPrefix(res.stdout, "tend: opened #1 Decide: migrate off @fixture/pay 1.x ") {
-		t.Fatalf("run said %q", res.stdout)
+		t.Fatalf("run said %q\n%s", res.stdout, res.stderr)
 	}
 	if strings.Count(res.stderr, "mechanical only") != 1 || !strings.Contains(res.stderr, "npm/@fixture/pay@2.0.0 needs code edits a model would make") {
 		t.Errorf("the run does not say plainly that it had no model:\n%s", res.stderr)
@@ -213,7 +262,7 @@ func TestNodeDecision(t *testing.T) {
 	}
 
 	w.forge.Now = func() time.Time { return now.Add(time.Hour) }
-	w.say(1, "drive-by", "NONE", "tend apply 1")
+	w.say(1, "drive-by", "NONE", "tend apply 2")
 	if res := w.tend("run").want(t, 0); !strings.Contains(res.stdout, "waiting on PR #1") {
 		t.Fatalf("a comment from outside the repo was honored: %q", res.stdout)
 	}
@@ -222,11 +271,10 @@ func TestNodeDecision(t *testing.T) {
 	}
 
 	w.forge.Now = func() time.Time { return now.Add(2 * time.Hour) }
-	w.say(1, "owner", "OWNER", "tend apply 1")
-	w.model = script(t, "node-sdk")
+	w.say(1, "owner", "OWNER", "tend apply 2")
 	res = w.tend("run").want(t, 0)
-	if !strings.HasPrefix(res.stdout, "tend: updated #1 Migrate off deprecated @fixture/pay 1.x ") {
-		t.Fatalf("after tend apply 1: %q", res.stdout)
+	if !strings.HasPrefix(res.stdout, "tend: updated #1 Pin @fixture/pay to 1.4.0 ") {
+		t.Fatalf("after tend apply 2: %q", res.stdout)
 	}
 	pr = *w.forge.PR(1)
 	if rev(t, pr) != 2 || len(w.forge.All()) != 1 || pr.Draft {
@@ -544,7 +592,7 @@ func TestDryRun(t *testing.T) {
 	w.noForge = true
 	delete(w.getenv, "GITHUB_REPOSITORY")
 	res := w.tend("run", "--dry-run").want(t, 0)
-	if !strings.HasPrefix(res.stdout, "Decide: migrate off @fixture/pay 1.x\n\n## @fixture/pay 1.4.0 → 2.0.0\n") {
+	if !strings.HasPrefix(res.stdout, "Migrate off deprecated @fixture/pay 1.x\n\n## @fixture/pay 1.4.0 → 2.0.0\n") {
 		t.Errorf("dry run printed:\n%s", res.stdout)
 	}
 	wt := strings.TrimSuffix(res.stdout[strings.LastIndex(res.stdout, " ")+1:], "\n")
@@ -952,6 +1000,59 @@ func TestCommitMode(t *testing.T) {
 	w.tend("run").want(t, 0)
 	if st := w.state(); st.Open != nil || st.Seen["go/example.com/fixture/crypto@v1.0.1"].Verdict != "delivered" {
 		t.Errorf("after the next run: open %+v, seen %+v", st.Open, st.Seen)
+	}
+}
+
+// Commit mode, unattended: tend waits while the repository's CI runs on its
+// commit, reverts the commit when CI fails on it, backs off the change, and
+// says so in its one tracking issue instead of trying again.
+func TestCommitModeRevert(t *testing.T) {
+	need(t, "go")
+	w := setup(t, "go-vuln")
+	w.commit("Commit straight to main", map[string]string{"tend.yml": "deliver: {mode: commit}\n"})
+	w.tend("run").want(t, 0)
+	sha := w.git(w.origin, "rev-parse", "main")
+
+	w.forge.CI[sha] = core.CI{State: "pending"}
+	if res := w.tend("run").want(t, 0); !strings.HasPrefix(res.stdout, "tend: waiting on CI for "+core.Short(sha)+", which tend pushed to main") {
+		t.Fatalf("while CI runs: %q\n%s", res.stdout, res.stderr)
+	}
+	w.forge.CI[sha] = core.CI{State: "failure", Failed: []string{"test (ubuntu-latest)"}}
+	res := w.tend("run").want(t, 0)
+	if !strings.HasPrefix(res.stdout, "tend: reverted "+core.Short(sha)+" on main: CI failed (test (ubuntu-latest))") {
+		t.Fatalf("after CI failed: %q\n%s", res.stdout, res.stderr)
+	}
+	msg := w.git(w.origin, "log", "-1", "--format=%B", "main")
+	for _, want := range []string{
+		`Revert "Bump example.com/fixture/crypto to v1.0.1 (fixes GO-2026-0001)"`,
+		"CI failed on " + core.Short(sha) + ": test (ubuntu-latest).",
+		"will not try go/example.com/fixture/crypto@v1.0.1 again",
+		"This reverts commit " + sha + ".",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the revert says %q, want %q", msg, want)
+		}
+	}
+	if d := w.git(w.origin, "diff", sha+"^", "main"); d != "" {
+		t.Errorf("main after the revert is not the tree before tend's commit:\n%s", d)
+	}
+	if p := w.state().Parked["go/example.com/fixture/crypto@v1.0.1"]; p.Reason != "reverted" {
+		t.Errorf("parked = %+v", p)
+	}
+
+	if res := w.tend("run").want(t, 0); res.stdout != "tend: up to date\n" {
+		t.Errorf("after the revert: %q\n%s", res.stdout, res.stderr)
+	}
+	is := w.forge.Issues()
+	if len(is) != 1 || !is[0].Open || !strings.Contains(is[0].Body, "- `go/example.com/fixture/crypto@v1.0.1`: reverted in ") || !strings.Contains(is[0].Body, "CI failed on "+core.Short(sha)) {
+		t.Fatalf("issues = %+v", is)
+	}
+	w.tend("run").want(t, 0)
+	if n := len(w.forge.Issues()); n != 1 || w.forge.Issues()[0].Body != is[0].Body {
+		t.Errorf("a run with nothing new touched the issue: %+v", w.forge.Issues())
+	}
+	if n := strings.Count(w.git(w.origin, "log", "--format=%s", "main")+"\n", "\nBump example.com/fixture/crypto"); n != 1 {
+		t.Errorf("the change was pushed %d times", n)
 	}
 }
 

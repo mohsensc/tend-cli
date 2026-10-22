@@ -1,0 +1,14 @@
+{
+  "name": "request",
+  "dist-tags": {
+    "latest": "2.88.2"
+  },
+  "time": {
+    "created": "2011-01-28T09:00:00.000Z",
+    "modified": "2020-02-11T09:00:00.000Z",
+    "2.88.2": "2020-02-11T09:00:00.000Z"
+  },
+  "deprecated": {
+    "2.88.2": "request has been deprecated, see https://github.com/request/request/issues/3142"
+  }
+}

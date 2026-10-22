@@ -167,7 +167,10 @@ func dropCounts(ds []plan.Drop) string {
 
 // subject is what a change is about, as a human names it.
 func subject(ch *core.Change) string {
-	if ch.Kind == core.Tidy {
+	if ch.Kind == core.First && ch.ID != core.FirstID {
+		return plan.StageName(ch.Batch.Stage)
+	}
+	if ch.Kind == core.First {
 		return "first PR"
 	}
 	if ch.API != nil {
@@ -189,7 +192,7 @@ func subject(ch *core.Change) string {
 }
 
 func target(ch *core.Change) string {
-	if ch.Kind == core.Tidy {
+	if ch.Kind == core.First {
 		return ""
 	}
 	if a := ch.API; a != nil {
@@ -209,8 +212,8 @@ func target(ch *core.Change) string {
 
 func detail(ch *core.Change, openID string, open *core.PR) string {
 	var parts []string
-	if c := ch.Cleanup; c != nil {
-		parts = append(parts, cleanup(c))
+	if b := ch.Batch; b != nil {
+		parts = append(parts, carries(b))
 		if open != nil && ch.ID == openID {
 			parts = append(parts, fmt.Sprintf("open PR #%d", open.Number))
 		}
@@ -243,21 +246,39 @@ func detail(ch *core.Change, openID string, open *core.PR) string {
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " · ")
 }
 
-// cleanup sums up a tidy-up: "remove 3 unused · move off 1 deprecated · 2
-// to look at", or that it only sets tend up.
-func cleanup(c *core.Cleanup) string {
+// carries sums up a catch-up PR: "fix 2 security · 1 API · move off 1
+// deprecated · remove 3 unused · 4 in later stages · 2 to look at", or that
+// it only sets tend up.
+func carries(b *core.Batch) string {
+	var sec, api, dep int
+	for _, ch := range b.Changes {
+		switch {
+		case ch.API != nil:
+			api++
+		case ch.Kind == core.Security:
+			sec++
+		default:
+			dep++
+		}
+	}
 	var parts []string
-	if n := len(c.Unused); n > 0 {
-		parts = append(parts, fmt.Sprintf("remove %d unused", n))
-	}
-	if n := len(c.Moves); n > 0 {
-		parts = append(parts, fmt.Sprintf("move off %d deprecated", n))
-	}
-	if n := len(c.Kept) + len(c.Left); n > 0 {
-		parts = append(parts, fmt.Sprintf("%d to look at", n))
+	for _, x := range []struct {
+		n    int
+		text string
+	}{
+		{sec, "fix %d security"},
+		{api, "%d API"},
+		{dep, "move off %d deprecated"},
+		{len(b.Unused), "remove %d unused"},
+		{len(b.Next), "%d in later stages"},
+		{len(b.Kept), "%d to look at"},
+	} {
+		if x.n > 0 {
+			parts = append(parts, fmt.Sprintf(x.text, x.n))
+		}
 	}
 	if len(parts) == 0 {
-		return "nothing to tidy; adds tend.yml"
+		return "nothing to catch up on; adds tend.yml"
 	}
 	return strings.Join(parts, " · ")
 }

@@ -325,13 +325,13 @@ func repoKey(s string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(strings.TrimPrefix(s, "git+")), "/"), ".git")
 }
 
-// kindRank puts a tidy-up straight after security work: it is tend's first
-// PR, and only a security fix may go ahead of it.
+// kindRank puts tend's first PR ahead of everything: the security fixes it
+// can make are part of it.
 func kindRank(k core.Kind) int {
 	switch k {
-	case core.Security:
+	case core.First:
 		return 0
-	case core.Tidy:
+	case core.Security:
 		return 1
 	case core.Breaking:
 		return 2
@@ -358,7 +358,7 @@ func sevRank(s string) int {
 // soon is how close a sunset has to be for a deprecation to rank as breaking.
 const soon = 30 * 24 * time.Hour
 
-// Rank orders a queue: kind (security, the tidy-up, a removed API, a
+// Rank orders a queue: kind (the first PR, security, a removed API, a
 // deprecation, a major bump, an update), severity, nearest sunset, most
 // sites, oldest upstream change, then id so the order never depends on map
 // iteration.

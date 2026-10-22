@@ -1,0 +1,134 @@
+diff --git a/package-lock.json b/package-lock.json
+index 0000000..0000000 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -8,31 +8,22 @@
+       "name": "node-catchup",
+       "version": "1.0.0",
+       "dependencies": {
+-        "@fixture/colors": "^1.0.0",
+         "@fixture/format": "^1.1.0",
+         "@fixture/parser": "^1.0.0",
+-        "@fixture/pay": "^1.4.0",
++        "@fixture/pay": "^2.0.0",
+         "@fixture/plugin-host": "^1.0.0",
+-        "@fixture/runtime": "^1.0.0",
+-        "@fixture/strings": "^1.0.0"
++        "@fixture/runtime": "^1.0.0"
+       },
+       "devDependencies": {
+         "@fixture/linter": "^1.0.0",
+-        "@fixture/old-test-helper": "^1.0.0",
+         "@types/fixture__pay": "^1.0.0",
+         "eslint-plugin-fixture": "^1.0.0"
+       }
+     },
+     "node_modules/@fixture/archive": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/archive/-/archive-1.0.0.tgz",
+-      "integrity": "sha512-ZIwBr4VEYdqVoTRJsocxd2IE16hu066kzttVg/Rt67bamJUCRNNrYr/Xpqk6x/8YmZJTmQEqLuwIbdTXIrQ1tg==",
+-      "license": "MIT"
+-    },
+-    "node_modules/@fixture/colors": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/colors/-/colors-1.0.0.tgz",
+-      "integrity": "sha512-BOV5JBLpdodwXdW2fVogsjN8xS1COd5n1xDFwIXlDrjy02LedRTA5wFbf++3tzi0NMzv8Kd0g2Rr5jn/aR5PLg==",
++      "version": "1.1.1",
++      "resolved": "http://registry.test/@fixture/archive/-/archive-1.1.1.tgz",
++      "integrity": "sha512-1vMi1aAeqVjQYEw+kn5Gamp+dlkFmRMzSvE5V00S73mcqad3dePTkhyvxEJGBMK1KKmraxOGc4x0t/F9+a/h1A==",
+       "license": "MIT"
+     },
+     "node_modules/@fixture/format": {
+@@ -51,27 +42,19 @@
+         "fixture-lint": "cli.js"
+       }
+     },
+-    "node_modules/@fixture/old-test-helper": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/old-test-helper/-/old-test-helper-1.0.0.tgz",
+-      "integrity": "sha512-dkXGzzC5b/wxzHdSCTUb/9WzzTXvNaJPFj8beaH8ExYmXg6/mgHjHRlgkjlgeKstmvL14k1ZOtDo8n1QvUEWEQ==",
+-      "dev": true,
+-      "license": "MIT"
+-    },
+     "node_modules/@fixture/parser": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/parser/-/parser-1.0.0.tgz",
+-      "integrity": "sha512-xOFkFDZr2NwNTnhYNCt51sSwFUTx7XnUIWhjlXzUmS0s2kcQC/iSh0F5HbbzdXP5Gsush0Pb319YOy3Em8zRFQ==",
++      "version": "1.0.1",
++      "resolved": "http://registry.test/@fixture/parser/-/parser-1.0.1.tgz",
++      "integrity": "sha512-ZMn52td1H/XDe9HEEnY5G4LHwQAy7qOleU9bbEU2bcTDcPUmQmi3mCePBqqlgjYDd9JGi0boF/M/CeRkdMH7Sg==",
+       "license": "MIT",
+       "dependencies": {
+         "@fixture/archive": "^1.0.0"
+       }
+     },
+     "node_modules/@fixture/pay": {
+-      "version": "1.4.0",
+-      "resolved": "http://registry.test/@fixture/pay/-/pay-1.4.0.tgz",
+-      "integrity": "sha512-IvDx2NsarsLhToiU9iUjFJcwTH9Gkv7L6zYyjj6yExBwSRvCS+Ogxqz0bkCtO6jn6br1mUHfq7turpu3bzp0ng==",
+-      "deprecated": "1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*",
++      "version": "2.0.0",
++      "resolved": "http://registry.test/@fixture/pay/-/pay-2.0.0.tgz",
++      "integrity": "sha512-9YOBQh5wfKucuKjW1zBQaOFTOuTYivG3T2FVonYB1RfNWwJ6oGMDOp/vNdHD34SPRfkOGiF8yhf5epc28OQDEQ==",
+       "license": "MIT"
+     },
+     "node_modules/@fixture/plugin-host": {
+@@ -89,12 +72,6 @@
+       "integrity": "sha512-V7ABsWxxqmuvCC/bjk8W3KGxo7S79COQm1WZ/r5FXWgGOB743ry6h15LuLrGrZkgkF9EFuRw7KjZYNKsbHDl5Q==",
+       "license": "MIT"
+     },
+-    "node_modules/@fixture/strings": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/strings/-/strings-1.0.0.tgz",
+-      "integrity": "sha512-XVhP66Ypk9sJJasyIyV9tIHZHRVuUNsD58Jb3SEXLLC4yCPIUGLEMGV9qjDaL98lK9/eNDzalaD08Pi9cGDZ/Q==",
+-      "license": "MIT"
+-    },
+     "node_modules/@types/fixture__pay": {
+       "version": "1.0.0",
+       "resolved": "http://registry.test/@types/fixture__pay/-/fixture__pay-1.0.0.tgz",
+diff --git a/package.json b/package.json
+index 0000000..0000000 100644
+--- a/package.json
++++ b/package.json
+@@ -7,17 +7,14 @@
+     "lint": "fixture-lint src"
+   },
+   "dependencies": {
+-    "@fixture/colors": "^1.0.0",
+     "@fixture/format": "^1.1.0",
+     "@fixture/parser": "^1.0.0",
+-    "@fixture/pay": "^1.4.0",
++    "@fixture/pay": "^2.0.0",
+     "@fixture/plugin-host": "^1.0.0",
+-    "@fixture/runtime": "^1.0.0",
+-    "@fixture/strings": "^1.0.0"
++    "@fixture/runtime": "^1.0.0"
+   },
+   "devDependencies": {
+     "@fixture/linter": "^1.0.0",
+-    "@fixture/old-test-helper": "^1.0.0",
+     "@types/fixture__pay": "^1.0.0",
+     "eslint-plugin-fixture": "^1.0.0"
+   }
+diff --git a/src/billing.js b/src/billing.js
+index 0000000..0000000 100644
+--- a/src/billing.js
++++ b/src/billing.js
+@@ -9,7 +9,7 @@ function cents(dollars) {
+ async function charge(dollars, customer) {
+   const amount = cents(dollars)
+   if (amount <= 0) throw new RangeError('nothing to charge')
+-  return pay.charges.create({ amount, currency: 'usd', customer })
++  return pay.paymentIntents.create({ amount, currency: 'usd', customer })
+ }
+ 
+ async function lookup(id) {
+@@ -17,7 +17,7 @@ async function lookup(id) {
+     throw new TypeError('lookup needs an id')
+   }
+ 
+-  return pay.charges.retrieve(id)
++  return pay.paymentIntents.retrieve(id)
+ }
+ 
+ module.exports = { charge, lookup }

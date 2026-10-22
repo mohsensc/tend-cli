@@ -189,7 +189,9 @@ var (
 func (r *resolver) npm(names []string, s core.Site) (status, string, string) {
 	pkg, chain, ok := r.importOf(names, s)
 	if !ok {
-		return unknown, "import not found", ""
+		// The call goes through a value the code made, such as an app a
+		// factory returned, whose members no export declares.
+		return none, "", ""
 	}
 	if len(chain) == 0 {
 		return none, "", ""
@@ -536,7 +538,7 @@ func goImports(file string) map[string]string {
 func (r *resolver) pip(names []string, s core.Site) (status, string, string) {
 	mod, chain, ok := r.importOf(names, s)
 	if !ok {
-		return unknown, "import not found", ""
+		return none, "", ""
 	}
 	if len(chain) == 0 {
 		return none, "", ""

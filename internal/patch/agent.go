@@ -53,6 +53,13 @@ var agentTools = []model.Tool{
 		Params: schema(map[string]any{"summary": str("what was changed, in a sentence")}, "summary")},
 }
 
+// benchTools are the tools of a characterization: write in place of nothing
+// but the one test file to edit.
+var benchTools = append([]model.Tool{
+	{Name: "write", Description: "Create the test file, or replace all of it.",
+		Params: schema(map[string]any{"path": str("repo-relative path of the test file"), "content": str("the whole file")}, "path", "content")},
+}, agentTools...)
+
 // session is one agent run over a worktree: what it may touch and what it did.
 type session struct {
 	t       *tree
@@ -64,6 +71,7 @@ type session struct {
 	edited  []string
 	results []string // pass or fail of each run, in order
 	log     *os.File
+	bench   string // the one test file a characterization may write, "" for a migration
 }
 
 // work hands the remaining sites to a model that calls tools. It ends when the
@@ -71,6 +79,21 @@ type session struct {
 // out; the model saying it is done is not enough.
 func work(ctx context.Context, t *tree, in job, o Options, p *core.Patch, a model.Agent) error {
 	s := &session{t: t, in: in, o: o, ctx: ctx, counts: map[string]int{}}
+	brief, err := s.brief()
+	if err != nil {
+		return err
+	}
+	if err := s.loop(ctx, a, agentSystem, brief, agentTools, p); err != nil {
+		return err
+	}
+	p.Applied = append(p.Applied, "the model edited "+strings.Join(s.edited, ", "))
+	return nil
+}
+
+// loop runs the conversation until the model's done passes or the budget
+// runs out, logging each tool call to the transcript.
+func (s *session) loop(ctx context.Context, a model.Agent, system, brief string, tools []model.Tool, p *core.Patch) error {
+	o := s.o
 	if o.Transcript != "" {
 		if err := os.MkdirAll(filepath.Dir(o.Transcript), 0o755); err == nil {
 			s.log, _ = os.Create(o.Transcript)
@@ -78,10 +101,6 @@ func work(ctx context.Context, t *tree, in job, o Options, p *core.Patch, a mode
 	}
 	if s.log != nil {
 		defer s.log.Close()
-	}
-	brief, err := s.brief()
-	if err != nil {
-		return err
 	}
 	turns := []model.Turn{{Role: "user", Text: brief}}
 	used := 0
@@ -92,7 +111,7 @@ func work(ctx context.Context, t *tree, in job, o Options, p *core.Patch, a mode
 		if o.Tokens > 0 && used >= o.Tokens {
 			return fmt.Errorf("the model spent its %d tokens (%s)", o.Tokens, s.summary())
 		}
-		r, err := a.Chat(ctx, agentSystem, turns, agentTools)
+		r, err := a.Chat(ctx, system, turns, tools)
 		if err != nil {
 			return fmt.Errorf("%w (%s)", err, s.summary())
 		}
@@ -111,7 +130,6 @@ func work(ctx context.Context, t *tree, in job, o Options, p *core.Patch, a mode
 			if finished {
 				p.Model = true
 				p.Edited = s.edited
-				p.Applied = append(p.Applied, "the model edited "+strings.Join(s.edited, ", "))
 				p.Note = s.summary()
 				o.logf("the model finished in %d steps", s.steps)
 				return nil
@@ -142,8 +160,8 @@ func (s *session) brief() (string, error) {
 func (s *session) call(c model.ToolCall) (string, bool) {
 	s.counts[c.Name]++
 	var args struct {
-		Path, Pattern, Glob, Old, New, Name, Summary string
-		From, To                                     int
+		Path, Pattern, Glob, Old, New, Name, Summary, Content string
+		From, To                                              int
 	}
 	if err := json.Unmarshal(c.Args, &args); err != nil {
 		return "error: the arguments are not a JSON object: " + err.Error(), false
@@ -155,6 +173,11 @@ func (s *session) call(c model.ToolCall) (string, bool) {
 		return s.grep(args.Pattern, args.Glob), false
 	case "edit":
 		return s.edit(args.Path, args.Old, args.New), false
+	case "write":
+		if s.bench == "" {
+			break
+		}
+		return s.write(args.Path, args.Content), false
 	case "run":
 		cmds, ok := s.commands(args.Name)
 		if !ok {
@@ -277,7 +300,7 @@ func (s *session) edit(p, old, now string) string {
 	if err != nil {
 		return "error: " + err.Error()
 	}
-	if !slices.Contains(s.in.allowed, rel) && !scan.IsTest(rel) {
+	if !slices.Contains(s.in.allowed, rel) && (s.bench != "" || !scan.IsTest(rel)) {
 		return "error: " + rel + " is not one of the files this change explains; edit the files listed at the start, or tests"
 	}
 	b := s.t.read(rel)
@@ -300,6 +323,25 @@ func (s *session) edit(p, old, now string) string {
 		slices.Sort(s.edited)
 	}
 	return "edited " + rel
+}
+
+// write creates the test file a characterization writes, or replaces it.
+func (s *session) write(p, content string) string {
+	rel, err := s.inside(p)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	if rel != s.bench {
+		return "error: write only creates " + s.bench
+	}
+	if err := place(s.t.wt, rel, content); err != nil {
+		return "error: " + err.Error()
+	}
+	delete(s.t.files, rel)
+	if !slices.Contains(s.edited, rel) {
+		s.edited = append(s.edited, rel)
+	}
+	return "wrote " + rel
 }
 
 func (s *session) commands(name string) (core.Commands, bool) {
@@ -342,7 +384,7 @@ func (s *session) run(cmds core.Commands) string {
 // edited and how its runs of the commands went.
 func (s *session) summary() string {
 	var parts []string
-	for _, tool := range []string{"read", "grep", "edit", "run"} {
+	for _, tool := range []string{"read", "grep", "edit", "write", "run"} {
 		if n := s.counts[tool]; n > 0 {
 			parts = append(parts, plural(n, tool))
 		}

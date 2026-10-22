@@ -19,15 +19,19 @@ import (
 )
 
 // keep drops exactly the parts that fail, whichever they are, proves a set
-// that passes as a whole once, and never proves a set twice.
+// that passes as a whole once, never proves a set twice, and drops a part
+// whose own making fails without proving anything for it.
 func TestKeep(t *testing.T) {
 	tests := []struct {
-		name  string
-		n     int
-		bad   []int
-		pairs [][2]int // parts that fail only together; the later one goes
-		tries int
+		name   string
+		n      int
+		bad    []int
+		pairs  [][2]int // parts that fail only together; the later one goes
+		broken []int    // parts whose own making fails
+		tries  int
 	}{
+		{name: "one that cannot be made", n: 5, broken: []int{3}, tries: 2},
+		{name: "two that cannot be made and one bad", n: 6, broken: []int{0, 4}, bad: []int{2}},
 		{name: "all pass", n: 5, tries: 1},
 		{name: "nothing to prove", n: 0, tries: 0},
 		{name: "one bad", n: 4, bad: []int{2}, tries: 4},
@@ -44,8 +48,13 @@ func TestKeep(t *testing.T) {
 			}
 			tries := 0
 			seen := map[string]bool{}
-			tr := &trial{check: func(_ context.Context, set []*part) (*drop, error) {
+			tr := &trial{left: 100, check: func(_ context.Context, set []*part) (*drop, error) {
 				tries++
+				for _, x := range set {
+					if slices.Contains(tt.broken, x.n) {
+						return &drop{x: x, build: "cannot be made"}, nil
+					}
+				}
 				if k := key(set); seen[k] {
 					t.Errorf("proved %s twice", k)
 				} else {
@@ -80,7 +89,7 @@ func TestKeep(t *testing.T) {
 			}
 			want := []int{}
 			for i := range tt.n {
-				if !slices.Contains(tt.bad, i) && !slices.ContainsFunc(tt.pairs, func(p [2]int) bool { return p[1] == i }) {
+				if !slices.Contains(tt.bad, i) && !slices.Contains(tt.broken, i) && !slices.ContainsFunc(tt.pairs, func(p [2]int) bool { return p[1] == i }) {
 					want = append(want, i)
 				}
 			}
@@ -95,20 +104,49 @@ func TestKeep(t *testing.T) {
 	}
 }
 
+// The proofs run out before every part is settled: what passed stays, and
+// the rest waits, said to be unproven.
+func TestKeepSpent(t *testing.T) {
+	var parts []*part
+	for i := range 8 {
+		parts = append(parts, &part{n: i, gone: &core.Dep{Name: fmt.Sprint(i)}})
+	}
+	tries := 0
+	tr := &trial{left: 2, check: func(_ context.Context, set []*part) (*drop, error) {
+		tries++
+		if slices.ContainsFunc(set, func(x *part) bool { return x.n == 7 }) {
+			return &drop{run: &core.Run{}}, nil
+		}
+		return nil, nil
+	}}
+	kept, err := tr.keep(context.Background(), nil, parts, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(kept) != 4 || kept[3].n != 3 || len(tr.dropped) != 4 || tries != 2 {
+		t.Fatalf("kept %d, dropped %d, %d tries", len(kept), len(tr.dropped), tries)
+	}
+	for _, d := range tr.dropped {
+		if want := "it was not proven: the pull request stops after 8 runs of the project's commands"; d.why() != want {
+			t.Errorf("why = %q", d.why())
+		}
+	}
+}
+
 func TestDropWhy(t *testing.T) {
 	failed := &core.Run{Steps: []core.Step{{Cmd: "npm ci"}, {Cmd: "npm test", Exit: 1}}}
 	gone := &part{gone: &core.Dep{Name: "left-pad"}}
 	inPkg := &part{gone: &core.Dep{Name: "left-pad", Manifest: core.Manifest{Path: "package.json"}}}
-	move := &part{move: &core.Change{Deps: []core.Dep{{Name: "stripe"}}}}
+	move := &part{ch: &core.Change{Deps: []core.Dep{{Name: "stripe"}}}}
 	for _, tt := range []struct {
 		d    drop
 		want string
 	}{
 		{drop{x: gone, run: failed}, "with it removed, `npm test` fails (exit 1)"},
-		{drop{x: move, run: failed}, "with the move made, `npm test` fails (exit 1)"},
+		{drop{x: move, run: failed}, "with it in the batch, `npm test` fails (exit 1)"},
 		{drop{x: gone, build: "npm install failed"}, "removing it fails: npm install failed"},
 		{drop{x: inPkg, build: "patch: package.json: npm install --package-lock-only: exit status 1"}, "removing it from package.json fails: npm install --package-lock-only: exit status 1"},
-		{drop{x: move, build: "patch: the edits to the code no longer apply: conflict"}, "the move cannot be made next to the rest: the edits to the code no longer apply: conflict"},
+		{drop{x: move, build: "patch: the edits to the code no longer apply: conflict"}, "making it next to the rest fails: the edits to the code no longer apply: conflict"},
 		{drop{x: gone, run: &core.Run{Steps: []core.Step{{Cmd: "go test ./..."}}}}, "with it removed, `go test ./...` does not finish"},
 	} {
 		if got := tt.d.why(); got != tt.want {
@@ -179,15 +217,15 @@ func TestOnboarding(t *testing.T) {
 			st.Seen["npm/a@1.0.0"] = state.Seen{Verdict: "delivered"}
 		}, settled: "before"},
 		{name: "the first PR is open", st: func(st *state.State) { st.Onboard = due }, forge: func(t *testing.T, f *deliver.FakeForge) {
-			openPR(t, f, deliver.TidyBranch, marker(core.TidyID))
+			openPR(t, f, deliver.FirstBranch, marker(core.FirstID))
 		}, due: true, settled: due},
 		{name: "a lost state finds the open first PR", forge: func(t *testing.T, f *deliver.FakeForge) {
-			openPR(t, f, deliver.TidyBranch, marker(core.TidyID))
+			openPR(t, f, deliver.FirstBranch, marker(core.FirstID))
 		}, due: true, settled: due},
 		{name: "a lost state that read the open first PR back", st: func(st *state.State) {
-			st.Open = &state.OpenPR{PR: 1, ID: core.TidyID}
+			st.Open = &state.OpenPR{PR: 1, ID: core.FirstID}
 		}, forge: func(t *testing.T, f *deliver.FakeForge) {
-			openPR(t, f, deliver.TidyBranch, marker(core.TidyID))
+			openPR(t, f, deliver.FirstBranch, marker(core.FirstID))
 		}, due: true, settled: due},
 		{name: "a lost state while a security fix went first", forge: func(t *testing.T, f *deliver.FakeForge) {
 			openPR(t, f, "tend/npm-a-1.0.1", `<!-- tend id="npm/a@1.0.1" base="abc" rev="1" tidy="due" -->`)
@@ -201,24 +239,24 @@ func TestOnboarding(t *testing.T) {
 			openPR(t, f, "tend/npm-a-1.0.1", marker("npm/a@1.0.1"))
 		}, settled: "before"},
 		{name: "the first PR merged", st: func(st *state.State) { st.Onboard = due }, forge: func(t *testing.T, f *deliver.FakeForge) {
-			if err := f.Merge(openPR(t, f, deliver.TidyBranch, marker(core.TidyID))); err != nil {
+			if err := f.Merge(openPR(t, f, deliver.FirstBranch, marker(core.FirstID))); err != nil {
 				t.Fatal(err)
 			}
 		}, settled: "merged"},
 		{name: "a person closed the first PR", forge: func(t *testing.T, f *deliver.FakeForge) {
-			if err := f.CloseByHuman(openPR(t, f, deliver.TidyBranch, marker(core.TidyID))); err != nil {
+			if err := f.CloseByHuman(openPR(t, f, deliver.FirstBranch, marker(core.FirstID))); err != nil {
 				t.Fatal(err)
 			}
 		}, settled: "closed"},
 		{name: "tend closed it for security work", st: func(st *state.State) { st.Onboard = due }, forge: func(t *testing.T, f *deliver.FakeForge) {
-			n := openPR(t, f, deliver.TidyBranch, marker(core.TidyID))
+			n := openPR(t, f, deliver.FirstBranch, marker(core.FirstID))
 			if err := deliver.Close(context.Background(), f, n, "Closing to make room for a security fix."); err != nil {
 				t.Fatal(err)
 			}
 			openPR(t, f, "tend/npm-a-1.0.1", marker("npm/a@1.0.1"))
 		}, due: true, settled: due},
 		{name: "someone commented after tend closed it", st: func(st *state.State) { st.Onboard = due }, forge: func(t *testing.T, f *deliver.FakeForge) {
-			n := openPR(t, f, deliver.TidyBranch, marker(core.TidyID))
+			n := openPR(t, f, deliver.FirstBranch, marker(core.FirstID))
 			if err := deliver.Close(context.Background(), f, n, "Closing to make room for a security fix."); err != nil {
 				t.Fatal(err)
 			}
@@ -228,16 +266,18 @@ func TestOnboarding(t *testing.T) {
 		}, due: true, settled: due},
 		{name: "settled before", st: func(st *state.State) { st.Onboard = "merged" }, settled: "merged"},
 		{name: "quiet says what nothing uses", cfg: func(c *config.Config) { c.Onboarding = "quiet" }, settled: "quiet",
-			log: "onboarding is quiet, so there is no tidy-up PR; nothing in the project uses left-pad"},
+			log: "onboarding is quiet, so there is no first PR; nothing in the project uses left-pad"},
 		{name: "off", cfg: func(c *config.Config) { c.Onboarding = "off" }, settled: "off"},
-		{name: "commit mode opens no PRs", cfg: func(c *config.Config) { c.Deliver.Mode = "commit" }, settled: "commit"},
+		{name: "commit mode catches up by commit", cfg: func(c *config.Config) { c.Deliver.Mode = "commit" }, due: true},
+		{name: "commit mode with the first PR open from before", cfg: func(c *config.Config) { c.Deliver.Mode = "commit" },
+			st: func(st *state.State) { st.Onboard, st.Open = due, &state.OpenPR{ID: core.FirstID, PR: 1} }, settled: "commit"},
 		{name: "not proven on this base", st: func(st *state.State) {
 			st.Onboard = due
-			st.Fail(core.TidyID, "npm test failed", "base1", time.Now())
+			st.Fail(core.FirstID, "npm test failed", "base1", time.Now())
 		}, settled: due},
-		{name: "nothing to tidy and a tend.yml already", cfg: func(c *config.Config) { c.Ignore = []config.Ignore{{Name: "left-pad"}} },
+		{name: "nothing to catch up on and a tend.yml already", cfg: func(c *config.Config) { c.Ignore = []config.Ignore{{Name: "left-pad"}} },
 			more: map[string]string{"tend.yml": "cooldown: 3d\n"}, settled: "clean"},
-		{name: "nothing to tidy and a tend.yml not yet committed", cfg: func(c *config.Config) { c.Ignore = []config.Ignore{{Name: "left-pad"}} },
+		{name: "nothing to catch up on and a tend.yml not yet committed", cfg: func(c *config.Config) { c.Ignore = []config.Ignore{{Name: "left-pad"}} },
 			local: "cooldown: 3d\n", settled: "clean"},
 	}
 	for _, tt := range tests {
@@ -271,8 +311,8 @@ func TestOnboarding(t *testing.T) {
 			if (ch != nil) != tt.due || s.st.Onboard != tt.settled {
 				t.Errorf("due = %v, settled %q; want %v, %q", ch != nil, s.st.Onboard, tt.due, tt.settled)
 			}
-			if ch != nil && (ch.Kind != core.Tidy || len(ch.Cleanup.Unused) != 1) {
-				t.Errorf("tidy-up = %+v", ch)
+			if ch != nil && (ch.Kind != core.First || len(ch.Batch.Unused) != 1) {
+				t.Errorf("first PR = %+v", ch)
 			}
 			if !strings.Contains(errs.String(), tt.log) {
 				t.Errorf("logged %q, want %q", errs.String(), tt.log)
@@ -290,7 +330,8 @@ func openPR(t *testing.T, f *deliver.FakeForge, branch, body string) int {
 	return pr.Number
 }
 
-// The tidy-up goes into the queue after security work and ahead of the rest.
+// The first PR goes into the queue ahead of everything, security work
+// included, which it carries.
 func TestOnboardQueue(t *testing.T) {
 	inv, root := onboardRepo(t, nil)
 	s := &session{e: Env{Stderr: &bytes.Buffer{}, Getenv: func(string) string { return "" }, Now: time.Now}, cfg: config.Default(), st: state.New(), root: root}
@@ -305,15 +346,15 @@ func TestOnboardQueue(t *testing.T) {
 	for _, ch := range p.Queue {
 		ids = append(ids, ch.ID)
 	}
-	if want := []string{"npm/a@1.0.1", core.TidyID, "npm/b@2.0.0"}; !slices.Equal(ids, want) {
+	if want := []string{core.FirstID, "npm/a@1.0.1", "npm/b@2.0.0"}; !slices.Equal(ids, want) {
 		t.Errorf("queue %q, want %q", ids, want)
 	}
 }
 
 // An open first PR tend no longer means to carry is closed with why; one
 // still due, or any other PR, is not.
-func TestUntidy(t *testing.T) {
-	tidy := core.Change{ID: core.TidyID, Kind: core.Tidy}
+func TestUnwanted(t *testing.T) {
+	first := core.Change{ID: core.FirstID, Kind: core.First}
 	tests := []struct {
 		name    string
 		onboard string
@@ -321,21 +362,21 @@ func TestUntidy(t *testing.T) {
 		queue   []core.Change
 		want    string
 	}{
-		{"onboarding turned off", "off", core.TidyID, nil, "tend.yml sets onboarding: off now"},
-		{"onboarding turned quiet", "quiet", core.TidyID, nil, "tend.yml sets onboarding: quiet now"},
-		{"commit mode", "commit", core.TidyID, nil, "tend.yml delivers by commit now"},
-		{"nothing left to tidy", "clean", core.TidyID, nil, "nothing is left to tidy up"},
-		{"still due", due, core.TidyID, []core.Change{tidy}, ""},
-		{"due, not proven on this base", due, core.TidyID, nil, ""},
-		{"queued after all", "clean", core.TidyID, []core.Change{tidy}, ""},
+		{"onboarding turned off", "off", core.FirstID, nil, "tend.yml sets onboarding: off now"},
+		{"onboarding turned quiet", "quiet", core.FirstID, nil, "tend.yml sets onboarding: quiet now"},
+		{"commit mode", "commit", core.FirstID, nil, "tend.yml delivers by commit now"},
+		{"nothing left to catch up on", "clean", core.FirstID, nil, "nothing is left to catch up on"},
+		{"still due", due, core.FirstID, []core.Change{first}, ""},
+		{"due, not proven on this base", due, core.FirstID, nil, ""},
+		{"queued after all", "clean", core.FirstID, []core.Change{first}, ""},
 		{"another PR", "off", "npm/a@1.0.0", nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &session{st: state.New()}
 			s.st.Onboard = tt.onboard
-			if got := s.untidy(&plan.Plan{Queue: tt.queue}, tt.id); got != tt.want {
-				t.Errorf("untidy = %q, want %q", got, tt.want)
+			if got := s.unwanted(&plan.Plan{Queue: tt.queue}, tt.id); got != tt.want {
+				t.Errorf("unwanted = %q, want %q", got, tt.want)
 			}
 		})
 	}

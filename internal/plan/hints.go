@@ -109,13 +109,15 @@ func stay(d core.Dep, to string) core.Option {
 			Title: "Pin to " + at + " and ignore",
 			Detail: fmt.Sprintf("Stay on %s %s and have tend stop proposing anything for it, security fixes included, until the entry is removed.\n\nThis goes into tend.yml:\n\n"+
 				"```yaml\nignore:\n  - name: %q\n    reason: staying on %s\n```", d.Name, at, d.Name, at),
-			To: at,
+			To:   at,
+			Stay: true,
 		}
 	}
 	return core.Option{
 		Title: "Pin to " + at + " and ignore",
 		Detail: fmt.Sprintf("Stay on %s and have tend stop proposing %s.\n\nThis goes into tend.yml:\n\n"+
 			"```yaml\nignore:\n  - name: %q\n    versions: [\">=%s\"]\n    reason: staying on %s\n```", at, to, d.Name, to, at),
-		To: at,
+		To:   at,
+		Stay: true,
 	}
 }

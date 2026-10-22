@@ -1,0 +1,24 @@
+{
+  "name": "node-catchup",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "lint": "fixture-lint src"
+  },
+  "dependencies": {
+    "@fixture/colors": "^1.0.0",
+    "@fixture/format": "^1.1.0",
+    "@fixture/parser": "^1.0.0",
+    "@fixture/pay": "^1.4.0",
+    "@fixture/plugin-host": "^1.0.0",
+    "@fixture/runtime": "^1.0.0",
+    "@fixture/strings": "^1.0.0"
+  },
+  "devDependencies": {
+    "@fixture/linter": "^1.0.0",
+    "@fixture/old-test-helper": "^1.0.0",
+    "@types/fixture__pay": "^1.0.0",
+    "eslint-plugin-fixture": "^1.0.0"
+  }
+}

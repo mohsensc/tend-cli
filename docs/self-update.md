@@ -15,8 +15,9 @@ print one line on stderr when there is one; they never update by themselves.
 A binary built by `go install` reports the module version it was built from.
 
 The Action does the same check with `openssl` before it puts the binary on
-the path. `@v1` is a moving tag that points at the newest `v1.x.y`; pin
-`@v1.2.3` to stay put.
+the path. `@v1` is a moving tag that points at the newest `v1.x.y`; while that
+release's files are still being uploaded, the Action installs the one before
+it. Pin `@v1.2.3` to stay put.
 
 ## Installing by hand
 

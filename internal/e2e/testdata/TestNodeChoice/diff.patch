@@ -1,0 +1,59 @@
+diff --git a/package-lock.json b/package-lock.json
+index 0000000..0000000 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -8,15 +8,14 @@
+       "name": "node-sdk",
+       "version": "1.0.0",
+       "dependencies": {
+-        "@fixture/pay": "^1.4.0",
++        "@fixture/pay": "^2.0.0",
+         "@fixture/util": "^1.0.0"
+       }
+     },
+     "node_modules/@fixture/pay": {
+-      "version": "1.4.0",
+-      "resolved": "http://registry.test/@fixture/pay/-/pay-1.4.0.tgz",
+-      "integrity": "sha512-IvDx2NsarsLhToiU9iUjFJcwTH9Gkv7L6zYyjj6yExBwSRvCS+Ogxqz0bkCtO6jn6br1mUHfq7turpu3bzp0ng==",
+-      "deprecated": "1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*",
++      "version": "2.0.0",
++      "resolved": "http://registry.test/@fixture/pay/-/pay-2.0.0.tgz",
++      "integrity": "sha512-9YOBQh5wfKucuKjW1zBQaOFTOuTYivG3T2FVonYB1RfNWwJ6oGMDOp/vNdHD34SPRfkOGiF8yhf5epc28OQDEQ==",
+       "license": "MIT"
+     },
+     "node_modules/@fixture/util": {
+diff --git a/package.json b/package.json
+index 0000000..0000000 100644
+--- a/package.json
++++ b/package.json
+@@ -6,7 +6,7 @@
+     "test": "node --test"
+   },
+   "dependencies": {
+-    "@fixture/pay": "^1.4.0",
++    "@fixture/pay": "^2.0.0",
+     "@fixture/util": "^1.0.0"
+   }
+ }
+diff --git a/src/billing.js b/src/billing.js
+index 0000000..0000000 100644
+--- a/src/billing.js
++++ b/src/billing.js
+@@ -9,7 +9,7 @@ function cents(dollars) {
+ async function charge(dollars, customer) {
+   const amount = cents(dollars)
+   if (amount <= 0) throw new RangeError('nothing to charge')
+-  return pay.charges.create({ amount, currency: 'usd', customer })
++  return pay.paymentIntents.create({ amount, currency: 'usd', customer })
+ }
+ 
+ async function lookup(id) {
+@@ -17,7 +17,7 @@ async function lookup(id) {
+     throw new TypeError('lookup needs an id')
+   }
+ 
+-  return pay.charges.retrieve(id)
++  return pay.paymentIntents.retrieve(id)
+ }
+ 
+ module.exports = { charge, lookup }

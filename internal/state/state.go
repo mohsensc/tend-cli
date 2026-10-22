@@ -28,9 +28,15 @@ type State struct {
 	Release  Release           // the last self-update check
 	// Onboard is where tend's first PR on the repo stands: "" until a run
 	// looks, due while it is coming or open, then how that ended: merged,
-	// closed, clean (nothing to tidy), before (tend was here before), quiet,
+	// closed, clean (nothing to catch up on), before (tend was here before), quiet,
 	// off, or commit (no PRs to open).
 	Onboard string `json:",omitempty"`
+	// Stage is how far the catch-up after the first PR got: the stage of
+	// the last catch-up PR that merged or commit that landed, 4 once the
+	// catch-up is over, 0 before it starts or when tend began here before
+	// it had stages.
+	Stage   int `json:",omitempty"`
+	Issue   Issue
 	Updated time.Time
 
 	path string
@@ -51,7 +57,8 @@ type BaseRun struct {
 
 type Parked struct {
 	PR     int
-	Reason string // rejected|preempted
+	Reason string // rejected|preempted|reverted
+	Detail string `json:",omitempty"` // reverted: the commit and the checks that failed
 	To     string
 	At     time.Time
 }
@@ -61,6 +68,18 @@ type OpenPR struct {
 	PR                   int
 	Branch, Base, Commit string
 	At                   time.Time
+	// Holds, for the first PR, is every queued change it was built from,
+	// made or left for later, so one that appears after it opened brings
+	// it up to date.
+	Holds []string `json:",omitempty"`
+	Stage int      `json:",omitempty"` // a catch-up PR's stage
+}
+
+// Issue is tend's tracking issue as tend last wrote it.
+type Issue struct {
+	Number int    `json:",omitempty"`
+	Body   string `json:",omitempty"`
+	Open   bool   `json:",omitempty"`
 }
 
 type Snap struct {

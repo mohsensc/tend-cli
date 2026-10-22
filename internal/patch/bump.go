@@ -83,8 +83,15 @@ func bump(ctx context.Context, wt string, deps []core.Dep, to, toName string, o 
 		o.logf("bumped %s in %s", d.Name, strings.Join(files, ", "))
 
 		line := fmt.Sprintf("bumped %s %s -> %s", d.Name, from(d), to)
-		if toName != "" {
+		switch {
+		case toName != "":
 			line = fmt.Sprintf("swapped %s for %s", d.Name, toName)
+		case b.Landed != "":
+			if p.Landed == nil {
+				p.Landed = map[string]string{}
+			}
+			p.Landed[d.Ecosystem+"/"+d.Name] = b.Landed
+			line = fmt.Sprintf("bumped %s %s -> %s, the newest release from %s its ranges allow", d.Name, from(d), b.Landed, to)
 		}
 		if len(files) > 0 {
 			line += " (" + strings.Join(files, ", ") + ")"
@@ -138,8 +145,8 @@ func from(d core.Dep) string {
 }
 
 // landed checks that the lockfile took the move: a direct dep sits at
-// exactly to, the release tend chose and proves; a transitive one has no
-// copy left at the version it moved from.
+// exactly to, the release tend chose and proves; a transitive one, for which
+// to is a floor, has no copy left at the version it moved from.
 func landed(e core.Ecosystem, wt string, d core.Dep, to, toName string) error {
 	deps, err := e.Deps(wt, d.Manifest)
 	if err != nil {
