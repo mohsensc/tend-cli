@@ -1,0 +1,53 @@
+{{- if .Welcome}}{{.Welcome}}
+{{- else}}## {{.Heading}}
+
+**Why**: {{.Why}}
+{{- with .Level}}
+**Level**: {{.}}
+{{- end}}
+{{- end}}
+{{- with .Upstream}}
+
+### What changed upstream
+
+{{.}}
+{{- end}}
+{{- with .Changed}}
+
+### What changed
+
+{{.}}
+{{- end}}
+{{- with .Touched}}
+
+### Touched in this repo
+
+{{.}}
+{{- end}}
+{{- with .Proof}}
+
+### Proof
+
+{{.}}
+{{- end}}
+{{- with .Vetting}}
+
+### Vetting
+
+{{.}}
+{{- end}}
+{{- with .Notes}}
+
+### Notes
+
+{{.}}
+{{- end}}
+{{- with .Options}}
+
+### Options
+
+{{.}}
+{{- end}}
+
+<sub>{{.Footer}}</sub>
+<!-- tend id="{{.ID}}" base="{{.Base}}" rev="{{.Rev}}"{{with .Tidy}} tidy="{{.}}"{{end}} -->

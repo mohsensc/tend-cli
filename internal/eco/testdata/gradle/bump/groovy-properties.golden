@@ -1,0 +1,6 @@
+files: [gradle.properties]
+locked: false
+note: no lockfile
+--- gradle.properties
+2: -junitVersion=4.13.2
+2: +junitVersion=4.13.3

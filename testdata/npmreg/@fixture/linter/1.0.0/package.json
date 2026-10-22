@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/linter",
+  "version": "1.0.0",
+  "bin": {
+    "fixture-lint": "cli.js"
+  },
+  "license": "MIT"
+}

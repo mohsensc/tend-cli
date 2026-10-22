@@ -1,0 +1,6 @@
+files: [package.json]
+locked: false
+note: npm not found
+--- package.json
+13: -    "is-number": "^7.0.0",
+13: +    "is-number": "^8.0.0",

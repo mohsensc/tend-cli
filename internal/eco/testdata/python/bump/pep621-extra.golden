@@ -1,0 +1,6 @@
+files: [uv/pyproject.toml]
+locked: false
+note: uv not found
+--- uv/pyproject.toml
+15: -    "ruff==0.6.9",
+15: +    "ruff==0.7.0",

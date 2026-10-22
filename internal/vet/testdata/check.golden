@@ -1,0 +1,14 @@
+- scope: 3 files, all explained by this change; 2 files reverted
+  - `README.md` not explained by this change; reverted (dropped)
+  - `src/scratch.js` not explained by this change; reverted (dropped)
+- symbols: 0/1 changed calls resolve; 1 flagged
+  - `src/billing.js:4` `a.paymentIntents.create` not verified: a is not installed (flagged)
+- lockfile: 1 fixed
+  - `package-lock.json` relocked from base to drop unrelated churn: c (fixed)
+- debug: 1 line dropped
+  - `src/billing.js:4` removed `console.log('migrating')` (dropped)
+- comments: 1 line dropped
+  - `src/billing.js:4` removed comment `// moved to payment intents` (dropped)
+- dead: nothing left unreferenced
+- question: not run: no model configured
+- not applicable: fields, leftovers

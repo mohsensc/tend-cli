@@ -1,0 +1,6 @@
+files: [src/App/App.csproj]
+locked: false
+note: dotnet not found in PATH
+--- src/App/App.csproj
+10: -    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.507" PrivateAssets="all" />
+10: +    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0" PrivateAssets="all" />

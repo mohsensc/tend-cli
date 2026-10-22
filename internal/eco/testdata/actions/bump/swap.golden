@@ -1,0 +1,6 @@
+files: [.github/workflows/ci.yml]
+locked: false
+note: no lockfile
+--- .github/workflows/ci.yml
+8: -      - uses: actions/checkout@v2
+8: +      - uses: acme/checkout@v4

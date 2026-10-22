@@ -1,0 +1,261 @@
+{
+  "Name": "attrs",
+  "Releases": [
+    {
+      "Version": "15.0.0a1",
+      "Time": "2015-02-21T10:42:56.582807Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "15.0.0",
+      "Time": "2015-04-15T21:55:50.251009Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "15.1.0",
+      "Time": "2015-08-20T11:57:17.530542Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "15.2.0",
+      "Time": "2015-12-08T15:30:03.6798Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "16.0.0",
+      "Time": "2016-05-23T18:34:03.061165Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "16.1.0",
+      "Time": "2016-08-30T10:32:22.869856Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "16.2.0",
+      "Time": "2016-09-17T06:00:38.253953Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "16.3.0",
+      "Time": "2016-11-24T13:07:06.666447Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "17.1.0",
+      "Time": "2017-05-16T17:04:23.980103Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "17.2.0",
+      "Time": "2017-05-24T18:04:08.794865Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "17.3.0",
+      "Time": "2017-11-08T17:57:49.56741Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "17.4.0",
+      "Time": "2017-12-30T08:20:05.582456Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "18.1.0",
+      "Time": "2018-05-03T16:42:28.41408Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "18.2.0",
+      "Time": "2018-09-01T04:50:57.813453Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "19.1.0",
+      "Time": "2019-03-03T09:07:56.654247Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "19.2.0",
+      "Time": "2019-10-01T15:08:40.534786Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "19.3.0",
+      "Time": "2019-10-15T05:52:40.702145Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "20.1.0",
+      "Time": "2020-08-20T17:23:25.163647Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "20.2.0",
+      "Time": "2020-09-05T10:24:44.902598Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "20.3.0",
+      "Time": "2020-11-05T10:04:47.447971Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "21.1.0",
+      "Time": "2021-05-06T08:26:59.426069Z",
+      "Pre": false,
+      "Yanked": true,
+      "Deprecated": "yanked: Installable but not importable on Python 3.4."
+    },
+    {
+      "Version": "21.2.0",
+      "Time": "2021-05-07T09:32:13.542057Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "21.3.0",
+      "Time": "2021-12-28T06:07:16.361056Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "21.4.0",
+      "Time": "2021-12-29T13:15:06.703351Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "22.1.0",
+      "Time": "2022-07-28T13:20:27.076261Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "22.2.0",
+      "Time": "2022-12-21T09:48:49.401035Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "23.1.0",
+      "Time": "2023-04-16T10:48:16.35805Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "23.2.0",
+      "Time": "2023-12-31T06:30:30.772444Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "24.1.0",
+      "Time": "2024-08-03T14:30:18.451327Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "24.2.0",
+      "Time": "2024-08-06T14:37:36.958006Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "24.3.0",
+      "Time": "2024-12-16T06:59:26.977525Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "25.1.0",
+      "Time": "2025-01-25T11:30:10.164985Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "25.2.0",
+      "Time": "2025-03-12T10:02:22.569652Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "25.3.0",
+      "Time": "2025-03-13T11:10:21.140999Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "25.4.0",
+      "Time": "2025-10-06T13:54:43.170512Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "26.1.0",
+      "Time": "2026-03-19T14:22:23.645947Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    }
+  ],
+  "Latest": "26.1.0",
+  "Repo": "https://github.com/python-attrs/attrs",
+  "Deprecated": "",
+  "Replacement": ""
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "nuget",
+    "Name": "fsharp.core",
+    "Version": "8.0.100",
+    "Req": "8.0.100",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/Old/Old.fsproj",
+      "Lock": "",
+      "Tool": "dotnet"
+    },
+    "Line": 3,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

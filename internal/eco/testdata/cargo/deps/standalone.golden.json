@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "cargo",
+    "Name": "reqwest",
+    "Version": "",
+    "Req": "0.11",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "standalone/Cargo.toml",
+      "Lock": "",
+      "Tool": "cargo"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

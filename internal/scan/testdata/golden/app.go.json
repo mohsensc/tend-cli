@@ -1,0 +1,370 @@
+{
+  "Lang": "go",
+  "Imports": [
+    {
+      "File": "app.go",
+      "Line": 8,
+      "Package": "C",
+      "Binding": "C",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 11,
+      "Package": "context",
+      "Binding": "context",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 12,
+      "Package": "fmt",
+      "Binding": "fmt",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 13,
+      "Package": "net/http",
+      "Binding": "http",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 15,
+      "Package": "github.com/lib/pq",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 16,
+      "Package": "github.com/onsi/gomega",
+      "Binding": ".",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 17,
+      "Package": "github.com/sashabaranov/go-openai",
+      "Binding": "openai",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 18,
+      "Package": "github.com/stripe/stripe-go/v79",
+      "Binding": "stripe",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 19,
+      "Package": "github.com/stripe/stripe-go/v79/charge",
+      "Binding": "charge",
+      "Names": null
+    },
+    {
+      "File": "app.go",
+      "Line": 20,
+      "Package": "gopkg.in/yaml.v3",
+      "Binding": "yaml",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 24,
+      "Col": 7,
+      "Chain": [
+        "openai",
+        "Client"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "ai  *openai.Client"
+    },
+    {
+      "Line": 25,
+      "Col": 6,
+      "Chain": [
+        "fmt",
+        "Stringer"
+      ],
+      "Call": false,
+      "Quals": [
+        "fmt"
+      ],
+      "Text": "log fmt.Stringer"
+    },
+    {
+      "Line": 28,
+      "Col": 27,
+      "Chain": [
+        "context",
+        "Context"
+      ],
+      "Call": false,
+      "Quals": [
+        "context"
+      ],
+      "Text": "func (s *Service) Ask(ctx context.Context) (string, error) {"
+    },
+    {
+      "Line": 29,
+      "Col": 17,
+      "Chain": [
+        "ai",
+        "CreateChatCompletion"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "resp, err := s.ai.CreateChatCompletion(ctx, openai.ChatCompletionRequest{"
+    },
+    {
+      "Line": 29,
+      "Col": 46,
+      "Chain": [
+        "openai",
+        "ChatCompletionRequest"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "resp, err := s.ai.CreateChatCompletion(ctx, openai.ChatCompletionRequest{"
+    },
+    {
+      "Line": 30,
+      "Col": 10,
+      "Chain": [
+        "openai",
+        "GPT4o"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "Model: openai.GPT4o,"
+    },
+    {
+      "Line": 38,
+      "Col": 28,
+      "Chain": [
+        "openai",
+        "Client"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "func Charge(key string, c *openai.Client) error {"
+    },
+    {
+      "Line": 39,
+      "Col": 2,
+      "Chain": [
+        "stripe",
+        "Key"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79"
+      ],
+      "Text": "stripe.Key = key"
+    },
+    {
+      "Line": 40,
+      "Col": 13,
+      "Chain": [
+        "charge",
+        "New"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79/charge"
+      ],
+      "Text": "ch, err := charge.New(\u0026stripe.ChargeParams{Amount: stripe.Int64(2000)})"
+    },
+    {
+      "Line": 40,
+      "Col": 25,
+      "Chain": [
+        "stripe",
+        "ChargeParams"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79"
+      ],
+      "Text": "ch, err := charge.New(\u0026stripe.ChargeParams{Amount: stripe.Int64(2000)})"
+    },
+    {
+      "Line": 40,
+      "Col": 53,
+      "Chain": [
+        "stripe",
+        "Int64"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79"
+      ],
+      "Text": "ch, err := charge.New(\u0026stripe.ChargeParams{Amount: stripe.Int64(2000)})"
+    },
+    {
+      "Line": 44,
+      "Col": 2,
+      "Chain": [
+        "fmt",
+        "Println"
+      ],
+      "Call": true,
+      "Quals": [
+        "fmt"
+      ],
+      "Text": "fmt.Println(ch.Paid) // charge.Get(ch.ID) in a comment is not a site"
+    },
+    {
+      "Line": 44,
+      "Col": 14,
+      "Chain": [
+        "ch",
+        "Paid"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79/charge"
+      ],
+      "Text": "fmt.Println(ch.Paid) // charge.Get(ch.ID) in a comment is not a site"
+    },
+    {
+      "Line": 45,
+      "Col": 9,
+      "Chain": [
+        "c",
+        "ListModels"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/sashabaranov/go-openai"
+      ],
+      "Text": "_, _ = c.ListModels(context.Background())"
+    },
+    {
+      "Line": 45,
+      "Col": 22,
+      "Chain": [
+        "context",
+        "Background"
+      ],
+      "Call": true,
+      "Quals": [
+        "context"
+      ],
+      "Text": "_, _ = c.ListModels(context.Background())"
+    },
+    {
+      "Line": 46,
+      "Col": 2,
+      "Chain": [
+        "Expect"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/onsi/gomega"
+      ],
+      "Text": "Expect(ch.Paid).To(BeTrue())"
+    },
+    {
+      "Line": 46,
+      "Col": 9,
+      "Chain": [
+        "ch",
+        "Paid"
+      ],
+      "Call": false,
+      "Quals": [
+        "github.com/stripe/stripe-go/v79/charge"
+      ],
+      "Text": "Expect(ch.Paid).To(BeTrue())"
+    },
+    {
+      "Line": 46,
+      "Col": 21,
+      "Chain": [
+        "BeTrue"
+      ],
+      "Call": true,
+      "Quals": [
+        "github.com/onsi/gomega"
+      ],
+      "Text": "Expect(ch.Paid).To(BeTrue())"
+    },
+    {
+      "Line": 47,
+      "Col": 12,
+      "Chain": [
+        "http",
+        "NewRequest"
+      ],
+      "Call": true,
+      "Quals": [
+        "net/http"
+      ],
+      "Text": "req, _ := http.NewRequest(http.MethodPost, \"https://api.stripe.com/v1/refunds\", nil)"
+    },
+    {
+      "Line": 47,
+      "Col": 28,
+      "Chain": [
+        "http",
+        "MethodPost"
+      ],
+      "Call": false,
+      "Quals": [
+        "net/http"
+      ],
+      "Text": "req, _ := http.NewRequest(http.MethodPost, \"https://api.stripe.com/v1/refunds\", nil)"
+    },
+    {
+      "Line": 50,
+      "Col": 6,
+      "Chain": [
+        "yaml",
+        "Unmarshal"
+      ],
+      "Call": true,
+      "Quals": [
+        "gopkg.in/yaml.v3"
+      ],
+      "Text": "_ = yaml.Unmarshal([]byte(\"a: 1\"), \u0026out)"
+    },
+    {
+      "Line": 51,
+      "Col": 2,
+      "Chain": [
+        "C",
+        "free"
+      ],
+      "Call": true,
+      "Quals": [
+        "C"
+      ],
+      "Text": "C.free(nil)"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "app.go",
+      "Line": 47,
+      "Method": "POST",
+      "URL": "https://api.stripe.com/v1/refunds",
+      "Host": "api.stripe.com"
+    }
+  ]
+}

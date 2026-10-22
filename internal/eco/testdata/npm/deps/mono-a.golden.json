@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "npm",
+    "Name": "is-number",
+    "Version": "6.0.0",
+    "Req": "^6.0.0",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "packages/a/package.json",
+      "Lock": "package-lock.json",
+      "Tool": "npm"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

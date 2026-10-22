@@ -1,0 +1,114 @@
+{
+  "Name": "left-pad",
+  "Releases": [
+    {
+      "Version": "0.0.0",
+      "Time": "2014-03-14T09:09:20.762Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "0.0.1",
+      "Time": "2014-08-14T03:31:03.146Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "0.0.2",
+      "Time": "2014-08-15T07:13:09.056Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "0.0.3",
+      "Time": "2016-03-22T21:51:19.774Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "0.0.4",
+      "Time": "2015-05-20T04:04:04.473Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "0.0.9",
+      "Time": "2016-03-22T21:51:19.774Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.0.0",
+      "Time": "2016-03-22T21:42:18.002Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.0.1",
+      "Time": "2016-03-23T00:00:19.758Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.0.2",
+      "Time": "2016-04-13T16:59:21.924Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.1.0",
+      "Time": "2016-05-01T11:06:11.595Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.1.1",
+      "Time": "2016-07-08T11:25:40.531Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.1.2",
+      "Time": "2016-09-24T10:25:01.998Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.1.3",
+      "Time": "2016-10-01T08:01:07.703Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.2.0",
+      "Time": "2017-11-17T05:48:38.934Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    },
+    {
+      "Version": "1.3.0",
+      "Time": "2018-04-09T01:10:45.796Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": "use String.prototype.padStart()"
+    }
+  ],
+  "Latest": "1.3.0",
+  "Repo": "https://github.com/stevemao/left-pad",
+  "Deprecated": "use String.prototype.padStart()",
+  "Replacement": ""
+}

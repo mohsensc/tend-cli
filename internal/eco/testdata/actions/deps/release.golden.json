@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/checkout",
+    "Version": "v4",
+    "Req": "v4",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/release.yaml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

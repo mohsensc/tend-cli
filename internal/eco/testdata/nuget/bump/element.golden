@@ -1,0 +1,6 @@
+files: [src/App/App.csproj]
+locked: false
+note: dotnet not found in PATH
+--- src/App/App.csproj
+8: -      <Version>3.1.1</Version>
+8: +      <Version>4.0.0</Version>

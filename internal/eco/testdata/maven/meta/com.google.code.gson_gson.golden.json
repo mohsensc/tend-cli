@@ -1,0 +1,317 @@
+{
+  "Name": "com.google.code.gson:gson",
+  "Releases": [
+    {
+      "Version": "1.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.5",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.6",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.7",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.7.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.7.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.2.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.2.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.2.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.2.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.3.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.5",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.6",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.6.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.6.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.7",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.0",
+      "Time": "2016-10-27T06:02:42Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.1",
+      "Time": "2017-05-31T01:39:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.2",
+      "Time": "2017-09-20T01:42:42Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.3",
+      "Time": "2018-04-27T22:36:17Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.4",
+      "Time": "2018-05-01T18:10:41Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.5",
+      "Time": "2018-05-22T03:08:59Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.6",
+      "Time": "2019-10-04T18:55:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.7",
+      "Time": "2021-05-24T23:23:56Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.8",
+      "Time": "2021-08-20T16:08:52Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.8.9",
+      "Time": "2021-10-29T20:00:01Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.9.0",
+      "Time": "2022-02-11T19:14:41Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.9.1",
+      "Time": "2022-07-31T21:26:22Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.10",
+      "Time": "2022-10-25T01:09:40Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.10.1",
+      "Time": "2023-01-06T15:44:01Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.11.0",
+      "Time": "2024-05-19T18:54:42.617Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.12.0",
+      "Time": "2025-01-27T22:41:57.965Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.12.1",
+      "Time": "2025-01-30T22:53:34.71Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.13.0",
+      "Time": "2025-04-11T14:30:34.134Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.13.1",
+      "Time": "2025-04-24T01:05:20.482Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.13.2-rc1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.13.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "2.14.0",
+      "Time": "2026-04-23T19:01:47Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    }
+  ],
+  "Latest": "2.14.0",
+  "Repo": "https://github.com/google/gson",
+  "Deprecated": "",
+  "Replacement": ""
+}

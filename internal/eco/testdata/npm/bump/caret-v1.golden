@@ -1,0 +1,6 @@
+files: [package.json]
+locked: false
+note: npm not found
+--- package.json
+8: -    "debug": "^2.6.9",
+8: +    "debug": "^4.4.3",

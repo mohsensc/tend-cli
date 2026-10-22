@@ -1,0 +1,8 @@
+{
+  "name": "legacy",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "dependencies": {
+    "left-pad": "~1.2.0"
+  }
+}

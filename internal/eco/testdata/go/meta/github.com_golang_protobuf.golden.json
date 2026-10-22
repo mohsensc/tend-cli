@@ -1,0 +1,163 @@
+{
+  "Name": "github.com/golang/protobuf",
+  "Releases": [
+    {
+      "Version": "v1.0.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.1.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.2.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.5",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0-rc.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0-rc.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0-rc.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0-rc.4",
+      "Time": "2020-03-09T20:21:52Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0",
+      "Time": "2020-04-13T19:43:07Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.1",
+      "Time": "2020-05-04T19:38:55Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.2",
+      "Time": "2020-05-14T20:44:37Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.3",
+      "Time": "2020-10-15T06:18:29Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.0",
+      "Time": "2021-03-18T00:15:31Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.1",
+      "Time": "2021-03-18T01:16:33Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.2",
+      "Time": "2021-03-29T18:20:59Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.3",
+      "Time": "2021-09-16T00:37:10Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.4",
+      "Time": "2024-03-06T06:45:40Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    }
+  ],
+  "Latest": "v1.5.4",
+  "Repo": "https://github.com/golang/protobuf",
+  "Deprecated": "Use the \"google.golang.org/protobuf\" module instead.",
+  "Replacement": ""
+}

@@ -1,0 +1,98 @@
+[
+  {
+    "Ecosystem": "pip",
+    "Name": "requests",
+    "Version": "2.32.3",
+    "Req": "^2.31",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "flask",
+    "Version": "2.3.3",
+    "Req": "~2.3",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 10,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "sqlalchemy",
+    "Version": "2.0.35",
+    "Req": "2.0.35",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 12,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pytest",
+    "Version": "8.3.3",
+    "Req": "^8.3",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 15,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "certifi",
+    "Version": "2024.8.30",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "iniconfig",
+    "Version": "2.0.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "poetry/pyproject.toml",
+      "Lock": "poetry/poetry.lock",
+      "Tool": "poetry"
+    },
+    "Line": 0,
+    "Dev": true,
+    "Direct": false,
+    "Pin": ""
+  }
+]

@@ -1,0 +1,27 @@
+[project]
+name = "shop"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx[http2]>=0.27,<1",
+    "pydantic==2.9.2",
+    'PyYAML>=6.0,<7 ; sys_platform != "win32"',
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary>=2.9"]
+dev = [
+    "pytest>=8",
+    "ruff==0.6.9",
+]
+
+[dependency-groups]
+docs = ["mkdocs>=1.6", { include-group = "lint" }]
+lint = ["mypy>=1.11"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

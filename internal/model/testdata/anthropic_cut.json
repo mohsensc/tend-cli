@@ -1,0 +1,9 @@
+{
+  "id": "msg_01cut",
+  "type": "message",
+  "role": "assistant",
+  "model": "model-id",
+  "content": [{"type": "text", "text": "--- a/x\n+++ b/"}],
+  "stop_reason": "max_tokens",
+  "usage": {"input_tokens": 41, "output_tokens": 8000}
+}

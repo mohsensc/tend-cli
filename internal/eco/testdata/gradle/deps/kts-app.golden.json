@@ -1,0 +1,50 @@
+[
+  {
+    "Ecosystem": "gradle",
+    "Name": "software.amazon.awssdk:bom",
+    "Version": "2.20.0",
+    "Req": "2.20.0",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/app/build.gradle.kts",
+      "Lock": "kts/app/gradle.lockfile",
+      "Tool": "gradle"
+    },
+    "Line": 10,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.google.guava:guava",
+    "Version": "32.1.2-jre",
+    "Req": "32.1.2-jre",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/app/build.gradle.kts",
+      "Lock": "kts/app/gradle.lockfile",
+      "Tool": "gradle"
+    },
+    "Line": 11,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "io.mockk:mockk",
+    "Version": "1.13.8",
+    "Req": "1.13.8",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/app/build.gradle.kts",
+      "Lock": "kts/app/gradle.lockfile",
+      "Tool": "gradle"
+    },
+    "Line": 18,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  }
+]

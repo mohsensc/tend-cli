@@ -1,0 +1,6 @@
+files: [api/pom.xml]
+locked: false
+note: no lockfile
+--- api/pom.xml
+47: -        8.0.33
+47: +        8.0.34

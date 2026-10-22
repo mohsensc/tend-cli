@@ -1,0 +1,21 @@
+{
+  "url": "https://api.github.com/repos/acme/shop/pulls/12",
+  "id": 1934567890,
+  "node_id": "PR_kwDOABCDE85xyz",
+  "html_url": "https://github.com/acme/shop/pull/12",
+  "number": 12,
+  "state": "open",
+  "locked": false,
+  "title": "Bump stripe to 16.0.1 (fixes GHSA-xxxx-yyyy-zzzz)",
+  "user": {"login": "github-actions[bot]", "id": 41898282, "type": "Bot"},
+  "body": "## stripe 14.2.0 → 16.0.1\n\n<!-- tend id=\"npm/stripe@16.0.1\" base=\"abc1234\" rev=\"1\" -->\n",
+  "created_at": "2026-10-12T09:00:00Z",
+  "updated_at": "2026-10-13T09:00:00Z",
+  "closed_at": null,
+  "merged_at": null,
+  "draft": false,
+  "labels": [{"id": 1, "name": "tend", "color": "0e8a16"}],
+  "head": {"label": "acme:tend/npm-stripe-16.0.1", "ref": "tend/npm-stripe-16.0.1", "sha": "1111111111111111111111111111111111111111"},
+  "base": {"label": "acme:main", "ref": "main", "sha": "2222222222222222222222222222222222222222"},
+  "author_association": "CONTRIBUTOR"
+}

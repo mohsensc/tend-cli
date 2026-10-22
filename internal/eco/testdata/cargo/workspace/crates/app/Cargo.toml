@@ -1,0 +1,24 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+rand = "0.8"
+yaml = { package = "serde_yaml", version = "0.9" }
+shared = { path = "../shared" }
+patched = { git = "https://example.com/patched.git" }
+
+[dependencies.regex]
+version = "1.9"
+default-features = false
+
+[dev-dependencies]
+tempfile = "3"
+
+[build-dependencies]
+cc = "1.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

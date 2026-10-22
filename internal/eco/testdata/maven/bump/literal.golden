@@ -1,0 +1,6 @@
+files: [api/pom.xml]
+locked: false
+note: no lockfile
+--- api/pom.xml
+41: -      <version>3.12.0</version>
+41: +      <version>3.14.0</version>

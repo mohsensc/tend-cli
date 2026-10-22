@@ -1,0 +1,12 @@
+{
+  "id": "chatcmpl-9fWxPr",
+  "object": "chat.completion",
+  "model": "model-id",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "--- a/x\n+++ b/", "refusal": null},
+      "finish_reason": "length"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/mattn/go-sqlite3/@v/v1.14.49.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v1.14.49\",\"Time\":\"2026-07-29T07:22:37Z\",\"Origin\":{\"VCS\":\"git\",\"URL\":\"https://github.com/mattn/go-sqlite3\",\"Hash\":\"cc41b8c87686036ea632cede537ffccef69b370a\",\"Ref\":\"refs/tags/v1.14.49\"}}"
+}

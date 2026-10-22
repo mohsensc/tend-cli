@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/actions/checkout/releases?per_page=100",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "W/\"605e2007ffcf9aa0af99f52f9048c6d133f52ef661d04f2a65f97cb8b317cde1\""
+    ],
+    "X-Ratelimit-Remaining": [
+      "56"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792582190"
+    ]
+  },
+  "body": "[\n  {\n    \"tag_name\": \"v7.0.1\",\n    \"name\": \"v7.0.1\",\n    \"published_at\": \"2026-07-20T15:10:05Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v6.1.0\",\n    \"name\": \"v6.1.0\",\n    \"published_at\": \"2026-07-20T15:23:28Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v5.1.0\",\n    \"name\": \"v5.1.0\",\n    \"published_at\": \"2026-07-20T15:27:58Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v4.4.0\",\n    \"name\": \"v4.4.0\",\n    \"published_at\": \"2026-07-20T15:36:10Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v3.7.0\",\n    \"name\": \"v3.7.0\",\n    \"published_at\": \"2026-07-20T15:40:05Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v2.8.0\",\n    \"name\": \"v2.8.0\",\n    \"published_at\": \"2026-07-20T15:43:41Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v6-beta\",\n    \"name\": \"v6-beta\",\n    \"published_at\": \"2025-11-03T19:42:16Z\",\n    \"prerelease\": true,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v4.2.2\",\n    \"name\": \"v4.2.2\",\n    \"published_at\": \"2024-10-23T14:46:00Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v4.0.0\",\n    \"name\": \"v4.0.0\",\n    \"published_at\": \"2023-10-17T15:41:17Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v2-beta\",\n    \"name\": \"v2 beta\",\n    \"published_at\": \"2019-12-03T15:35:24Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  },\n  {\n    \"tag_name\": \"v1.0.0\",\n    \"name\": \"v1.0.0\",\n    \"published_at\": \"2019-08-01T12:59:53Z\",\n    \"prerelease\": false,\n    \"draft\": false\n  }\n]\n"
+}

@@ -1,0 +1,6 @@
+files: [services/api/Dockerfile.dev]
+locked: false
+note: no lockfile
+--- services/api/Dockerfile.dev
+1: -FROM --platform=linux/amd64 node:18 AS dev
+1: +FROM --platform=linux/amd64 node:22 AS dev

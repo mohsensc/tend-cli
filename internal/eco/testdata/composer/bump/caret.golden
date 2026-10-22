@@ -1,0 +1,6 @@
+files: [composer.json]
+locked: false
+note: composer not found in PATH
+--- composer.json
+8: -        "monolog/monolog": "^3.5",
+8: +        "monolog/monolog": "^4.0",

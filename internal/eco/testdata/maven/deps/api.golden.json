@@ -1,0 +1,98 @@
+[
+  {
+    "Ecosystem": "maven",
+    "Name": "com.fasterxml.jackson.core:jackson-databind",
+    "Version": "2.15.2",
+    "Req": "${jackson.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 24,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "com.squareup.okhttp3:okhttp",
+    "Version": "4.11.0",
+    "Req": "${okhttp.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "com.google.guava:guava",
+    "Version": "32.1.2-jre",
+    "Req": "${guava.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 36,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "org.apache.commons:commons-lang3",
+    "Version": "3.12.0",
+    "Req": "3.12.0",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 41,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "mysql:mysql-connector-java",
+    "Version": "8.0.33",
+    "Req": "8.0.33",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 47,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "org.junit.jupiter:junit-jupiter",
+    "Version": "5.10.0",
+    "Req": "${junit.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/api/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 56,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  }
+]

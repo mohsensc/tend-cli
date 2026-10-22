@@ -1,0 +1,3 @@
+verify:
+  install: ["python3 -m venv .venv && .venv/bin/pip install --quiet --no-index --find-links wheels -r requirements.txt"]
+  test: [".venv/bin/python -m unittest"]

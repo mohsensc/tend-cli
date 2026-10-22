@@ -1,0 +1,5 @@
+{
+    "name": "acme/tool",
+    "require": {"monolog/monolog": "^2.9", "php": ">=7.4"},
+    "require-dev": {}
+}

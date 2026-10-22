@@ -1,0 +1,7 @@
+tend: 1 queued, 0 skipped, no open PR
+
+  1  deprecation  api.example-unknown.com API  GET /v2/items  operation deprecated · sunset 2027-06-30 · 1 site
+
+untracked:
+  api.nowhere-documented.com: called by the code, with no OpenAPI spec tend could find; a spec or changelog URL in tend.yml fixes that
+    apis: [{name: nowhere-documented.com, hosts: [api.nowhere-documented.com], spec: <OpenAPI spec URL>}]

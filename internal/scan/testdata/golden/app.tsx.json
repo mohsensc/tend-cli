@@ -1,0 +1,386 @@
+{
+  "Lang": "js",
+  "Imports": [
+    {
+      "File": "app.tsx",
+      "Line": 1,
+      "Package": "stripe",
+      "Binding": "Stripe",
+      "Names": null
+    },
+    {
+      "File": "app.tsx",
+      "Line": 2,
+      "Package": "aws-sdk",
+      "Binding": "aws",
+      "Names": null
+    },
+    {
+      "File": "app.tsx",
+      "Line": 3,
+      "Package": "@aws-sdk/client-s3",
+      "Binding": "",
+      "Names": [
+        "S3Client",
+        "Put"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 4,
+      "Package": "stripe/types",
+      "Binding": "",
+      "Names": [
+        "Charge"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 5,
+      "Package": "lodash/fp",
+      "Binding": "def",
+      "Names": [
+        "helper"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 7,
+      "Package": "reflect-metadata",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "app.tsx",
+      "Line": 9,
+      "Package": "axios",
+      "Binding": "axios",
+      "Names": null
+    },
+    {
+      "File": "app.tsx",
+      "Line": 10,
+      "Package": "pg",
+      "Binding": "",
+      "Names": [
+        "createClient",
+        "PgPool"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 11,
+      "Package": "some-lib",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "app.tsx",
+      "Line": 12,
+      "Package": "@nestjs/common",
+      "Binding": "",
+      "Names": [
+        "Injectable",
+        "Input"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 31,
+      "Package": "chalk",
+      "Binding": "",
+      "Names": [
+        "chalk"
+      ]
+    },
+    {
+      "File": "app.tsx",
+      "Line": 32,
+      "Package": "dayjs",
+      "Binding": "mod",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 15,
+      "Col": 22,
+      "Chain": [
+        "Stripe"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "const stripe = new Stripe(key, { apiVersion: '2024-06-20' });"
+    },
+    {
+      "Line": 16,
+      "Col": 24,
+      "Chain": [
+        "stripe",
+        "charges",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "const charge = await stripe.charges.create({ amount: 2000, currency: 'usd' });"
+    },
+    {
+      "Line": 18,
+      "Col": 18,
+      "Chain": [
+        "S3Client"
+      ],
+      "Call": true,
+      "Quals": [
+        "@aws-sdk/client-s3"
+      ],
+      "Text": "const s3 = new S3Client({});"
+    },
+    {
+      "Line": 19,
+      "Col": 9,
+      "Chain": [
+        "s3",
+        "send"
+      ],
+      "Call": true,
+      "Quals": [
+        "@aws-sdk/client-s3"
+      ],
+      "Text": "await s3.send(new Put({ Bucket: 'b', Key: 'k' }));"
+    },
+    {
+      "Line": 19,
+      "Col": 21,
+      "Chain": [
+        "Put"
+      ],
+      "Call": true,
+      "Quals": [
+        "@aws-sdk/client-s3"
+      ],
+      "Text": "await s3.send(new Put({ Bucket: 'b', Key: 'k' }));"
+    },
+    {
+      "Line": 20,
+      "Col": 9,
+      "Chain": [
+        "stripe",
+        "customers",
+        "del"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "await stripe?.customers?.del('cus_1');"
+    },
+    {
+      "Line": 21,
+      "Col": 3,
+      "Chain": [
+        "stripe",
+        "paymentIntents",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "stripe['paymentIntents'].create({});"
+    },
+    {
+      "Line": 22,
+      "Col": 3,
+      "Chain": [
+        "aws",
+        "config",
+        "update"
+      ],
+      "Call": true,
+      "Quals": [
+        "aws-sdk"
+      ],
+      "Text": "aws.config.update({ region: 'us-east-1' });"
+    },
+    {
+      "Line": 23,
+      "Col": 21,
+      "Chain": [
+        "axios",
+        "post"
+      ],
+      "Call": true,
+      "Quals": [
+        "axios"
+      ],
+      "Text": "const res = await axios.post('https://api.example.com/v1/orders', { total_cents: 5 });"
+    },
+    {
+      "Line": 27,
+      "Col": 20,
+      "Chain": [
+        "PgPool"
+      ],
+      "Call": true,
+      "Quals": [
+        "pg"
+      ],
+      "Text": "const pool = new PgPool();"
+    },
+    {
+      "Line": 28,
+      "Col": 3,
+      "Chain": [
+        "pool",
+        "query"
+      ],
+      "Call": true,
+      "Quals": [
+        "pg"
+      ],
+      "Text": "pool.query('select 1');"
+    },
+    {
+      "Line": 29,
+      "Col": 14,
+      "Chain": [
+        "createClient"
+      ],
+      "Call": true,
+      "Quals": [
+        "pg"
+      ],
+      "Text": "const db = createClient();"
+    },
+    {
+      "Line": 30,
+      "Col": 3,
+      "Chain": [
+        "db",
+        "connect"
+      ],
+      "Call": true,
+      "Quals": [
+        "pg"
+      ],
+      "Text": "db.connect();"
+    },
+    {
+      "Line": 33,
+      "Col": 3,
+      "Chain": [
+        "mod",
+        "extend"
+      ],
+      "Call": true,
+      "Quals": [
+        "dayjs"
+      ],
+      "Text": "mod.extend({});"
+    },
+    {
+      "Line": 34,
+      "Col": 3,
+      "Chain": [
+        "helper"
+      ],
+      "Call": true,
+      "Quals": [
+        "lodash/fp"
+      ],
+      "Text": "helper(def);"
+    },
+    {
+      "Line": 37,
+      "Col": 54,
+      "Chain": [
+        "stripe",
+        "balance",
+        "retrieve"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "return \u003ca href=\"https://docs.example.com/x\"\u003eDon't {stripe.balance.retrieve()}\u003c/a\u003e;"
+    },
+    {
+      "Line": 40,
+      "Col": 2,
+      "Chain": [
+        "Injectable"
+      ],
+      "Call": true,
+      "Quals": [
+        "@nestjs/common"
+      ],
+      "Text": "@Injectable()"
+    },
+    {
+      "Line": 42,
+      "Col": 4,
+      "Chain": [
+        "Input"
+      ],
+      "Call": false,
+      "Quals": [
+        "@nestjs/common"
+      ],
+      "Text": "@Input"
+    },
+    {
+      "Line": 45,
+      "Col": 23,
+      "Chain": [
+        "Stripe"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "this.client = new Stripe(key);"
+    },
+    {
+      "Line": 48,
+      "Col": 17,
+      "Chain": [
+        "client",
+        "refunds",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe"
+      ],
+      "Text": "return this.client.refunds.create({});"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "app.tsx",
+      "Line": 23,
+      "Method": "POST",
+      "URL": "https://api.example.com/v1/orders",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.tsx",
+      "Line": 24,
+      "Method": "DELETE",
+      "URL": "/v1/orders/${id}",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.tsx",
+      "Line": 37,
+      "Method": "",
+      "URL": "https://docs.example.com/x",
+      "Host": "docs.example.com"
+    }
+  ]
+}

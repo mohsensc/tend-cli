@@ -1,0 +1,54 @@
+{
+  "example-unknown.com": {
+    "added": "2025-03-04T10:00:00.000Z",
+    "preferred": "2.0.0",
+    "versions": {
+      "2.0.0": {
+        "added": "2025-03-04T10:00:00.000Z",
+        "updated": "2026-09-30T08:00:00.000Z",
+        "info": {
+          "title": "Example Unknown Inventory API",
+          "version": "2.0.0",
+          "x-providerName": "example-unknown.com",
+          "x-origin": [
+            {
+              "format": "openapi",
+              "url": "https://api.example-unknown.com/openapi.json",
+              "version": "3.0"
+            }
+          ]
+        },
+        "swaggerUrl": "https://api.apis.guru/v2/specs/example-unknown.com/2.0.0/openapi.json",
+        "swaggerYamlUrl": "https://api.apis.guru/v2/specs/example-unknown.com/2.0.0/openapi.yaml",
+        "openapiVer": "3.0.3",
+        "link": "https://api.apis.guru/v2/specs/example-unknown.com/2.0.0.json"
+      }
+    }
+  },
+  "stripe.com": {
+    "added": "2017-05-02T11:42:52.000Z",
+    "preferred": "2022-11-15",
+    "versions": {
+      "2022-11-15": {
+        "added": "2022-11-15T00:00:00.000Z",
+        "updated": "2023-03-06T07:12:59.965Z",
+        "info": {
+          "title": "Stripe API",
+          "version": "2022-11-15",
+          "x-providerName": "stripe.com",
+          "x-origin": [
+            {
+              "format": "openapi",
+              "url": "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.yaml",
+              "version": "3.0"
+            }
+          ]
+        },
+        "swaggerUrl": "https://api.apis.guru/v2/specs/stripe.com/2022-11-15/openapi.json",
+        "swaggerYamlUrl": "https://api.apis.guru/v2/specs/stripe.com/2022-11-15/openapi.yaml",
+        "openapiVer": "3.0.0",
+        "link": "https://api.apis.guru/v2/specs/stripe.com/2022-11-15.json"
+      }
+    }
+  }
+}

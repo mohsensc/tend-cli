@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-9fWxPq",
+  "object": "chat.completion",
+  "created": 1735689600,
+  "model": "model-id",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "--- a/x\n+++ b/x\n", "refusal": null},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {"prompt_tokens": 41, "completion_tokens": 17, "total_tokens": 58}
+}

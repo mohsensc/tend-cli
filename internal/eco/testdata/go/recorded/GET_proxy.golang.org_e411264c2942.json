@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/!burnt!sushi/toml/@v/v1.2.0.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v1.2.0\",\"Time\":\"2022-06-25T23:55:26Z\"}"
+}

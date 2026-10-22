@@ -1,0 +1,34 @@
+[
+  {
+    "Ecosystem": "npm",
+    "Name": "is-number",
+    "Version": "7.0.0",
+    "Req": "^7.0.0",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "packages/b/package.json",
+      "Lock": "package-lock.json",
+      "Tool": "npm"
+    },
+    "Line": 5,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "npm",
+    "Name": "ms",
+    "Version": "2.1.3",
+    "Req": "2.1.3",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "packages/b/package.json",
+      "Lock": "package-lock.json",
+      "Tool": "npm"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

@@ -1,0 +1,87 @@
+{
+  "Lang": "java",
+  "Imports": [
+    {
+      "File": "app.kt",
+      "Line": 3,
+      "Package": "com.stripe.Stripe",
+      "Binding": "Stripe",
+      "Names": null
+    },
+    {
+      "File": "app.kt",
+      "Line": 4,
+      "Package": "com.stripe.model.Customer",
+      "Binding": "StripeCustomer",
+      "Names": null
+    },
+    {
+      "File": "app.kt",
+      "Line": 5,
+      "Package": "okhttp3.*",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "app.kt",
+      "Line": 6,
+      "Package": "io.ktor.client.HttpClient",
+      "Binding": "HttpClient",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 9,
+      "Col": 5,
+      "Chain": [
+        "Stripe",
+        "apiKey"
+      ],
+      "Call": false,
+      "Quals": [
+        "com.stripe.Stripe.apiKey"
+      ],
+      "Text": "Stripe.apiKey = \"sk\""
+    },
+    {
+      "Line": 10,
+      "Col": 13,
+      "Chain": [
+        "StripeCustomer",
+        "retrieve"
+      ],
+      "Call": true,
+      "Quals": [
+        "com.stripe.model.Customer.retrieve"
+      ],
+      "Text": "val c = StripeCustomer.retrieve(\"cus_1\")"
+    },
+    {
+      "Line": 11,
+      "Col": 18,
+      "Chain": [
+        "HttpClient"
+      ],
+      "Call": true,
+      "Quals": [
+        "io.ktor.client.HttpClient"
+      ],
+      "Text": "val client = HttpClient()"
+    },
+    {
+      "Line": 12,
+      "Col": 5,
+      "Chain": [
+        "client",
+        "close"
+      ],
+      "Call": true,
+      "Quals": [
+        "io.ktor.client.HttpClient"
+      ],
+      "Text": "client.close()"
+    }
+  ],
+  "URLs": null
+}

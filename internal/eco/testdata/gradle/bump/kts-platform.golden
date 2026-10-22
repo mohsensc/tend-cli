@@ -1,0 +1,6 @@
+files: [app/build.gradle.kts]
+locked: false
+note: gradle not found
+--- app/build.gradle.kts
+10: -    implementation(platform("software.amazon.awssdk:bom:2.20.0"))
+10: +    implementation(platform("software.amazon.awssdk:bom:2.25.0"))

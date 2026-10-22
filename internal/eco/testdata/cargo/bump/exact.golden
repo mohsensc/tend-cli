@@ -1,0 +1,6 @@
+files: [crates/shared/Cargo.toml]
+locked: false
+note: cargo not found in PATH
+--- crates/shared/Cargo.toml
+8: -serde_json = "=1.0.115"
+8: +serde_json = "=1.0.120"

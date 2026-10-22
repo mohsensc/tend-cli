@@ -1,0 +1,22 @@
+{
+  "url": "https://api.github.com/repos/actions/checkout",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "W/\"5e4348b4d849297765b958d1795b1e8fbbf1c3ba5281e2e3f1b658a99b55bc18\""
+    ],
+    "Last-Modified": [
+      "Wed, 21 Oct 2026 09:38:17 GMT"
+    ],
+    "X-Ratelimit-Remaining": [
+      "55"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792582190"
+    ]
+  },
+  "body": "{\n  \"name\": \"checkout\",\n  \"full_name\": \"actions/checkout\",\n  \"html_url\": \"https://github.com/actions/checkout\",\n  \"default_branch\": \"main\",\n  \"archived\": false,\n  \"fork\": false\n}\n"
+}

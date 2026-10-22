@@ -1,0 +1,50 @@
+[
+  {
+    "Ecosystem": "maven",
+    "Name": "com.fasterxml.jackson.core:jackson-databind",
+    "Version": "2.15.2",
+    "Req": "${jackson.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 19,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "org.junit.jupiter:junit-jupiter",
+    "Version": "5.10.0",
+    "Req": "${junit.version}",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 20,
+    "Dev": true,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "maven",
+    "Name": "software.amazon.awssdk:bom",
+    "Version": "2.20.0",
+    "Req": "2.20.0",
+    "Manifest": {
+      "Ecosystem": "maven",
+      "Path": "multi/pom.xml",
+      "Lock": "",
+      "Tool": "mvn"
+    },
+    "Line": 30,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

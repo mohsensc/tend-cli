@@ -1,0 +1,6 @@
+files: [Gemfile]
+locked: false
+note: bundle not found in PATH
+--- Gemfile
+7: -gem "stripe", "~> 10.0", ">= 10.1"
+7: +gem "stripe", "~> 11.0", ">= 10.1"

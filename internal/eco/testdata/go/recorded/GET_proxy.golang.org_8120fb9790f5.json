@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/go-chi/chi/v5/@v/v5.2.4.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v5.2.4\",\"Time\":\"2026-01-14T16:02:00Z\",\"Origin\":{\"VCS\":\"git\",\"URL\":\"https://github.com/go-chi/chi\",\"Hash\":\"6eb35881c0e438ffb663ddbad3a61babaa5e5d8a\",\"Ref\":\"refs/tags/v5.2.4\"}}"
+}

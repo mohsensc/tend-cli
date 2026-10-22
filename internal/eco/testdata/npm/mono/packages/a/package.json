@@ -1,0 +1,8 @@
+{
+  "name": "@mono/a",
+  "version": "1.0.0",
+  "dependencies": {
+    "@mono/b": "*",
+    "is-number": "^6.0.0"
+  }
+}

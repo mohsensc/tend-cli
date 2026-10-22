@@ -1,0 +1,260 @@
+{
+  "base": "main",
+  "dropped": [
+    {
+      "change": {
+        "deps": [
+          {
+            "dev": false,
+            "direct": true,
+            "ecosystem": "npm",
+            "line": 0,
+            "manifest": {},
+            "name": "@fixture/util",
+            "version": "1.0.0"
+          }
+        ],
+        "id": "npm/@fixture/util@1.0.1",
+        "kind": "update",
+        "level": "patch",
+        "to": "1.0.1"
+      },
+      "detail": "patch update that touches nothing; updates.patch is off",
+      "reason": "noise"
+    },
+    {
+      "change": {
+        "deps": [
+          {
+            "dev": false,
+            "direct": false,
+            "ecosystem": "npm",
+            "line": 0,
+            "manifest": {},
+            "name": "left-pad",
+            "version": "1.1.0"
+          }
+        ],
+        "id": "npm/left-pad@1.3.0",
+        "kind": "update",
+        "level": "minor",
+        "to": "1.3.0"
+      },
+      "detail": "minor update that touches nothing; updates.minor is off",
+      "reason": "noise"
+    },
+    {
+      "change": {
+        "deps": [
+          {
+            "dev": false,
+            "direct": false,
+            "ecosystem": "npm",
+            "line": 0,
+            "manifest": {},
+            "name": "react",
+            "version": "19.2.0"
+          }
+        ],
+        "id": "npm/react@20.0.0",
+        "kind": "breaking",
+        "level": "major",
+        "published": "2026-10-21T12:00:00Z",
+        "to": "20.0.0"
+      },
+      "detail": "released 2026-10-21, cooldown is 3d",
+      "reason": "cooldown"
+    }
+  ],
+  "notes": [
+    "npm: broken: registry returned 503"
+  ],
+  "open": {
+    "body": "<!-- tend id=\"go/example.com/fixture/crypto@v1.0.1\" base=\"abc\" rev=\"1\" -->",
+    "draft": false,
+    "number": 12,
+    "title": "Bump example.com/fixture/crypto to v1.0.1"
+  },
+  "queue": [
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "go",
+          "line": 0,
+          "manifest": {},
+          "name": "example.com/fixture/crypto",
+          "version": "v1.0.0"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "osv",
+          "title": "GO-2026-0001 Signatures can be forged",
+          "url": "https://osv.dev/vulnerability/GO-2026-0001"
+        }
+      ],
+      "id": "go/example.com/fixture/crypto@v1.0.1",
+      "kind": "security",
+      "level": "patch",
+      "severity": "high",
+      "sites": [
+        {
+          "call": true,
+          "chain": [
+            "crypto",
+            "Sign"
+          ],
+          "col": 0,
+          "file": "main.go",
+          "line": 9
+        }
+      ],
+      "to": "v1.0.1"
+    },
+    {
+      "api": {
+        "field": "total_cents",
+        "method": "GET",
+        "path": "/v1/orders",
+        "provider": "fixture",
+        "what": "response field removed"
+      },
+      "id": "api/fixture/GET /v1/orders#total_cents",
+      "kind": "breaking",
+      "sites": [
+        {
+          "call": false,
+          "chain": [
+            "total_cents"
+          ],
+          "col": 0,
+          "file": "app/orders.py",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "npm",
+          "line": 0,
+          "manifest": {
+            "path": "package.json"
+          },
+          "name": "@fixture/pay",
+          "version": "1.4.0"
+        }
+      ],
+      "id": "npm/@fixture/pay@2.0.0",
+      "kind": "deprecation",
+      "level": "major",
+      "sites": [
+        {
+          "call": false,
+          "chain": [
+            "pay",
+            "charges",
+            "create"
+          ],
+          "col": 0,
+          "file": "src/billing.js",
+          "line": 4
+        },
+        {
+          "call": false,
+          "chain": [
+            "pay",
+            "charges",
+            "retrieve"
+          ],
+          "col": 0,
+          "file": "src/billing.js",
+          "line": 9
+        }
+      ],
+      "to": "2.0.0"
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 1,
+          "manifest": {
+            "path": "Dockerfile"
+          },
+          "name": "library/node",
+          "version": "16-alpine"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "eol",
+          "url": "https://endoflife.date/nodejs"
+        }
+      ],
+      "id": "docker/library/node@22-alpine",
+      "kind": "deprecation",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "Dockerfile",
+          "line": 1,
+          "text": "FROM node:16-alpine"
+        }
+      ],
+      "sunset": "2023-09-11T00:00:00Z",
+      "to": "22-alpine"
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": false,
+          "ecosystem": "npm",
+          "line": 0,
+          "manifest": {},
+          "name": "moment",
+          "version": "2.29.4"
+        }
+      ],
+      "id": "npm/moment@",
+      "kind": "deprecation",
+      "options": [
+        {
+          "safe": false,
+          "title": "dayjs"
+        },
+        {
+          "safe": false,
+          "title": "luxon"
+        }
+      ]
+    }
+  ],
+  "repo": "acme/shop",
+  "untracked": [
+    {
+      "what": "vendor/lib",
+      "why": "a git submodule, pinned to a commit; tend does not move submodules"
+    },
+    {
+      "fix": "{name: one.example, hosts: [api.one.example], spec: <OpenAPI spec URL>}",
+      "key": "apis",
+      "what": "api.one.example",
+      "why": "no spec"
+    },
+    {
+      "fix": "{name: two.example, hosts: [api.two.example], spec: <OpenAPI spec URL>}",
+      "key": "apis",
+      "what": "api.two.example",
+      "why": "no spec"
+    }
+  ]
+}

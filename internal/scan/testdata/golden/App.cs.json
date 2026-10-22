@@ -1,0 +1,126 @@
+{
+  "Lang": "csharp",
+  "Imports": [
+    {
+      "File": "App.cs",
+      "Line": 1,
+      "Package": "System",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "App.cs",
+      "Line": 2,
+      "Package": "System.Net.Http",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "App.cs",
+      "Line": 3,
+      "Package": "Stripe",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "App.cs",
+      "Line": 4,
+      "Package": "Stripe.Checkout",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "App.cs",
+      "Line": 5,
+      "Package": "Newtonsoft.Json.JsonConvert",
+      "Binding": "Json",
+      "Names": null
+    },
+    {
+      "File": "App.cs",
+      "Line": 6,
+      "Package": "System.Math",
+      "Binding": "",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 16,
+      "Col": 13,
+      "Chain": [
+        "StripeConfiguration",
+        "ApiKey"
+      ],
+      "Call": false,
+      "Quals": [
+        "Stripe.StripeConfiguration.ApiKey",
+        "Stripe.Checkout.StripeConfiguration.ApiKey"
+      ],
+      "Text": "StripeConfiguration.ApiKey = \"sk\";"
+    },
+    {
+      "Line": 17,
+      "Col": 31,
+      "Chain": [
+        "ChargeService"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe.ChargeService",
+        "Stripe.Checkout.ChargeService"
+      ],
+      "Text": "var service = new ChargeService();"
+    },
+    {
+      "Line": 18,
+      "Col": 13,
+      "Chain": [
+        "service",
+        "Create"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe.ChargeService",
+        "Stripe.Checkout.ChargeService"
+      ],
+      "Text": "service.Create(new ChargeCreateOptions { Amount = 2000 });"
+    },
+    {
+      "Line": 20,
+      "Col": 21,
+      "Chain": [
+        "Json",
+        "SerializeObject"
+      ],
+      "Call": true,
+      "Quals": [
+        "Newtonsoft.Json.JsonConvert.SerializeObject"
+      ],
+      "Text": "var s = Json.SerializeObject(service);"
+    },
+    {
+      "Line": 23,
+      "Col": 13,
+      "Chain": [
+        "Stripe",
+        "Refund",
+        "Create"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe.Refund.Create"
+      ],
+      "Text": "Stripe.Refund.Create();"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "App.cs",
+      "Line": 24,
+      "Method": "GET",
+      "URL": "https://api.stripe.com/v1/charges",
+      "Host": "api.stripe.com"
+    }
+  ]
+}

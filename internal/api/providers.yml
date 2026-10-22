@@ -1,0 +1,41 @@
+- name: stripe
+  hosts: [api.stripe.com]
+  spec: https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json
+  sdks: [{eco: npm, name: stripe}, {eco: pip, name: stripe}, {eco: go, name: github.com/stripe/stripe-go}, {eco: rubygems, name: stripe}, {eco: composer, name: stripe/stripe-php}, {eco: maven, name: "com.stripe:stripe-java"}, {eco: nuget, name: stripe.net}]
+  base: /v1
+  verbs: {create: POST, retrieve: "GET/{id}", update: "POST/{id}", del: "DELETE/{id}", list: GET, cancel: "POST/{id}/cancel", capture: "POST/{id}/capture"}
+- name: github
+  hosts: [api.github.com]
+  spec: https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json
+  sdks: [{eco: npm, name: "@octokit/rest"}, {eco: go, name: github.com/google/go-github}, {eco: pip, name: PyGithub}, {eco: rubygems, name: octokit}]
+  sunset: x-github.removalDate
+- name: openai
+  hosts: [api.openai.com]
+  spec: https://raw.githubusercontent.com/openai/openai-openapi/main/openapi.yaml
+  sdks: [{eco: npm, name: openai}, {eco: pip, name: openai}, {eco: go, name: github.com/openai/openai-go}]
+  base: /v1
+  verbs: {create: POST, retrieve: "GET/{id}", list: GET, del: "DELETE/{id}", cancel: "POST/{id}/cancel"}
+- name: twilio
+  hosts: [api.twilio.com]
+  spec: https://raw.githubusercontent.com/twilio/twilio-oai/main/spec/json/twilio_api_v2010.json
+  sdks: [{eco: npm, name: twilio}, {eco: pip, name: twilio}, {eco: go, name: github.com/twilio/twilio-go}, {eco: rubygems, name: twilio-ruby}]
+- name: sendgrid
+  hosts: [api.sendgrid.com]
+  spec: https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_mail_v3.json
+  sdks: [{eco: npm, name: "@sendgrid/mail"}, {eco: pip, name: sendgrid}]
+- name: plaid
+  hosts: [production.plaid.com, sandbox.plaid.com]
+  spec: https://raw.githubusercontent.com/plaid/plaid-openapi/master/2020-09-14.yml
+  sdks: [{eco: npm, name: plaid}, {eco: pip, name: plaid-python}, {eco: go, name: github.com/plaid/plaid-go}]
+- name: digitalocean
+  hosts: [api.digitalocean.com]
+  spec: https://api-engineering.nyc3.digitaloceanspaces.com/spec-ci/DigitalOcean-public.v2.yaml
+  sdks: [{eco: go, name: github.com/digitalocean/godo}, {eco: pip, name: pydo}]
+- name: cloudflare
+  hosts: [api.cloudflare.com]
+  spec: https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
+  sdks: [{eco: npm, name: cloudflare}, {eco: go, name: github.com/cloudflare/cloudflare-go}, {eco: pip, name: cloudflare}]
+- name: datadog
+  hosts: [api.datadoghq.com]
+  spec: https://raw.githubusercontent.com/DataDog/datadog-api-client-go/master/.generator/schemas/v1/openapi.yaml
+  sdks: [{eco: go, name: github.com/DataDog/datadog-api-client-go}, {eco: pip, name: datadog-api-client}]

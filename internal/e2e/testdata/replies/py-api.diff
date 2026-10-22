@@ -1,0 +1,11 @@
+```diff
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -14,5 +14,5 @@ def total(orders):
+     cents = 0
+     for order in orders:
+         if order.get("status") != "void":
+-            cents += order["total_cents"]
++            cents += order["total"]["amount"]
+     return cents
+```

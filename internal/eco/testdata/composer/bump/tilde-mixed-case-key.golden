@@ -1,0 +1,6 @@
+files: [composer.json]
+locked: false
+note: composer not found in PATH
+--- composer.json
+9: -        "Symfony/Console": "~6.4",
+9: +        "Symfony/Console": "~7.0",

@@ -1,0 +1,6 @@
+files: [compose.yaml]
+locked: false
+note: no lockfile
+--- compose.yaml
+10: -    image: ghcr.io/acme/tool:2.1.0
+10: +    image: ghcr.io/acme/tool:2.2.0

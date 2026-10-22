@@ -1,0 +1,12 @@
+{
+  "node_id": "PR_kwDOABCDE85xyz",
+  "html_url": "https://github.com/acme/shop/pull/12",
+  "number": 12,
+  "state": "open",
+  "title": "Bump stripe to 16.0.1",
+  "body": "",
+  "merged_at": null,
+  "draft": true,
+  "head": {"ref": "tend/npm-stripe-16.0.1"},
+  "base": {"ref": "main"}
+}

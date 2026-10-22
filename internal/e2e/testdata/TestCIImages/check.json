@@ -1,0 +1,274 @@
+{
+  "base": "main",
+  "dropped": [],
+  "notes": [],
+  "open": null,
+  "queue": [
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 1,
+          "manifest": {
+            "ecosystem": "docker",
+            "path": "Dockerfile",
+            "tool": "docker"
+          },
+          "name": "library/node",
+          "req": "node:16-alpine",
+          "version": "16-alpine"
+        },
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 7,
+          "manifest": {
+            "ecosystem": "docker",
+            "path": "Dockerfile",
+            "tool": "docker"
+          },
+          "name": "library/node",
+          "req": "node:16-alpine",
+          "version": "16-alpine"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "eol",
+          "text": "nodejs 16 reached end of life on 2023-09-11.",
+          "title": "nodejs 16 end of life 2023-09-11",
+          "url": "https://endoflife.date/nodejs"
+        }
+      ],
+      "id": "docker/library/node@24-alpine",
+      "kind": "deprecation",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "Dockerfile",
+          "line": 1,
+          "text": "FROM node:16-alpine AS build"
+        },
+        {
+          "call": false,
+          "col": 0,
+          "file": "Dockerfile",
+          "line": 7,
+          "text": "FROM node:16-alpine"
+        }
+      ],
+      "sunset": "2023-09-11T00:00:00Z",
+      "to": "24-alpine"
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 3,
+          "manifest": {
+            "ecosystem": "docker",
+            "path": "docker-compose.yml",
+            "tool": "docker"
+          },
+          "name": "library/postgres",
+          "req": "postgres:11",
+          "version": "11"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "eol",
+          "text": "postgresql 11 reached end of life on 2023-11-09.",
+          "title": "postgresql 11 end of life 2023-11-09",
+          "url": "https://endoflife.date/postgresql"
+        }
+      ],
+      "id": "docker/library/postgres@18",
+      "kind": "deprecation",
+      "level": "major",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "docker-compose.yml",
+          "line": 3,
+          "text": "image: postgres:11"
+        }
+      ],
+      "sunset": "2023-11-09T00:00:00Z",
+      "to": "18"
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "actions",
+          "line": 12,
+          "manifest": {
+            "ecosystem": "actions",
+            "path": ".github/workflows/ci.yml",
+            "tool": "actions"
+          },
+          "name": "actions/checkout",
+          "req": "v2",
+          "version": "v2"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "registry",
+          "text": "runs on node12, removed from GitHub runners",
+          "title": "actions/checkout v2 is deprecated",
+          "url": "https://github.com/actions/checkout"
+        },
+        {
+          "source": "table",
+          "title": "GitHub Actions retired the set-output and save-state commands",
+          "url": "https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* block checking out fork pr for pull_request_target and workflow_run by @aiqiaoy in https://github.com/actions/checkout/pull/2454\r\n* Bump actions/publish-immutable-action from 0.0.3 to 0.0.4 in the minor-actions-dependencies group across 1 directory by @dependabot[bot] in https://github.com/actions/checkout/pull/2458\r\n* Bump flatted from 3.3.1 to 3.4.2 by @dependabot[bot] in https://github.com/actions/checkout/pull/2460\r\n* Bump js-yaml from 4.1.0 to 4.2.0 by @dependabot[bot] in https://github.com/actions/checkout/pull/2461\r\n* Bump @actions/core and @actions/tool-cache and Remove uuid by @dependabot[bot] in https://github.com/actions/checkout/pull/2459\r\n* upgrade module to esm and update dependencies by @aiqiaoy in https://github.com/actions/checkout/pull/2463\r\n* Bump the minor-npm-dependencies group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/actions/checkout/pull/2462\r\n* getting ready for checkout v7 release by @aiqiaoy in https://github.com/actions/checkout/pull/2464\r\n* update error wording by @aiqiaoy in https://github.com/actions/checkout/pull/2467\r\n\r\n## New Contributors\r\n* @aiqiaoy made their first contribution in https://git",
+          "title": "v7.0.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v7.0.0"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* **[BREAKING]** backport `allow-unsafe-pr-checkout` to v6 by @aiqiaoy in https://github.com/actions/checkout/pull/2500\r\n* backport fixes to releases-v6 by @aiqiaoy in https://github.com/actions/checkout/pull/2527\r\n\r\nhttps://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/ for more details about this breaking change\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v6.0.3...v6.1.0",
+          "title": "v6.1.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v6.1.0"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Update changelog by @ericsciple in https://github.com/actions/checkout/pull/2357\r\n* fix: expand merge commit SHA regex and add SHA-256 test cases by @yaananth in https://github.com/actions/checkout/pull/2414\r\n* Fix checkout init for SHA-256 repositories by @yaananth in https://github.com/actions/checkout/pull/2439\r\n* Update changelog for v6.0.3 by @yaananth in https://github.com/actions/checkout/pull/2446\r\n\r\n## New Contributors\r\n* @yaananth made their first contribution in https://github.com/actions/checkout/pull/2414\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v6...v6.0.3",
+          "title": "v6.0.3",
+          "url": "https://github.com/actions/checkout/releases/tag/v6.0.3"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Add orchestration_id to git user-agent when ACTIONS_ORCHESTRATION_ID is set by @TingluoHuang in https://github.com/actions/checkout/pull/2355\r\n* Fix tag handling: preserve annotations and explicit fetch-tags by @ericsciple in https://github.com/actions/checkout/pull/2356\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v6.0.1...v6.0.2",
+          "title": "v6.0.2",
+          "url": "https://github.com/actions/checkout/releases/tag/v6.0.2"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Update all references from v5 and v4 to v6 by @ericsciple in https://github.com/actions/checkout/pull/2314\r\n* Add worktree support for persist-credentials includeIf by @ericsciple in https://github.com/actions/checkout/pull/2327\r\n* Clarify v6 README by @ericsciple in https://github.com/actions/checkout/pull/2328\r\n\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v6...v6.0.1",
+          "title": "v6.0.1",
+          "url": "https://github.com/actions/checkout/releases/tag/v6.0.1"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Update README to include Node.js 24 support details and requirements by @salmanmkc in https://github.com/actions/checkout/pull/2248\r\n* Persist creds to a separate file by @ericsciple in https://github.com/actions/checkout/pull/2286\r\n* v6-beta by @ericsciple in https://github.com/actions/checkout/pull/2298\r\n* update readme/changelog for v6 by @ericsciple in https://github.com/actions/checkout/pull/2311\r\n\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v5.0.0...v6.0.0",
+          "title": "v6.0.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v6.0.0"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* **[BREAKING]** backport `allow-unsafe-pr-checkout` to v5 by @aiqiaoy in https://github.com/actions/checkout/pull/2501\r\n* backport fixes to releases-v5 by @aiqiaoy in https://github.com/actions/checkout/pull/2523\r\n\r\nhttps://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/ for more details about this breaking change\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v5.0.1...v5.1.0",
+          "title": "v5.1.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v5.1.0"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Port v6 cleanup to v5 by @ericsciple in https://github.com/actions/checkout/pull/2301\r\n\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v5...v5.0.1",
+          "title": "v5.0.1",
+          "url": "https://github.com/actions/checkout/releases/tag/v5.0.1"
+        }
+      ],
+      "id": "actions/actions/checkout@v7",
+      "kind": "deprecation",
+      "level": "major",
+      "options": [
+        {
+          "codemod": {
+            "text": {
+              "echo \"::set-output name=sha::$(git rev-parse HEAD)\"": "echo \"sha=$(git rev-parse HEAD)\" >> \"$GITHUB_OUTPUT\""
+            }
+          },
+          "detail": "The same values go to $GITHUB_OUTPUT and $GITHUB_STATE, which every current runner supports.",
+          "safe": true,
+          "title": "Write step outputs and state to environment files",
+          "to": "v7"
+        }
+      ],
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": ".github/workflows/ci.yml",
+          "line": 12,
+          "text": "- uses: actions/checkout@v2"
+        },
+        {
+          "call": false,
+          "col": 0,
+          "file": ".github/workflows/ci.yml",
+          "line": 14,
+          "text": "run: echo \"::set-output name=sha::$(git rev-parse HEAD)\""
+        }
+      ],
+      "to": "v7"
+    },
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 1,
+          "manifest": {
+            "ecosystem": "docker",
+            "path": "Dockerfile",
+            "tool": "docker"
+          },
+          "name": "library/node",
+          "req": "node:16-alpine",
+          "version": "16-alpine"
+        },
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "docker",
+          "line": 7,
+          "manifest": {
+            "ecosystem": "docker",
+            "path": "Dockerfile",
+            "tool": "docker"
+          },
+          "name": "library/node",
+          "req": "node:16-alpine",
+          "version": "16-alpine"
+        }
+      ],
+      "id": "docker/library/node@26-alpine",
+      "kind": "breaking",
+      "level": "major",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "Dockerfile",
+          "line": 1,
+          "text": "FROM node:16-alpine AS build"
+        },
+        {
+          "call": false,
+          "col": 0,
+          "file": "Dockerfile",
+          "line": 7,
+          "text": "FROM node:16-alpine"
+        }
+      ],
+      "to": "26-alpine"
+    }
+  ],
+  "repo": "acme/ci-images",
+  "untracked": []
+}

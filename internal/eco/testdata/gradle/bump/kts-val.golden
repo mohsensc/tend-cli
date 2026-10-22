@@ -1,0 +1,6 @@
+files: [lib/build.gradle.kts]
+locked: false
+note: gradle not found
+--- lib/build.gradle.kts
+1: -val ktorVersion = "2.3.4"
+1: +val ktorVersion = "2.3.12"

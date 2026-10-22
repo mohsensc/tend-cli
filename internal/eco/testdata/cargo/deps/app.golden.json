@@ -1,0 +1,114 @@
+[
+  {
+    "Ecosystem": "cargo",
+    "Name": "serde",
+    "Version": "1.0.200",
+    "Req": "1.0",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "rand",
+    "Version": "0.8.5",
+    "Req": "0.8",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "serde_yaml",
+    "Version": "0.9.34",
+    "Req": "0.9",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "regex",
+    "Version": "1.10.4",
+    "Req": "1.9",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 13,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "tempfile",
+    "Version": "3.10.1",
+    "Req": "3",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 18,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "cc",
+    "Version": "1.0.95",
+    "Req": "1.0",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 21,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "libc",
+    "Version": "0.2.153",
+    "Req": "0.2",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/app/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 24,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

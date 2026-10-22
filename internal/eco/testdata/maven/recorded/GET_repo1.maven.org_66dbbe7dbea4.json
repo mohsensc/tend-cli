@@ -1,0 +1,16 @@
+{
+  "url": "https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.33/mysql-connector-java-8.0.33.pom",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/xml"
+    ],
+    "Etag": [
+      "W/\"ac65b27184e8db8cd7ba75ca13dd8a80\""
+    ],
+    "Last-Modified": [
+      "Tue, 07 Mar 2023 16:15:54 GMT"
+    ]
+  },
+  "body": "\u003c?xml version=\"1.0\" encoding=\"UTF-8\" ?\u003e\n\u003c!--\n  Copyright (c) 2006, 2022, Oracle and/or its affiliates.\n\n  This program is free software; you can redistribute it and/or modify it under\n  the terms of the GNU General Public License, version 2.0, as published by the\n  Free Software Foundation.\n\n  This program is also distributed with certain software (including but not\n  limited to OpenSSL) that is licensed under separate terms, as designated in a\n  particular file or component or in included license documentation. The\n  authors of MySQL hereby grant you an additional permission to link the\n  program and your derivative works with the separately licensed software that\n  they have included with MySQL.\n\n  Without limiting anything contained in the foregoing, this file, which is\n  part of MySQL Connector/J, is also subject to the Universal FOSS Exception,\n  version 1.0, a copy of which can be found at\n  http://oss.oracle.com/licenses/universal-foss-exception.\n\n  This program is distributed in the hope that it will be useful, but WITHOUT\n  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\n  FOR A PARTICULAR PURPOSE. See the GNU General Public License, version 2.0,\n  for more details.\n\n  You should have received a copy of the GNU General Public License along with\n  this program; if not, write to the Free Software Foundation, Inc.,\n  51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA\n--\u003e\n\u003cproject xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n    xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd\"\u003e\n  \u003cmodelVersion\u003e4.0.0\u003c/modelVersion\u003e\n\n  \u003cgroupId\u003emysql\u003c/groupId\u003e\n  \u003cartifactId\u003emysql-connector-java\u003c/artifactId\u003e\n  \u003cversion\u003e8.0.33\u003c/version\u003e\n\n  \u003cdistributionManagement\u003e\n    \u003crelocation\u003e\n      \u003cgroupId\u003ecom.mysql\u003c/groupId\u003e\n      \u003cartifactId\u003emysql-connector-j\u003c/artifactId\u003e\n      \u003cmessage\u003eMySQL Connector/J artifacts moved to reverse-DNS compliant Maven 2+ coordinates.\u003c/message\u003e\n    \u003c/relocation\u003e\n  \u003c/distributionManagement\u003e\n\u003c/project\u003e\n"
+}

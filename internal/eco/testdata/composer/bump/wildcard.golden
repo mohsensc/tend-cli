@@ -1,0 +1,6 @@
+files: [composer.json]
+locked: false
+note: composer not found in PATH
+--- composer.json
+12: -        "acme/internal": "1.2.*",
+12: +        "acme/internal": "2.0.*",

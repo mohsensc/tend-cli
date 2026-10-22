@@ -1,0 +1,6 @@
+files: [src/App/App.csproj]
+locked: false
+note: dotnet not found in PATH
+--- src/App/App.csproj
+15: -    <PackageReference Include="Polly" Version="8.*" />
+15: +    <PackageReference Include="Polly" Version="9.*" />

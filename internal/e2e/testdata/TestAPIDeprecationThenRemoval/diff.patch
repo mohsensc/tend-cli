@@ -1,0 +1,11 @@
+diff --git a/app/orders.py b/app/orders.py
+index 0000000..0000000 100644
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -14,7 +14,7 @@ def total(orders):
+     cents = 0
+     for order in orders:
+         if order.get("status") != "void":
+-            cents += order["total_cents"]
++            cents += order["total"]["amount"]
+     return cents

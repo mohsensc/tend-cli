@@ -1,0 +1,6 @@
+files: [build.gradle]
+locked: false
+note: no lockfile
+--- build.gradle
+3: -        kotlin_version = '1.9.0'
+3: +        kotlin_version = '1.9.24'

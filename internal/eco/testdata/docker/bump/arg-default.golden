@@ -1,0 +1,6 @@
+files: [Dockerfile]
+locked: false
+note: no lockfile
+--- Dockerfile
+2: -ARG NODE_VERSION=20.11-alpine
+2: +ARG NODE_VERSION=22.1-alpine

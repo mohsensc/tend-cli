@@ -1,0 +1,6 @@
+files: [web.dockerfile]
+locked: false
+note: no lockfile
+--- web.dockerfile
+1: -FROM nginx:1.25-alpine
+1: +FROM nginx:1.27-alpine

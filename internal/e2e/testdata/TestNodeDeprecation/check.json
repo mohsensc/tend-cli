@@ -1,0 +1,116 @@
+{
+  "base": "main",
+  "dropped": [
+    {
+      "change": {
+        "deps": [
+          {
+            "dev": false,
+            "direct": true,
+            "ecosystem": "npm",
+            "line": 10,
+            "manifest": {
+              "ecosystem": "npm",
+              "lock": "package-lock.json",
+              "path": "package.json",
+              "tool": "npm"
+            },
+            "name": "@fixture/util",
+            "req": "^1.0.0",
+            "version": "1.0.0"
+          }
+        ],
+        "id": "npm/@fixture/util@1.0.1",
+        "kind": "update",
+        "level": "patch",
+        "published": "2026-10-01T09:00:00Z",
+        "to": "1.0.1"
+      },
+      "detail": "patch, 0 sites",
+      "reason": "noise"
+    }
+  ],
+  "notes": [],
+  "open": null,
+  "queue": [
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "npm",
+          "line": 9,
+          "manifest": {
+            "ecosystem": "npm",
+            "lock": "package-lock.json",
+            "path": "package.json",
+            "tool": "npm"
+          },
+          "name": "@fixture/pay",
+          "req": "^1.4.0",
+          "version": "1.4.0"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "registry",
+          "text": "1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*",
+          "title": "@fixture/pay 1.4.0 is deprecated",
+          "url": "https://www.npmjs.com/package/@fixture/pay"
+        }
+      ],
+      "id": "npm/@fixture/pay@2.0.0",
+      "kind": "deprecation",
+      "level": "major",
+      "options": [
+        {
+          "codemod": {
+            "renames": {
+              "charges.create": "paymentIntents.create",
+              "charges.retrieve": "paymentIntents.retrieve"
+            }
+          },
+          "detail": "Move to @fixture/pay 2.0.0 and rename the calls the notice names. The notice is prose, not a migration guide, so the proof decides whether the rename is all it takes.",
+          "safe": false,
+          "title": "Apply the rename hinted by the deprecation notice (charges.* -> paymentIntents.*)",
+          "to": "2.0.0"
+        },
+        {
+          "detail": "Stay on 1.4.0 and have tend stop proposing 2.0.0.\n\nThis goes into tend.yml:\n\n```yaml\nignore:\n  - name: \"@fixture/pay\"\n    versions: [\">=2.0.0\"]\n    reason: staying on 1.4.0\n```",
+          "safe": false,
+          "title": "Pin to 1.4.0 and ignore",
+          "to": "1.4.0"
+        }
+      ],
+      "sites": [
+        {
+          "call": true,
+          "chain": [
+            "pay",
+            "charges",
+            "create"
+          ],
+          "col": 10,
+          "file": "src/billing.js",
+          "line": 12,
+          "text": "return pay.charges.create({ amount, currency: 'usd', customer })"
+        },
+        {
+          "call": true,
+          "chain": [
+            "pay",
+            "charges",
+            "retrieve"
+          ],
+          "col": 10,
+          "file": "src/billing.js",
+          "line": 20,
+          "text": "return pay.charges.retrieve(id)"
+        }
+      ],
+      "to": "2.0.0"
+    }
+  ],
+  "repo": "acme/node-sdk",
+  "untracked": []
+}

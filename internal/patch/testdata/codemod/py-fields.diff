@@ -1,0 +1,18 @@
+diff --git a/app/orders.py b/app/orders.py
+index 0d7e425..64fd62a 100644
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -1,10 +1,10 @@
+ import json
+ 
+ def total(order):
+-    return order["total_cents"]
++    return order["amount_total"]
+ 
+ def label(o):
+-    return o.total_cents / 100
++    return o.amount_total / 100
+ 
+ # total_cents stays in this comment
+-defaults = {"total_cents": 0, "currency": "usd"}
++defaults = {"amount_total": 0, "currency": "usd"}

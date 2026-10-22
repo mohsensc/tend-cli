@@ -1,0 +1,6 @@
+files: [uv/pyproject.toml]
+locked: false
+note: uv not found
+--- uv/pyproject.toml
+6: -    "httpx[http2]>=0.27,<1",
+6: +    "httpx[http2]>=1.0,<2",

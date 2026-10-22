@@ -1,0 +1,15 @@
+{
+  "name": "berry-app",
+  "packageManager": "yarn@4.5.0",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@isaacs/string-locale-compare": "^1.1.0",
+    "debug": "^4.3.4",
+    "shared": "workspace:*"
+  },
+  "devDependencies": {
+    "is-number": "^7.0.0"
+  }
+}

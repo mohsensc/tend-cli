@@ -1,0 +1,12 @@
+--- go.mod
+6: -	example.com/lib v1.4.2
+6: +	example.com/lib/v2 v2.0.0
+--- internal/billing/billing.go
+3: -import "example.com/lib/money"
+3: +import "example.com/lib/v2/money"
+--- internal/billing/billing_test.go
+6: -	lib "example.com/lib"
+6: +	lib "example.com/lib/v2"
+--- main.go
+6: -	"example.com/lib"
+6: +	"example.com/lib/v2"

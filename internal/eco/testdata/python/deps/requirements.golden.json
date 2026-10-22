@@ -1,0 +1,82 @@
+[
+  {
+    "Ecosystem": "pip",
+    "Name": "requests",
+    "Version": "",
+    "Req": "\u003e=2.31,\u003c3",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "django",
+    "Version": "4.2.16",
+    "Req": "==4.2.16",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "python-dateutil",
+    "Version": "",
+    "Req": "~=2.8.2",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "attrs",
+    "Version": "",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "urllib3",
+    "Version": "2.2.3",
+    "Req": "==2.2.3",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

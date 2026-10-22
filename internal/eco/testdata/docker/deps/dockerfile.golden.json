@@ -1,0 +1,130 @@
+[
+  {
+    "Ecosystem": "docker",
+    "Name": "library/node",
+    "Version": "20.11-alpine",
+    "Req": "node:${NODE_VERSION}",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "library/node",
+    "Version": "20.11-alpine",
+    "Req": "node:${NODE_VERSION}",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "library/golang",
+    "Version": "1.22.0-bookworm",
+    "Req": "golang:1.22.0-bookworm@sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 11,
+    "Dev": false,
+    "Direct": true,
+    "Pin": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "library/golang",
+    "Version": "",
+    "Req": "golang:${GO_VERSION} (unresolved ARG GO_VERSION)",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "ghcr.io/acme/base",
+    "Version": "3.2",
+    "Req": "${REGISTRY}/acme/base:3.2",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 15,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "library/nginx",
+    "Version": "latest",
+    "Req": "docker.io/library/nginx@sha256:f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 20,
+    "Dev": false,
+    "Direct": true,
+    "Pin": "sha256:f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f"
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "library/python",
+    "Version": "3.12-slim",
+    "Req": "python:3.12-slim",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 21,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "docker",
+    "Name": "localhost:5000/team/tool",
+    "Version": "v1.2.3",
+    "Req": "localhost:5000/team/tool:v1.2.3",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "Dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 22,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

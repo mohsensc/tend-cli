@@ -1,0 +1,6 @@
+files: [compose.yaml]
+locked: false
+note: no lockfile
+--- compose.yaml
+3: -    image: postgres:11
+3: +    image: postgres:16

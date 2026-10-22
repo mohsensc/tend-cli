@@ -1,0 +1,6 @@
+apis:
+  - name: fixture
+    hosts: [api.fixture.dev]
+    spec: https://api.fixture.dev/openapi.json
+verify:
+  test: ["python3 -m unittest"]

@@ -1,0 +1,6 @@
+files: [composer.json]
+locked: false
+note: composer not found in PATH
+--- composer.json
+13: -        "laravel/framework": ">=10.0"
+13: +        "laravel/framework": ">=11.0.0"

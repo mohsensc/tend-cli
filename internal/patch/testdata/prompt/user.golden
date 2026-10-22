@@ -1,0 +1,106 @@
+Change: @fixture/pay 1.4.0 -> 2.0.0 (breaking, major)
+The manifests and lockfiles already point at the new version.
+
+Upstream:
+
+[releases] v2.0.0
+https://github.com/fixture/pay/releases/tag/v2.0.0
+## Breaking
+
+- `charges.*` was replaced by `paymentIntents.*`.
+- `charges.list` is gone; use `paymentIntents.list`.
+
+[registry] 1.4.0 deprecated
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+Already applied where they matched, do not redo:
+- rename charges.create -> paymentIntents.create
+
+Files you may edit:
+- package.json
+- src/billing.js
+
+=== src/billing.js
+Imports:
+ 1| const pay = require('@fixture/pay');
+Call sites that may need to change:
+10| pay.charges.create(...)
+14| pay.charges.retrieve(...)
+70| pay.charges.list(...)
+Context:
+ 1| const pay = require('@fixture/pay');
+ 2| // line 2
+ 3| // line 3
+ 4| // line 4
+ 5| // line 5
+ 6| // line 6
+ 7| // line 7
+ 8| // line 8
+ 9| // line 9
+10|   const res = await pay.charges.create({ amount });
+11| // line 11
+12| // line 12
+13| // line 13
+14|   return pay.charges.retrieve(res.id);
+15| // line 15
+16| // line 16
+17| // line 17
+18| // line 18
+19| // line 19
+20| // line 20
+21| // line 21
+22| // line 22
+23| // line 23
+24| // line 24
+25| // line 25
+26| // line 26
+27| // line 27
+28| // line 28
+29| // line 29
+30| // line 30
+31| // line 31
+32| // line 32
+33| // line 33
+34| // line 34
+35| // line 35
+36| // line 36
+37| // line 37
+38| // line 38
+39| // line 39
+  | ...
+45| // line 45
+46| // line 46
+47| // line 47
+48| // line 48
+49| // line 49
+50| // line 50
+51| // line 51
+52| // line 52
+53| // line 53
+54| // line 54
+55| // line 55
+56| // line 56
+57| // line 57
+58| // line 58
+59| // line 59
+60| // line 60
+61| // line 61
+62| // line 62
+63| // line 63
+64| // line 64
+65| // line 65
+66| // line 66
+67| // line 67
+68| // line 68
+69| // line 69
+70| pay.charges.list({ limit: 3 });
+71| // line 71
+72| // line 72
+73| // line 73
+74| // line 74
+75| // line 75
+76| // line 76
+77| // line 77
+78| // line 78
+79| // line 79
+80| // line 80

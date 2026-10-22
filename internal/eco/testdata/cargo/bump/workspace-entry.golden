@@ -1,0 +1,6 @@
+files: [Cargo.toml]
+locked: false
+note: cargo not found in PATH
+--- Cargo.toml
+6: -serde = { version = "1.0", features = ["derive"] }
+6: +serde = { version = "2.0", features = ["derive"] }

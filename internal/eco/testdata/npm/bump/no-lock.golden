@@ -1,0 +1,6 @@
+files: [legacy/package.json]
+locked: false
+note: no lockfile
+--- legacy/package.json
+6: -    "left-pad": "~1.2.0"
+6: +    "left-pad": "~1.3.0"

@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "go",
+    "Name": "golang.org/x/tools",
+    "Version": "v0.25.0",
+    "Req": "v0.25.0",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "tools/go.mod",
+      "Lock": "",
+      "Tool": "go"
+    },
+    "Line": 5,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

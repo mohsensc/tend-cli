@@ -1,0 +1,6 @@
+files: [composer.json]
+locked: false
+note: composer not found in PATH
+--- composer.json
+17: -        "mockery/mockery": "~1.6.0"
+17: +        "mockery/mockery": "~1.7.0"

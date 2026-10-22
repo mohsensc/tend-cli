@@ -1,0 +1,6 @@
+files: [build.gradle]
+locked: false
+note: no lockfile
+--- build.gradle
+16: -    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+16: +    implementation 'com.squareup.retrofit3:retrofit:3.0.0'

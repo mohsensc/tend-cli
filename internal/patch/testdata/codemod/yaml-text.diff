@@ -1,0 +1,12 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 02edbfb..89d24ee 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -5,5 +5,5 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - id: v
+-        run: echo "::set-output name=version::${VERSION}"
+-      - run: echo "::set-output name=version::${VERSION}" && echo "::set-output name=version::${VERSION}"
++        run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
++      - run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT" && echo "version=${VERSION}" >> "$GITHUB_OUTPUT"

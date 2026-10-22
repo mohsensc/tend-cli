@@ -1,0 +1,6 @@
+files: [Gemfile]
+locked: false
+note: bundle not found in PATH
+--- Gemfile
+5: -gem 'rails', '~> 7.1.3'
+5: +gem 'rails', '~> 8.0.0'

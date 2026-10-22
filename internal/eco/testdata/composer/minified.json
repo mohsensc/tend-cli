@@ -1,0 +1,12 @@
+{
+  "minified": "composer/2.0",
+  "packages": {
+    "acme/lib": [
+      {"name": "acme/lib", "version": "2.0.0", "version_normalized": "2.0.0.0", "time": "2024-03-01T09:00:00+00:00", "abandoned": true, "source": {"type": "git", "url": "https://github.com/acme/lib.git", "reference": "aaa"}, "require": {"php": ">=8.1"}},
+      {"version": "v2.0.0-beta1", "version_normalized": "2.0.0.0-beta1", "time": "2024-02-01T09:00:00+00:00", "abandoned": "__unset"},
+      {"version": "1.9.0", "version_normalized": "1.9.0.0", "time": "2023-01-05T09:00:00+00:00", "require": {"php": ">=7.4"}},
+      {"version": "1.x-dev", "version_normalized": "1.9999999.9999999.9999999-dev", "time": "2023-02-05T09:00:00+00:00"},
+      {"version": "dev-main", "version_normalized": "dev-main", "time": "2024-04-01T09:00:00+00:00"}
+    ]
+  }
+}

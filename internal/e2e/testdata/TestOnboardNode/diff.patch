@@ -1,0 +1,111 @@
+diff --git a/package-lock.json b/package-lock.json
+index 0000000..0000000 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -8,25 +8,16 @@
+       "name": "node-tidy",
+       "version": "1.0.0",
+       "dependencies": {
+-        "@fixture/colors": "^1.0.0",
+-        "@fixture/pay": "^1.4.0",
++        "@fixture/pay": "^2.0.0",
+         "@fixture/plugin-host": "^1.0.0",
+-        "@fixture/runtime": "^1.0.0",
+-        "@fixture/strings": "^1.0.0"
++        "@fixture/runtime": "^1.0.0"
+       },
+       "devDependencies": {
+         "@fixture/linter": "^1.0.0",
+-        "@fixture/old-test-helper": "^1.0.0",
+         "@types/fixture__pay": "^1.0.0",
+         "eslint-plugin-fixture": "^1.0.0"
+       }
+     },
+-    "node_modules/@fixture/colors": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/colors/-/colors-1.0.0.tgz",
+-      "integrity": "sha512-tzCEYKE03Hz95mv711eZ+Kekqhrd2W2e5bmpQZMVIwoXjyTVZW8OCZcYFD1S7XEHeD/6sSGg7VobsCp5gNRyNA==",
+-      "license": "MIT"
+-    },
+     "node_modules/@fixture/linter": {
+       "version": "1.0.0",
+       "resolved": "http://registry.test/@fixture/linter/-/linter-1.0.0.tgz",
+@@ -37,18 +28,10 @@
+         "fixture-lint": "cli.js"
+       }
+     },
+-    "node_modules/@fixture/old-test-helper": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/old-test-helper/-/old-test-helper-1.0.0.tgz",
+-      "integrity": "sha512-cQoZH2BTclDJ9OXpekvO198G84U/N6WtAuXclBr361wLVnLJ+XlzgztBH9YiZzouVo4LTcaNP3mRgsESvneEyA==",
+-      "dev": true,
+-      "license": "MIT"
+-    },
+     "node_modules/@fixture/pay": {
+-      "version": "1.4.0",
+-      "resolved": "http://registry.test/@fixture/pay/-/pay-1.4.0.tgz",
+-      "integrity": "sha512-zHlML/QRZPk0ZPeZMZfTh39ng/c+qdt47lcJhU5pMYAP2H+LYWiS3cD2y0I2/2VQUJgxKPNAZ+Zun+FNTvpKhA==",
+-      "deprecated": "1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*",
++      "version": "2.0.0",
++      "resolved": "http://registry.test/@fixture/pay/-/pay-2.0.0.tgz",
++      "integrity": "sha512-s8C6YmeJVcDVL9o+AMMgZsq9+Z37JwyCL1BOGPbkgfx9+rmOnOgSmjamrS67JvLq6SXLvEwNYAgHYh0q1iP3Pg==",
+       "license": "MIT"
+     },
+     "node_modules/@fixture/plugin-host": {
+@@ -66,12 +49,6 @@
+       "integrity": "sha512-mxDhKC0rM3KIDYvtXi3UW1sfECxxD25kBdtWYTtKQS0I3/XgYTggO0FPkpajjZc2JH1KSDWAWzZbGEEpAM2kcw==",
+       "license": "MIT"
+     },
+-    "node_modules/@fixture/strings": {
+-      "version": "1.0.0",
+-      "resolved": "http://registry.test/@fixture/strings/-/strings-1.0.0.tgz",
+-      "integrity": "sha512-U+h6CnD5z5DrijwZgBO+MyQugBGVnjSJ4uBGTwKv+V/w2+u5TN5k5Jo3X1f6dZc3swsb9q+vdLIhmjTrCP05DA==",
+-      "license": "MIT"
+-    },
+     "node_modules/@types/fixture__pay": {
+       "version": "1.0.0",
+       "resolved": "http://registry.test/@types/fixture__pay/-/fixture__pay-1.0.0.tgz",
+diff --git a/package.json b/package.json
+index 0000000..0000000 100644
+--- a/package.json
++++ b/package.json
+@@ -7,15 +7,12 @@
+     "lint": "fixture-lint src"
+   },
+   "dependencies": {
+-    "@fixture/colors": "^1.0.0",
+-    "@fixture/pay": "^1.4.0",
++    "@fixture/pay": "^2.0.0",
+     "@fixture/plugin-host": "^1.0.0",
+-    "@fixture/runtime": "^1.0.0",
+-    "@fixture/strings": "^1.0.0"
++    "@fixture/runtime": "^1.0.0"
+   },
+   "devDependencies": {
+     "@fixture/linter": "^1.0.0",
+-    "@fixture/old-test-helper": "^1.0.0",
+     "@types/fixture__pay": "^1.0.0",
+     "eslint-plugin-fixture": "^1.0.0"
+   }
+diff --git a/src/billing.js b/src/billing.js
+index 0000000..0000000 100644
+--- a/src/billing.js
++++ b/src/billing.js
+@@ -9,7 +9,7 @@ function cents(dollars) {
+ async function charge(dollars, customer) {
+   const amount = cents(dollars)
+   if (amount <= 0) throw new RangeError('nothing to charge')
+-  return pay.charges.create({ amount, currency: 'usd', customer })
++  return pay.paymentIntents.create({ amount, currency: 'usd', customer })
+ }
+ 
+ async function lookup(id) {
+@@ -17,7 +17,7 @@ async function lookup(id) {
+     throw new TypeError('lookup needs an id')
+   }
+ 
+-  return pay.charges.retrieve(id)
++  return pay.paymentIntents.retrieve(id)
+ }
+ 
+ module.exports = { charge, lookup }

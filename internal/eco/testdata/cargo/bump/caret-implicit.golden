@@ -1,0 +1,6 @@
+files: [crates/app/Cargo.toml]
+locked: false
+note: cargo not found in PATH
+--- crates/app/Cargo.toml
+8: -rand = "0.8"
+8: +rand = "0.9"

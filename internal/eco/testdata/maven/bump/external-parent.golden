@@ -1,0 +1,6 @@
+files: [pom.xml]
+locked: false
+note: no lockfile
+--- pom.xml
+7: -    <version>3.1.0</version>
+7: +    <version>3.3.4</version>

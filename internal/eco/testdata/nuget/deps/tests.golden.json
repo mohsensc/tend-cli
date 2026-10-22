@@ -1,0 +1,34 @@
+[
+  {
+    "Ecosystem": "nuget",
+    "Name": "xunit",
+    "Version": "2.7.0",
+    "Req": "2.7.0",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App.Tests/App.Tests.csproj",
+      "Lock": "",
+      "Tool": "dotnet"
+    },
+    "Line": 3,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "moq",
+    "Version": "4.20.70",
+    "Req": "4.20.70",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App.Tests/App.Tests.csproj",
+      "Lock": "",
+      "Tool": "dotnet"
+    },
+    "Line": 4,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "url": "https://rubygems.org/api/v1/gems/rack.json",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ]
+  },
+  "body": "{\n  \"name\": \"rack\",\n  \"version\": \"3.2.7\",\n  \"platform\": \"ruby\",\n  \"licenses\": [\n    \"MIT\"\n  ],\n  \"info\": \"Rack provides a minimal, modular and adaptable interface for developing\\nweb applications in Ruby. By wrapping HTTP requests and responses in\\nthe simplest way possible, it unifies and distills the API for web\\nservers, web frameworks, and software in between (the so-called\\nmiddleware) into a single method call.\\n\",\n  \"project_uri\": \"https://rubygems.org/gems/rack\",\n  \"homepage_uri\": \"https://github.com/rack/rack\",\n  \"wiki_uri\": null,\n  \"documentation_uri\": \"https://rubydoc.info/github/rack/rack\",\n  \"source_code_uri\": \"https://github.com/rack/rack\",\n  \"bug_tracker_uri\": \"https://github.com/rack/rack/issues\",\n  \"changelog_uri\": \"https://github.com/rack/rack/blob/main/CHANGELOG.md\"\n}\n"
+}

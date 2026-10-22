@@ -1,0 +1,10 @@
+{
+  "url": "https://registry.npmjs.org/@tend-fixture%2Fdoes-not-exist",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"error\":\"Not found\"}"
+}

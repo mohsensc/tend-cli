@@ -1,0 +1,13 @@
+diff --git a/app/report.py b/app/report.py
+index 0000000..0000000 100644
+--- a/app/report.py
++++ b/app/report.py
+@@ -4,7 +4,7 @@ import fixturelib
+ def total():
+     """Sum the totals of every row in the store."""
+     sum_ = 0
+-    rows = fixturelib.fetch_all()
++    rows = fixturelib.iter_rows()
+     for row in rows:
+         sum_ += row["total"]
+     return sum_

@@ -1,0 +1,6 @@
+files: [gradle/libs.versions.toml]
+locked: false
+note: gradle not found
+--- gradle/libs.versions.toml
+2: -okhttp = "4.11.0"
+2: +okhttp = "4.12.0"

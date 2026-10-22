@@ -1,0 +1,6 @@
+files: [src/Old/Old.fsproj]
+locked: false
+note: no packages.lock.json
+--- src/Old/Old.fsproj
+3: -    <PackageReference Include="FSharp.Core" Version="8.0.100" />
+3: +    <PackageReference Include="FSharp.Core" Version="9.0.100" />

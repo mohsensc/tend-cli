@@ -1,0 +1,274 @@
+[
+  {
+    "Ecosystem": "rubygems",
+    "Name": "rails",
+    "Version": "7.1.3",
+    "Req": "~\u003e 7.1.3",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 5,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "pg",
+    "Version": "1.5.6",
+    "Req": "\u003e= 1.1",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "stripe",
+    "Version": "10.5.0",
+    "Req": "~\u003e 10.0, \u003e= 10.1",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "puma",
+    "Version": "6.4.2",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "nokogiri",
+    "Version": "1.16.2",
+    "Req": "~\u003e 1.16",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 11,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "tzinfo-data",
+    "Version": "1.2024.1",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 13,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "rspec-rails",
+    "Version": "6.1.1",
+    "Req": "~\u003e 6.1",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 16,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "pry",
+    "Version": "0.14.2",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 17,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "webmock",
+    "Version": "3.19.1",
+    "Req": "3.19.1",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 21,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "rubocop",
+    "Version": "1.60.2",
+    "Req": "~\u003e 1.60",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 24,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "faraday",
+    "Version": "2.9.0",
+    "Req": "~\u003e 2.9",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 25,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "capybara",
+    "Version": "3.40.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 26,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "simplecov",
+    "Version": "0.22.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 33,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "actionpack",
+    "Version": "7.1.3",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "faraday-net_http",
+    "Version": "3.1.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "nio4r",
+    "Version": "2.7.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "rubygems",
+    "Name": "rack",
+    "Version": "3.0.9",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "rubygems",
+      "Path": "Gemfile",
+      "Lock": "Gemfile.lock",
+      "Tool": "bundle"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

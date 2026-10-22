@@ -1,0 +1,6 @@
+files: [Dockerfile]
+locked: false
+note: no lockfile
+--- Dockerfile
+15: -FROM ${REGISTRY}/acme/base:3.2 AS base
+15: +FROM ${REGISTRY}/acme/base:3.3 AS base

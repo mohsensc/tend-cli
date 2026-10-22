@@ -1,0 +1,6 @@
+files: [Dockerfile]
+locked: false
+note: no lockfile
+--- Dockerfile
+20: -FROM docker.io/library/nginx@sha256:f0e1d2c3b4a5968778695a4b3c2d1e0ff0e1d2c3b4a5968778695a4b3c2d1e0f AS static
+20: +FROM docker.io/library/nginx:1.27@sha256:2222222222222222222222222222222222222222222222222222222222222222 AS static

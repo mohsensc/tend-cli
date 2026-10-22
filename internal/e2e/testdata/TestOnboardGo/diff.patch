@@ -1,0 +1,22 @@
+diff --git a/go.mod b/go.mod
+index 0000000..0000000 100644
+--- a/go.mod
++++ b/go.mod
+@@ -2,7 +2,4 @@ module example.com/gotidy
+ 
+ go 1.26
+ 
+-require (
+-	example.com/fixture/crypto v1.0.0
+-	example.com/fixture/logs v1.0.0
+-)
++require example.com/fixture/crypto v1.0.0
+diff --git a/go.sum b/go.sum
+index 0000000..0000000 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,4 +1,2 @@
+ example.com/fixture/crypto v1.0.0 h1:vrBom59kTwQSYRLB5WOxm6l/4fr+33oT/5ezo63Dj88=
+ example.com/fixture/crypto v1.0.0/go.mod h1:U2RqA19ltmzFBEbpvtP8yHQ/GHiK6ybzjiU47kMky7I=
+-example.com/fixture/logs v1.0.0 h1:WkHBkWSzhQaoFYrCh0BDr36uZPNOAWlKoUWmkuIwOs4=
+-example.com/fixture/logs v1.0.0/go.mod h1:w9mECgo9el/+0O+WFyCwGPnfQi3kqCpP95Y9HSbE2y0=

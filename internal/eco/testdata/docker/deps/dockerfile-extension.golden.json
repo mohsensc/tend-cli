@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "docker",
+    "Name": "library/nginx",
+    "Version": "1.25-alpine",
+    "Req": "nginx:1.25-alpine",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "web.dockerfile",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 1,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

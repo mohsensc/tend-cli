@@ -1,0 +1,506 @@
+{
+  "Name": "github.com/mattn/go-sqlite3",
+  "Releases": [
+    {
+      "Version": "v1.0.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.1.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.2.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.3.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.4.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.6.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.7.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.8.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.9.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.10.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.11.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.12.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.13.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.5",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.6",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.7",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.8",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.9",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.10",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.11",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.12",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.13",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.14",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.15",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.16",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.17",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.18",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.19",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.20",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.21",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.22",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.23",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.24",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.25",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.26",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.27",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.28",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.29",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.30",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.31",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.32",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.33",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.34",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.35",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.36",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.37",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.38",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.39",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.40",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.41",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.42",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.43",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.44",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.45",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.46",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.47",
+      "Time": "2026-06-21T15:11:48Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.48",
+      "Time": "2026-07-13T04:36:04Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.49",
+      "Time": "2026-07-29T07:22:37Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.50",
+      "Time": "2026-08-17T09:24:35Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.51",
+      "Time": "2026-09-05T03:01:50Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.14.52",
+      "Time": "2026-09-05T04:18:43Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v2.0.0+incompatible",
+      "Time": "2018-08-02T21:24:16Z",
+      "Pre": false,
+      "Yanked": true,
+      "Deprecated": "retracted: Accidental; no major changes or features."
+    },
+    {
+      "Version": "v2.0.1+incompatible",
+      "Time": "2019-11-18T16:19:53Z",
+      "Pre": false,
+      "Yanked": true,
+      "Deprecated": "retracted: Accidental; no major changes or features."
+    },
+    {
+      "Version": "v2.0.2+incompatible",
+      "Time": "2019-12-17T07:07:49Z",
+      "Pre": false,
+      "Yanked": true,
+      "Deprecated": "retracted: Accidental; no major changes or features."
+    },
+    {
+      "Version": "v2.0.3+incompatible",
+      "Time": "2020-01-28T10:25:19Z",
+      "Pre": false,
+      "Yanked": true,
+      "Deprecated": "retracted: Accidental; no major changes or features."
+    }
+  ],
+  "Latest": "v1.14.52",
+  "Repo": "https://github.com/mattn/go-sqlite3",
+  "Deprecated": "",
+  "Replacement": ""
+}

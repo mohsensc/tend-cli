@@ -1,0 +1,3 @@
+tend: 1 queued, 0 skipped, no open PR
+
+  1  deprecation  go (go.mod)  1.24 → 1.26  EOL 2026-02-10 · go.mod:3
