@@ -3,12 +3,13 @@ package e2e
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"crypto/sha1"
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"hash/crc32"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -140,11 +141,7 @@ func integrity(tgz []byte) string {
 // integrity a lockfile records holds.
 func pack(dir string) ([]byte, error) {
 	var buf bytes.Buffer
-	gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
-	if err != nil {
-		return nil, err
-	}
-	tw := tar.NewWriter(gz)
+	tw := tar.NewWriter(&buf)
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -165,10 +162,32 @@ func pack(dir string) ([]byte, error) {
 	if err := tw.Close(); err != nil {
 		return nil, err
 	}
-	if err := gz.Close(); err != nil {
-		return nil, err
+	return stored(buf.Bytes()), nil
+}
+
+// stored wraps b in gzip without compressing it. compress/gzip frames its
+// output differently from one Go release to the next, even at NoCompression;
+// stored deflate blocks have one encoding.
+func stored(b []byte) []byte {
+	res := []byte{0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff}
+	sum, size := crc32.ChecksumIEEE(b), uint32(len(b))
+	for {
+		n := min(len(b), 0xffff)
+		final := byte(0)
+		if n == len(b) {
+			final = 1
+		}
+		res = append(res, final)
+		res = binary.LittleEndian.AppendUint16(res, uint16(n))
+		res = binary.LittleEndian.AppendUint16(res, ^uint16(n))
+		res = append(res, b[:n]...)
+		if final == 1 {
+			break
+		}
+		b = b[n:]
 	}
-	return buf.Bytes(), nil
+	res = binary.LittleEndian.AppendUint32(res, sum)
+	return binary.LittleEndian.AppendUint32(res, size)
 }
 
 // CopyProject copies a fixture project to dst, filling in vars.

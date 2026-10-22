@@ -60,7 +60,7 @@ func TestConfigDocNamesEveryKey(t *testing.T) {
 
 func TestWordingRules(t *testing.T) {
 	banned := regexp.MustCompile(`(?i)\b(robust|seamless(ly)?|comprehensive(ly)?|powerful|blazing)\b`)
-	files := []string{"README.md", "docs/config.md", "docs/pr-anatomy.md", "docs/how-it-works.md", "docs/self-update.md", "docs/limitations.md", "docs/adding-an-ecosystem.md", "docs/adding-a-provider.md", "action/install.sh"}
+	files := []string{"README.md", "docs/config.md", "docs/pr-anatomy.md", "docs/how-it-works.md", "docs/self-update.md", "docs/limitations.md", "docs/adding-an-ecosystem.md", "docs/adding-a-provider.md", "docs/github-actions.md", "docs/CONTRIBUTING.md", "action/install.sh"}
 	for _, f := range files {
 		text := repoFile(t, f)
 		if m := banned.FindString(text); m != "" {

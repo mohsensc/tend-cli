@@ -1,8 +1,6 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -25,4 +23,3 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test -race ./...
-      - run: go test ./internal/e2e -count=1
