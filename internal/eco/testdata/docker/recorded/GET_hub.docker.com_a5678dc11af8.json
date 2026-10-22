@@ -1,0 +1,16 @@
+{
+  "url": "https://hub.docker.com/v2/repositories/library/node/tags?page_size=100&name=-alpine",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ],
+    "X-Ratelimit-Remaining": [
+      "180"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792580435"
+    ]
+  },
+  "body": "{\n  \"count\": 2702,\n  \"next\": \"https://hub.docker.com/v2/repositories/library/node/tags?name=-alpine&page=2&page_size=100\",\n  \"previous\": null,\n  \"results\": [\n    {\n      \"name\": \"lts-alpine3.24\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:27.144599Z\",\n      \"last_updated\": \"2026-10-14T20:43:27.144599Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"lts-alpine3.23\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:25.138734Z\",\n      \"last_updated\": \"2026-10-14T20:43:25.138734Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"lts-alpine\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:23.063072Z\",\n      \"last_updated\": \"2026-10-14T20:43:23.063072Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"krypton-alpine3.24\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:05.096075Z\",\n      \"last_updated\": \"2026-10-14T20:43:05.096075Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"krypton-alpine3.23\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:03.028491Z\",\n      \"last_updated\": \"2026-10-14T20:43:03.028491Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"krypton-alpine\",\n      \"tag_last_pushed\": \"2026-10-14T20:43:00.925233Z\",\n      \"last_updated\": \"2026-10-14T20:43:00.925233Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"current-alpine3.24\",\n      \"tag_last_pushed\": \"2026-10-14T20:42:37.835964Z\",\n      \"last_updated\": \"2026-10-14T20:42:37.835964Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"26-alpine\",\n      \"tag_last_pushed\": \"2026-10-14T20:40:51.09005Z\",\n      \"last_updated\": \"2026-10-14T20:40:51.09005Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"24-alpine\",\n      \"tag_last_pushed\": \"2026-10-14T20:38:55.449061Z\",\n      \"last_updated\": \"2026-10-14T20:38:55.449061Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"22-alpine\",\n      \"tag_last_pushed\": \"2026-09-23T23:38:38.822883Z\",\n      \"last_updated\": \"2026-09-23T23:38:38.822883Z\",\n      \"tag_status\": \"active\"\n    }\n  ]\n}\n"
+}

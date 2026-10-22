@@ -1,0 +1,15 @@
+- symbols: 1/1 changed calls resolve in a@2.0.0 typings
+- leftovers: 1 flagged
+  - `src/billing.js:88` still calls `pay.charges.retrieve` (flagged)
+- lockfile: 1 fixed
+  - `package-lock.json` relocked from base to drop unrelated churn: c (fixed)
+- debug: nothing added
+- comments: 2 lines dropped
+  - `src/billing.js:41` removed comment `// use v2` (dropped)
+  - `src/billing.js:50` removed comment `// done` (dropped)
+- dead: 1 flagged
+  - `src/billing.js:120` `legacyCharge` is now unreferenced (flagged)
+- scope: 3 files, all explained by this change
+- question: 1 flagged
+  - `src/billing.js:42` the old call passed capture: false (flagged)
+- not applicable: fields

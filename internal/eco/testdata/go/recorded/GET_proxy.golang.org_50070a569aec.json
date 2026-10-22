@@ -1,0 +1,16 @@
+{
+  "url": "https://proxy.golang.org/github.com/!burnt!sushi/toml/@v/v1.6.0.mod",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ],
+    "Etag": [
+      "\"45d78b80571999b6a258da0f21673da39e6b501349c033a4acd169437411d733\""
+    ],
+    "Last-Modified": [
+      "Thu, 18 Dec 2025 12:16:07 GMT"
+    ]
+  },
+  "body": "module github.com/BurntSushi/toml\n\ngo 1.18\n"
+}

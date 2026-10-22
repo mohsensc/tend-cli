@@ -1,0 +1,22 @@
+{
+  "url": "https://api.github.com/repos/actions/checkout/contents/action.yml?ref=v1.2.0",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "\"2b080c833687082c7181805c58a431cfab35a781\""
+    ],
+    "Last-Modified": [
+      "Thu, 21 Nov 2019 16:04:30 GMT"
+    ],
+    "X-Ratelimit-Remaining": [
+      "4974"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792582191"
+    ]
+  },
+  "body": "{\"name\":\"action.yml\",\"path\":\"action.yml\",\"sha\":\"2b080c833687082c7181805c58a431cfab35a781\",\"size\":964,\"url\":\"https://api.github.com/repos/actions/checkout/contents/action.yml?ref=v1.2.0\",\"html_url\":\"https://github.com/actions/checkout/blob/v1.2.0/action.yml\",\"git_url\":\"https://api.github.com/repos/actions/checkout/git/blobs/2b080c833687082c7181805c58a431cfab35a781\",\"download_url\":\"https://raw.githubusercontent.com/actions/checkout/v1.2.0/action.yml\",\"type\":\"file\",\"content\":\"bmFtZTogJ0NoZWNrb3V0Jw0KZGVzY3JpcHRpb246ICdDaGVja291dCBhIEdp\\ndCByZXBvc2l0b3J5LicNCmlucHV0czogDQogIHJlcG9zaXRvcnk6DQogICAg\\nZGVzY3JpcHRpb246ICdSZXBvc2l0b3J5IG5hbWUnDQogIHJlZjoNCiAgICBk\\nZXNjcmlwdGlvbjogJ1JlZiB0byBjaGVja291dCAoU0hBLCBicmFuY2gsIHRh\\nZyknDQogIHRva2VuOg0KICAgIGRlc2NyaXB0aW9uOiAnQWNjZXNzIHRva2Vu\\nIGZvciBjbG9uZSByZXBvc2l0b3J5Jw0KICBjbGVhbjoNCiAgICBkZXNjcmlw\\ndGlvbjogJ0lmIHRydWUsIGV4ZWN1dGUgYGV4ZWN1dGUgZ2l0IGNsZWFuIC1m\\nZmR4ICYmIGdpdCByZXNldCAtLWhhcmQgSEVBRGAgYmVmb3JlIGZldGNoaW5n\\nJw0KICAgIGRlZmF1bHQ6IHRydWUNCiAgc3VibW9kdWxlczoNCiAgICBkZXNj\\ncmlwdGlvbjogJ1doZXRoZXIgdG8gaW5jbHVkZSBzdWJtb2R1bGVzOiBmYWxz\\nZSB0byBleGNsdWRlIHN1Ym1vZHVsZXMsIHRydWUgdG8gaW5jbHVkZSBvbmx5\\nIG9uZSBsZXZlbCBvZiBzdWJtb2R1bGVzLCBvciByZWN1cnNpdmUgdG8gcmVj\\ndXJzaXZlbHkgY2xvbmUgc3VibW9kdWxlczsgZGVmYXVsdHMgdG8gZmFsc2Un\\nDQogIGxmczoNCiAgICBkZXNjcmlwdGlvbjogJ1doZXRoZXIgdG8gZG93bmxv\\nYWQgR2l0LUxGUyBmaWxlczsgZGVmYXVsdHMgdG8gZmFsc2UnDQogIGZldGNo\\nLWRlcHRoOg0KICAgIGRlc2NyaXB0aW9uOiAnVGhlIGRlcHRoIG9mIGNvbW1p\\ndHMgdG8gYXNrIEdpdCB0byBmZXRjaDsgZGVmYXVsdHMgdG8gbm8gbGltaXQn\\nICANCiAgcGF0aDoNCiAgICBkZXNjcmlwdGlvbjogJ09wdGlvbmFsIHBhdGgg\\ndG8gY2hlY2sgb3V0IHNvdXJjZSBjb2RlJyAgDQpydW5zOg0KICAjIFBsdWdp\\nbnMgbGl2ZSBvbiB0aGUgcnVubmVyIGFuZCBhcmUgb25seSBhdmFpbGFibGUg\\ndG8gYSBjZXJ0YWluIHNldCBvZiBmaXJzdCBwYXJ0eSBhY3Rpb25zLg0KICBw\\nbHVnaW46ICdjaGVja291dCcNCg==\\n\",\"encoding\":\"base64\",\"_links\":{\"self\":\"https://api.github.com/repos/actions/checkout/contents/action.yml?ref=v1.2.0\",\"git\":\"https://api.github.com/repos/actions/checkout/git/blobs/2b080c833687082c7181805c58a431cfab35a781\",\"html\":\"https://github.com/actions/checkout/blob/v1.2.0/action.yml\"}}"
+}

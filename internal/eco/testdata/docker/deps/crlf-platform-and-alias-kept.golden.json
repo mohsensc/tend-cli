@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "docker",
+    "Name": "library/node",
+    "Version": "18",
+    "Req": "node:18",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "services/api/Dockerfile.dev",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 1,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

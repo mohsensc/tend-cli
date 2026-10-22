@@ -1,0 +1,14 @@
+[
+  {
+    "node_id": "PR_kwDOABCDE85cls",
+    "html_url": "https://github.com/acme/shop/pull/10",
+    "number": 10,
+    "state": "closed",
+    "title": "Bump left-pad to 1.3.0",
+    "body": "",
+    "merged_at": null,
+    "draft": true,
+    "head": {"ref": "tend/npm-left-pad-1.3.0"},
+    "base": {"ref": "main"}
+  }
+]

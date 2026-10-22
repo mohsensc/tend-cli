@@ -1,0 +1,202 @@
+{
+  "Lang": "rust",
+  "Imports": [
+    {
+      "File": "main.rs",
+      "Line": 1,
+      "Package": "std::collections::HashMap",
+      "Binding": "HashMap",
+      "Names": null
+    },
+    {
+      "File": "main.rs",
+      "Line": 2,
+      "Package": "reqwest::Client",
+      "Binding": "Client",
+      "Names": null
+    },
+    {
+      "File": "main.rs",
+      "Line": 2,
+      "Package": "reqwest::header",
+      "Binding": "header",
+      "Names": null
+    },
+    {
+      "File": "main.rs",
+      "Line": 2,
+      "Package": "reqwest::header::HeaderMap",
+      "Binding": "Headers",
+      "Names": null
+    },
+    {
+      "File": "main.rs",
+      "Line": 3,
+      "Package": "serde::*",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "main.rs",
+      "Line": 5,
+      "Package": "log",
+      "Binding": "logging",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 7,
+      "Col": 3,
+      "Chain": [
+        "tokio",
+        "main"
+      ],
+      "Call": false,
+      "Quals": [
+        "tokio::main"
+      ],
+      "Text": "#[tokio::main]"
+    },
+    {
+      "Line": 8,
+      "Col": 39,
+      "Chain": [
+        "std",
+        "error",
+        "Error"
+      ],
+      "Call": false,
+      "Quals": [
+        "std::error::Error"
+      ],
+      "Text": "async fn main() -\u003e Result\u003c(), Box\u003cdyn std::error::Error\u003e\u003e {"
+    },
+    {
+      "Line": 9,
+      "Col": 18,
+      "Chain": [
+        "Client",
+        "new"
+      ],
+      "Call": true,
+      "Quals": [
+        "reqwest::Client::new"
+      ],
+      "Text": "let client = Client::new();"
+    },
+    {
+      "Line": 10,
+      "Col": 17,
+      "Chain": [
+        "Headers",
+        "new"
+      ],
+      "Call": true,
+      "Quals": [
+        "reqwest::header::HeaderMap::new"
+      ],
+      "Text": "let mut h = Headers::new();"
+    },
+    {
+      "Line": 11,
+      "Col": 5,
+      "Chain": [
+        "h",
+        "insert"
+      ],
+      "Call": true,
+      "Quals": [
+        "reqwest::header::HeaderMap::new"
+      ],
+      "Text": "h.insert(header::ACCEPT, \"application/json\".parse()?);"
+    },
+    {
+      "Line": 11,
+      "Col": 14,
+      "Chain": [
+        "header",
+        "ACCEPT"
+      ],
+      "Call": false,
+      "Quals": [
+        "reqwest::header::ACCEPT"
+      ],
+      "Text": "h.insert(header::ACCEPT, \"application/json\".parse()?);"
+    },
+    {
+      "Line": 12,
+      "Col": 15,
+      "Chain": [
+        "client",
+        "get"
+      ],
+      "Call": true,
+      "Quals": [
+        "reqwest::Client::new"
+      ],
+      "Text": "let res = client.get(\"https://api.example.com/v1/items\").headers(h).send().await?;"
+    },
+    {
+      "Line": 13,
+      "Col": 12,
+      "Chain": [
+        "serde_json",
+        "Value"
+      ],
+      "Call": false,
+      "Quals": [
+        "serde_json::Value"
+      ],
+      "Text": "let v: serde_json::Value = serde_json::from_str(\u0026res.text().await?)?;"
+    },
+    {
+      "Line": 13,
+      "Col": 32,
+      "Chain": [
+        "serde_json",
+        "from_str"
+      ],
+      "Call": true,
+      "Quals": [
+        "serde_json::from_str"
+      ],
+      "Text": "let v: serde_json::Value = serde_json::from_str(\u0026res.text().await?)?;"
+    },
+    {
+      "Line": 15,
+      "Col": 5,
+      "Chain": [
+        "logging",
+        "info"
+      ],
+      "Call": false,
+      "Quals": [
+        "log::info"
+      ],
+      "Text": "logging::info!(\"{}\", 'x');"
+    },
+    {
+      "Line": 17,
+      "Col": 39,
+      "Chain": [
+        "HashMap",
+        "new"
+      ],
+      "Call": true,
+      "Quals": [
+        "std::collections::HashMap::new"
+      ],
+      "Text": "let _m: HashMap\u003cString, String\u003e = HashMap::new();"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "main.rs",
+      "Line": 12,
+      "Method": "GET",
+      "URL": "https://api.example.com/v1/items",
+      "Host": "api.example.com"
+    }
+  ]
+}

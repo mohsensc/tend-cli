@@ -1,0 +1,1 @@
+Require go 1.26 or later

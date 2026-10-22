@@ -1,0 +1,6 @@
+files: [Cargo.toml]
+locked: false
+note: cargo not found in PATH
+--- Cargo.toml
+8: -tokio = { version = "1", default-features = false, features = ["rt"] }
+8: +tokio = { version = "2", default-features = false, features = ["rt"] }

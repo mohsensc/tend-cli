@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/go-chi/chi/v6/@v/list",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ]
+  },
+  "body": "not found: module github.com/go-chi/chi/v6: no matching versions for query \"latest\""
+}

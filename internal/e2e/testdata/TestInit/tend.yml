@@ -1,0 +1,68 @@
+# tend.yml: every key is optional, and every key below is at its default.
+# Uncomment what you change. Reference: https://github.com/mohsensc/tend-cli/blob/main/docs/config.md
+
+# base: ""                 # base branch; "" means the repo's default branch
+# cooldown: 3d             # skip releases younger than this; security fixes and deprecations do not wait
+# schedule: 1d             # how often watch runs and the workflow init --ci writes: 1h to 12h, 1d or 7d
+# onboarding: pr           # the first run: pr (a tidy-up PR with a welcome) | quiet (no PR, just start) | off
+# ecosystems: []           # read only these, e.g. [npm, docker, actions]; [] means all
+
+# updates:                 # which changes get a pull request; a breaking change always does
+#   security: true
+#   deprecations: true
+#   major: false           # plain bumps the code does not use are only recorded
+#   minor: false
+#   patch: false
+
+# ignore:
+#   - name: lodash         # glob on the package name: "@types/*", "actions/*"
+#     ecosystem: npm       # optional; "api" matches an API provider by name
+#     versions: [">=5"]    # optional: >=, >, <=, <, ==, ^x, ~x; comma means and
+#     reason: pinned on purpose
+#   - name: "*"            # every package of one ecosystem: tend leaves it alone
+#     ecosystem: gradle
+
+# groups:                  # packages from the same source repo that release together are grouped anyway
+#   - name: aws-sdk
+#     match: ["@aws-sdk/*"]
+
+# apis:                    # extra API providers; the built-in catalog always applies
+#   - name: billing
+#     hosts: [api.billing.internal]
+#     spec: https://billing.internal/openapi.json   # URL or repo-relative path
+#     changelog: ""        # RSS, Atom or HTML page watched for news about what the code uses, when there is no spec
+#     probe: false         # send OPTIONS and HEAD to used endpoints and read Deprecation and Sunset headers
+
+# deps:                    # versions written where no ecosystem looks
+#   - name: protoc
+#     file: scripts/install.sh                  # glob
+#     match: 'PROTOC_VERSION=(?P<v>[0-9.]+)'
+#     source: github:protocolbuffers/protobuf   # or npm:<pkg>, pypi:<pkg>, <ecosystem>:<name>, url:<template with {name}>
+
+# model:                   # or one line naming both: model: groq/openai/gpt-oss-120b
+#   provider: none         # none | anthropic | openai | groq | ollama | command
+#   model: ""              # the provider's model id
+#   base_url: ""           # openai: any server that speaks the chat completions API; "" means the provider's own
+#   key_env: ""            # env var with the API key; "" means TEND_MODEL_KEY, then the provider's usual one
+#   command: ""            # provider command: shell line that reads the prompt on stdin and writes the reply
+#   attempts: 2            # tries at a diff, for a model without tool calling
+#   turns: 30              # tool calls a model with tool calling may make on one change
+#   tokens: 400000         # tokens it may spend on one change; 0 means no limit
+
+# verify:
+#   install: []            # [] means detected per ecosystem
+#   build: []
+#   test: []
+#   timeout: 20m
+#   container: ""          # image to run the commands in, with the worktree mounted
+#   env: []                # env vars passed through to the commands; secrets are dropped otherwise
+
+# deliver:
+#   mode: pr               # pr | commit (commit pushes straight to branch)
+#   branch: ""             # commit mode: branch to push to; "" means base
+#   labels: [tend]
+#   draft: false
+#   automerge: none        # none | patch | minor | security; never for code a model wrote
+#   merge_method: squash   # merge | squash | rebase
+#   reviewers: []
+#   title_prefix: ""       # e.g. "chore(deps): "

@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/mattn/go-sqlite3/@v/list",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ]
+  },
+  "body": "v1.9.0\nv1.14.45\nv1.3.0\nv1.14.1\nv1.7.0\nv1.14.14\nv1.14.12\nv1.14.24\nv1.8.0\nv1.14.51\nv1.14.33\nv1.14.7\nv1.14.19\nv1.14.49\nv1.14.16\nv1.6.0\nv1.0.0\nv2.0.1+incompatible\nv1.14.0\nv1.12.0\nv1.14.27\nv1.14.17\nv1.14.50\nv1.14.4\nv1.14.47\nv1.14.44\nv1.14.5\nv1.14.43\nv1.14.25\nv1.14.22\nv1.14.30\nv1.14.38\nv1.5.0\nv1.14.6\nv2.0.2+incompatible\nv1.14.28\nv1.14.8\nv2.0.0+incompatible\nv1.14.3\nv1.14.48\nv1.10.0\nv1.14.39\nv1.14.9\nv1.14.35\nv1.11.0\nv1.14.13\nv1.14.52\nv1.14.46\nv1.14.18\nv1.14.11\nv1.4.0\nv1.14.20\nv1.2.0\nv1.14.10\nv1.14.31\nv1.14.34\nv1.14.32\nv1.14.37\nv1.14.29\nv1.14.21\nv1.13.0\nv2.0.3+incompatible\nv1.14.15\nv1.14.2\nv1.14.36\nv1.1.0\nv1.14.41\nv1.14.26\nv1.14.42\nv1.14.40\nv1.14.23\n"
+}

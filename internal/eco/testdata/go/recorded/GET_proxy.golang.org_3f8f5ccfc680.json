@@ -1,0 +1,16 @@
+{
+  "url": "https://proxy.golang.org/github.com/golang/protobuf/@v/v1.5.4.mod",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ],
+    "Etag": [
+      "\"c5f873c621cfaaf563f8b66a0501a5be14390cb0859e5187ce616d0312a6c8f8\""
+    ],
+    "Last-Modified": [
+      "Wed, 06 Mar 2024 07:11:57 GMT"
+    ]
+  },
+  "body": "// Deprecated: Use the \"google.golang.org/protobuf\" module instead.\nmodule github.com/golang/protobuf\n\ngo 1.17\n\nrequire (\n\tgithub.com/google/go-cmp v0.5.5\n\tgoogle.golang.org/protobuf v1.33.0\n)\n"
+}

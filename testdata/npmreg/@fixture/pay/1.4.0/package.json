@@ -1,0 +1,6 @@
+{
+  "name": "@fixture/pay",
+  "version": "1.4.0",
+  "main": "index.js",
+  "license": "MIT"
+}

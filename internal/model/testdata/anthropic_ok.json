@@ -1,0 +1,13 @@
+{
+  "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+  "type": "message",
+  "role": "assistant",
+  "model": "model-id",
+  "content": [
+    {"type": "text", "text": "Here is the patch:\n"},
+    {"type": "text", "text": "--- a/x\n+++ b/x\n"}
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 41, "output_tokens": 17}
+}

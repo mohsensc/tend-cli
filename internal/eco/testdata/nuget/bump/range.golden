@@ -1,0 +1,6 @@
+files: [src/App/App.csproj]
+locked: false
+note: dotnet not found in PATH
+--- src/App/App.csproj
+14: -    <PackageReference Include="Dapper" Version="[2.0.0,3.0.0)" />
+14: +    <PackageReference Include="Dapper" Version="[3.1.0,4.0.0)" />

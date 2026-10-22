@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0": {
+      "Dapper": {
+        "type": "Direct",
+        "requested": "[2.0.0, 3.0.0)",
+        "resolved": "2.0.123",
+        "contentHash": "abc"
+      },
+      "Humanizer": {
+        "type": "Direct",
+        "requested": "[2.14.1, )",
+        "resolved": "2.14.1",
+        "contentHash": "def"
+      },
+      "Microsoft.SourceLink.GitHub": {
+        "type": "Direct",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "ghi"
+      },
+      "Newtonsoft.Json": {
+        "type": "Direct",
+        "requested": "[13.0.1, )",
+        "resolved": "13.0.1",
+        "contentHash": "jkl"
+      },
+      "Polly": {
+        "type": "Direct",
+        "requested": "[8.*, )",
+        "resolved": "8.2.1",
+        "contentHash": "mno"
+      },
+      "Serilog": {
+        "type": "Direct",
+        "requested": "[3.1.1, )",
+        "resolved": "3.1.1",
+        "contentHash": "pqr"
+      },
+      "StyleCop.Analyzers": {
+        "type": "Direct",
+        "requested": "[1.2.0-beta.507, )",
+        "resolved": "1.2.0-beta.507",
+        "contentHash": "stu"
+      },
+      "Humanizer.Core": {
+        "type": "Transitive",
+        "resolved": "2.14.1",
+        "contentHash": "vwx"
+      },
+      "Microsoft.Build.Tasks.Git": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "yz0"
+      },
+      "Lib": {
+        "type": "Project"
+      }
+    },
+    "net6.0": {
+      "Newtonsoft.Json": {
+        "type": "Direct",
+        "requested": "[13.0.1, )",
+        "resolved": "13.0.1",
+        "contentHash": "jkl"
+      },
+      "System.Memory": {
+        "type": "Transitive",
+        "resolved": "4.5.5",
+        "contentHash": "123"
+      },
+      "Humanizer.Core": {
+        "type": "Transitive",
+        "resolved": "2.13.0",
+        "contentHash": "456"
+      }
+    }
+  }
+}

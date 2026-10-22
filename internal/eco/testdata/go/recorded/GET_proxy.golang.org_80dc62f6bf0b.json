@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/!burnt!sushi/toml/@v/v1.3.1.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v1.3.1\",\"Time\":\"2023-06-06T09:25:54Z\",\"Origin\":{\"VCS\":\"git\",\"URL\":\"https://github.com/BurntSushi/toml\",\"Ref\":\"refs/tags/v1.3.1\",\"Hash\":\"96fcef232f3c6f201cd851db0ac37822e36afadb\"}}"
+}

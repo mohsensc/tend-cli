@@ -1,0 +1,196 @@
+[
+  {
+    "ID": "api/stripe/GET /v1/charges/{charge}#expand",
+    "Kind": "deprecation",
+    "Severity": "",
+    "Level": "",
+    "Deps": null,
+    "To": "",
+    "ToName": "",
+    "API": {
+      "Provider": "stripe",
+      "Method": "GET",
+      "Path": "/v1/charges/{charge}",
+      "Field": "expand",
+      "What": "parameter deprecated"
+    },
+    "Evidence": [
+      {
+        "Source": "openapi",
+        "Title": "stripe spec 2026-09-30",
+        "Text": "",
+        "URL": ""
+      }
+    ],
+    "Options": null,
+    "Sunset": "0001-01-01T00:00:00Z",
+    "Published": "0001-01-01T00:00:00Z",
+    "Sites": [
+      {
+        "File": "src/pay.js",
+        "Line": 9,
+        "Col": 0,
+        "Chain": [
+          "stripe",
+          "charges",
+          "retrieve"
+        ],
+        "Call": true,
+        "Text": ""
+      }
+    ]
+  },
+  {
+    "ID": "api/stripe/POST /v1/charges",
+    "Kind": "deprecation",
+    "Severity": "",
+    "Level": "",
+    "Deps": null,
+    "To": "",
+    "ToName": "",
+    "API": {
+      "Provider": "stripe",
+      "Method": "POST",
+      "Path": "/v1/charges",
+      "Field": "",
+      "What": "operation deprecated"
+    },
+    "Evidence": [
+      {
+        "Source": "openapi",
+        "Title": "stripe spec 2026-09-30",
+        "Text": "Create a charge",
+        "URL": ""
+      }
+    ],
+    "Options": [
+      {
+        "Title": "Move to PaymentIntents",
+        "Detail": "Stripe's recommended replacement. charges.create becomes paymentIntents.create with confirm: true and payment_method in place of source. A payment that needs authentication comes back as requires_action instead of failing, so the code reading the result has to handle that status; that part is not mechanical.",
+        "Safe": false,
+        "Codemod": {
+          "Renames": {
+            "charges.create": "paymentIntents.create"
+          },
+          "Imports": null,
+          "Paths": {
+            "/v1/charges": "/v1/payment_intents"
+          },
+          "Fields": {
+            "source": "payment_method"
+          },
+          "Text": null
+        },
+        "ToName": "",
+        "To": ""
+      },
+      {
+        "Title": "Move to Checkout Sessions",
+        "Detail": "Stripe hosts the payment page and handles authentication, so the least payment code stays in this repo. It turns an API call into a redirect, which changes the checkout flow, not just the call.",
+        "Safe": false,
+        "Codemod": null,
+        "ToName": "",
+        "To": ""
+      }
+    ],
+    "Sunset": "0001-01-01T00:00:00Z",
+    "Published": "0001-01-01T00:00:00Z",
+    "Sites": [
+      {
+        "File": "pay/charge.go",
+        "Line": 20,
+        "Col": 0,
+        "Chain": [
+          "charge",
+          "New"
+        ],
+        "Call": true,
+        "Text": ""
+      },
+      {
+        "File": "src/pay.js",
+        "Line": 4,
+        "Col": 0,
+        "Chain": [
+          "stripe",
+          "charges",
+          "create"
+        ],
+        "Call": true,
+        "Text": ""
+      }
+    ]
+  },
+  {
+    "ID": "api/stripe/POST /v1/charges#paid",
+    "Kind": "deprecation",
+    "Severity": "",
+    "Level": "",
+    "Deps": null,
+    "To": "",
+    "ToName": "",
+    "API": {
+      "Provider": "stripe",
+      "Method": "POST",
+      "Path": "/v1/charges",
+      "Field": "paid",
+      "What": "response field deprecated"
+    },
+    "Evidence": [
+      {
+        "Source": "openapi",
+        "Title": "stripe spec 2026-09-30",
+        "Text": "Create a charge",
+        "URL": ""
+      }
+    ],
+    "Options": null,
+    "Sunset": "0001-01-01T00:00:00Z",
+    "Published": "0001-01-01T00:00:00Z",
+    "Sites": [
+      {
+        "File": "pay/charge.go",
+        "Line": 20,
+        "Col": 0,
+        "Chain": [
+          "charge",
+          "New"
+        ],
+        "Call": true,
+        "Text": ""
+      },
+      {
+        "File": "pay/charge.go",
+        "Line": 21,
+        "Col": 0,
+        "Chain": [
+          "paid"
+        ],
+        "Call": false,
+        "Text": "x[\"paid\"]"
+      },
+      {
+        "File": "src/pay.js",
+        "Line": 4,
+        "Col": 0,
+        "Chain": [
+          "stripe",
+          "charges",
+          "create"
+        ],
+        "Call": true,
+        "Text": ""
+      },
+      {
+        "File": "src/pay.js",
+        "Line": 5,
+        "Col": 0,
+        "Chain": [
+          "paid"
+        ],
+        "Call": false,
+        "Text": "x[\"paid\"]"
+      }
+    ]
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/checkout",
+    "Version": "v2",
+    "Req": "v2",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/setup-node",
+    "Version": "v4.1.0",
+    "Req": "v4.1.0",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/cache",
+    "Version": "v4.0.2",
+    "Req": "0c45773b623bea8c8e75f6c82b208c3cf94ea4f9",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 12,
+    "Dev": false,
+    "Direct": true,
+    "Pin": "0c45773b623bea8c8e75f6c82b208c3cf94ea4f9"
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "docker/build-push-action",
+    "Version": "v4",
+    "Req": "3b5e8027fcad23fda98b2e3ac259d8d67585f671",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 13,
+    "Dev": false,
+    "Direct": true,
+    "Pin": "3b5e8027fcad23fda98b2e3ac259d8d67585f671"
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "owner/tool",
+    "Version": "main",
+    "Req": "main",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/upload-artifact",
+    "Version": "a8a3f3ad30e3422c9c7b888a15615d96a6e6e6a2",
+    "Req": "a8a3f3ad30e3422c9c7b888a15615d96a6e6e6a2",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 19,
+    "Dev": false,
+    "Direct": true,
+    "Pin": "a8a3f3ad30e3422c9c7b888a15615d96a6e6e6a2"
+  },
+  {
+    "Ecosystem": "actions",
+    "Name": "acme/workflows",
+    "Version": "v1.2",
+    "Req": "v1.2",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": ".github/workflows/ci.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 21,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

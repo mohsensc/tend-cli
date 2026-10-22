@@ -1,0 +1,279 @@
+{
+  "Lang": "python",
+  "Imports": [
+    {
+      "File": "app.py",
+      "Line": 1,
+      "Package": "os",
+      "Binding": "os",
+      "Names": null
+    },
+    {
+      "File": "app.py",
+      "Line": 1,
+      "Package": "json",
+      "Binding": "json",
+      "Names": null
+    },
+    {
+      "File": "app.py",
+      "Line": 2,
+      "Package": "boto3",
+      "Binding": "boto3",
+      "Names": null
+    },
+    {
+      "File": "app.py",
+      "Line": 3,
+      "Package": "boto3.session",
+      "Binding": "bs",
+      "Names": null
+    },
+    {
+      "File": "app.py",
+      "Line": 4,
+      "Package": "google.cloud.storage",
+      "Binding": "google",
+      "Names": null
+    },
+    {
+      "File": "app.py",
+      "Line": 5,
+      "Package": "stripe",
+      "Binding": "",
+      "Names": [
+        "StripeCharge",
+        "Customer"
+      ]
+    },
+    {
+      "File": "app.py",
+      "Line": 6,
+      "Package": "openai",
+      "Binding": "",
+      "Names": [
+        "OpenAI",
+        "Async"
+      ]
+    },
+    {
+      "File": "app.py",
+      "Line": 10,
+      "Package": "tenacity",
+      "Binding": "",
+      "Names": [
+        "retry"
+      ]
+    },
+    {
+      "File": "app.py",
+      "Line": 12,
+      "Package": "typing",
+      "Binding": "",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 16,
+      "Col": 10,
+      "Chain": [
+        "OpenAI"
+      ],
+      "Call": true,
+      "Quals": [
+        "openai.OpenAI"
+      ],
+      "Text": "client = OpenAI()"
+    },
+    {
+      "Line": 17,
+      "Col": 6,
+      "Chain": [
+        "boto3",
+        "client"
+      ],
+      "Call": true,
+      "Quals": [
+        "boto3.client"
+      ],
+      "Text": "s3 = boto3.client(\"s3\")"
+    },
+    {
+      "Line": 21,
+      "Col": 2,
+      "Chain": [
+        "retry"
+      ],
+      "Call": false,
+      "Quals": [
+        "tenacity.retry"
+      ],
+      "Text": "@retry"
+    },
+    {
+      "Line": 24,
+      "Col": 14,
+      "Chain": [
+        "StripeCharge",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe.Charge.create"
+      ],
+      "Text": "charge = StripeCharge.create(amount=2000, currency=\"usd\")"
+    },
+    {
+      "Line": 26,
+      "Col": 5,
+      "Chain": [
+        "Customer",
+        "retrieve"
+      ],
+      "Call": true,
+      "Quals": [
+        "stripe.Customer.retrieve"
+      ],
+      "Text": "Customer.retrieve(\"cus_1\")"
+    },
+    {
+      "Line": 27,
+      "Col": 12,
+      "Chain": [
+        "client",
+        "chat",
+        "completions",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "openai.OpenAI"
+      ],
+      "Text": "resp = client.chat.completions.create(model=\"gpt-4o\", messages=[])"
+    },
+    {
+      "Line": 28,
+      "Col": 5,
+      "Chain": [
+        "s3",
+        "upload_file"
+      ],
+      "Call": true,
+      "Quals": [
+        "boto3.client"
+      ],
+      "Text": "s3.upload_file(\"a.txt\", \"b\", \"a.txt\")"
+    },
+    {
+      "Line": 30,
+      "Col": 14,
+      "Chain": [
+        "google",
+        "cloud",
+        "storage",
+        "Client"
+      ],
+      "Call": true,
+      "Quals": [
+        "google.cloud.storage.Client"
+      ],
+      "Text": "bucket = google.cloud.storage.Client().bucket(\"b\")"
+    },
+    {
+      "Line": 31,
+      "Col": 5,
+      "Chain": [
+        "bs",
+        "Session"
+      ],
+      "Call": true,
+      "Quals": [
+        "boto3.session.Session"
+      ],
+      "Text": "bs.Session()"
+    },
+    {
+      "Line": 32,
+      "Col": 12,
+      "Chain": [
+        "json",
+        "dumps"
+      ],
+      "Call": true,
+      "Quals": [
+        "json.dumps"
+      ],
+      "Text": "body = json.dumps({\"a\": 1})"
+    },
+    {
+      "Line": 34,
+      "Col": 12,
+      "Chain": [
+        "os",
+        "environ"
+      ],
+      "Call": false,
+      "Quals": [
+        "os.environ"
+      ],
+      "Text": "return os.environ[\"X\"]"
+    },
+    {
+      "Line": 39,
+      "Col": 19,
+      "Chain": [
+        "Async"
+      ],
+      "Call": true,
+      "Quals": [
+        "openai.AsyncOpenAI"
+      ],
+      "Text": "self.ai = Async()"
+    },
+    {
+      "Line": 42,
+      "Col": 20,
+      "Chain": [
+        "ai",
+        "models",
+        "list"
+      ],
+      "Call": true,
+      "Quals": [
+        "openai.AsyncOpenAI"
+      ],
+      "Text": "await self.ai.models.list()"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "app.py",
+      "Line": 14,
+      "Method": "",
+      "URL": "https://api.example.com",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.py",
+      "Line": 20,
+      "Method": "",
+      "URL": "/hooks",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.py",
+      "Line": 29,
+      "Method": "POST",
+      "URL": "/v1/orders",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.py",
+      "Line": 33,
+      "Method": "PUT",
+      "URL": "/v1/refunds",
+      "Host": "api.example.com"
+    }
+  ]
+}

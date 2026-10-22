@@ -1,0 +1,112 @@
+{
+  "Lang": "ruby",
+  "Imports": [
+    {
+      "File": "app.rb",
+      "Line": 1,
+      "Package": "stripe",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "app.rb",
+      "Line": 2,
+      "Package": "aws-sdk-s3",
+      "Binding": "",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 11,
+      "Col": 5,
+      "Chain": [
+        "Stripe",
+        "api_key"
+      ],
+      "Call": false,
+      "Quals": [
+        "Stripe::api_key"
+      ],
+      "Text": "Stripe.api_key = key"
+    },
+    {
+      "Line": 12,
+      "Col": 11,
+      "Chain": [
+        "Aws",
+        "S3",
+        "Client",
+        "new"
+      ],
+      "Call": true,
+      "Quals": [
+        "Aws::S3::Client::new"
+      ],
+      "Text": "@s3 = Aws::S3::Client.new(region: 'us-east-1')"
+    },
+    {
+      "Line": 19,
+      "Col": 5,
+      "Chain": [
+        "Stripe",
+        "Charge",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe::Charge::create"
+      ],
+      "Text": "Stripe::Charge.create(amount: 2000, currency: 'usd')"
+    },
+    {
+      "Line": 20,
+      "Col": 6,
+      "Chain": [
+        "s3",
+        "put_object"
+      ],
+      "Call": true,
+      "Quals": [
+        "Aws::S3::Client::new"
+      ],
+      "Text": "@s3.put_object(bucket: 'b', key: 'k')"
+    },
+    {
+      "Line": 21,
+      "Col": 16,
+      "Chain": [
+        "Stripe",
+        "Customer",
+        "retrieve"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe::Customer::retrieve"
+      ],
+      "Text": "customer = Stripe::Customer.retrieve('cus_1')"
+    },
+    {
+      "Line": 24,
+      "Col": 5,
+      "Chain": [
+        "Faraday",
+        "post"
+      ],
+      "Call": true,
+      "Quals": [
+        "Faraday::post"
+      ],
+      "Text": "Faraday.post(\"https://api.example.com/v1/events\") # Stripe.x"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "app.rb",
+      "Line": 24,
+      "Method": "POST",
+      "URL": "https://api.example.com/v1/events",
+      "Host": "api.example.com"
+    }
+  ]
+}

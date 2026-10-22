@@ -1,0 +1,15 @@
+{
+  "name": "legacy-app",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "debug": "^2.6.9",
+    "left-pad": "^1.1.0",
+    "send": "~0.17.1"
+  },
+  "devDependencies": {
+    "is-number": "^7.0.0"
+  }
+}

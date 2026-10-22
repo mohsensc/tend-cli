@@ -1,0 +1,39 @@
+[
+  {
+    "ID": "api/fixture/GET /v1/orders/{id}/legacy",
+    "Kind": "deprecation",
+    "Severity": "",
+    "Level": "",
+    "Deps": null,
+    "To": "",
+    "ToName": "",
+    "API": {
+      "Provider": "fixture",
+      "Method": "GET",
+      "Path": "/v1/orders/{id}/legacy",
+      "Field": "",
+      "What": "operation deprecated"
+    },
+    "Evidence": [
+      {
+        "Source": "openapi",
+        "Title": "fixture spec 2.0.0",
+        "Text": "Fetch an order in the old format",
+        "URL": "https://api.fixture.dev/openapi.json"
+      }
+    ],
+    "Options": null,
+    "Sunset": "2027-03-01T00:00:00Z",
+    "Published": "0001-01-01T00:00:00Z",
+    "Sites": [
+      {
+        "File": "app/orders.py",
+        "Line": 14,
+        "Col": 0,
+        "Chain": null,
+        "Call": false,
+        "Text": "https://api.fixture.dev/v1/orders/{order_id}/legacy"
+      }
+    ]
+  }
+]

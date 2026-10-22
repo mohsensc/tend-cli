@@ -1,0 +1,6 @@
+files: [reqs/requirements.txt]
+locked: false
+note: no lockfile
+--- reqs/requirements.txt
+8: -python-dateutil~=2.8.2
+8: +python-dateutil~=2.9.0

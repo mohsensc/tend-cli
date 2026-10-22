@@ -1,0 +1,4 @@
+tend: 2 queued, 0 skipped, no open PR
+
+  1  tidy         first PR                     remove 3 unused · move off 1 deprecated
+  2  deprecation  @fixture/pay  1.4.0 → 2.0.0  2 sites

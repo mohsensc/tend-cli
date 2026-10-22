@@ -1,0 +1,6 @@
+files: [.github/workflows/ci.yml]
+locked: false
+note: no lockfile
+--- .github/workflows/ci.yml
+9: -      - uses: actions/setup-node@v4.1.0
+9: +      - uses: actions/setup-node@v5.0.0

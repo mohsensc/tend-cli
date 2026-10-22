@@ -1,0 +1,1 @@
+Bump example.com/fixture/crypto to v1.0.1 (fixes GO-2026-0001)

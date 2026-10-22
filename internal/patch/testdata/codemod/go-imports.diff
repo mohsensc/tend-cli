@@ -1,0 +1,26 @@
+diff --git a/main.go b/main.go
+index 94f7830..72b04c0 100644
+--- a/main.go
++++ b/main.go
+@@ -3,8 +3,8 @@ package main
+ import (
+ 	"fmt"
+ 
+-	"github.com/x/y"
+-	ysub "github.com/x/y/sub"
++	"github.com/x/y/v2"
++	ysub "github.com/x/y/v2/sub"
+ 	"github.com/x/yz"
+ )
+ 
+diff --git a/util.go b/util.go
+index 8fc94c7..0d6209a 100644
+--- a/util.go
++++ b/util.go
+@@ -1,5 +1,5 @@
+ package main
+ 
+-import "github.com/x/y"
++import "github.com/x/y/v2"
+ 
+ func util() string { return y.Name }

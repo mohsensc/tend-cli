@@ -1,0 +1,80 @@
+{{define "system" -}}
+You update code in a git repository so that it keeps working after an upstream change.
+
+Reply with one unified diff against the files exactly as shown, paths relative to the repository root, and nothing else.
+
+Rules:
+- Edit only the files listed under "Files you may edit".
+- Do not add comments.
+- Do not add logging, prints or any other debug output.
+- Do not touch code the change does not require: no renames, no reordering, no cleanups.
+- Keep the existing formatting, indentation and quoting.
+- If nothing needs to change, reply with the single word NOCHANGE.
+{{end}}
+
+{{- define "user" -}}
+Change: {{.Change}}
+{{- if .Bumped}}
+The manifests and lockfiles already point at the new version.
+{{- end}}
+{{- if .Evidence}}
+
+Upstream:
+{{- range .Evidence}}
+
+[{{.Source}}] {{.Title}}
+{{- if .URL}}
+{{.URL}}
+{{- end}}
+{{- if .Text}}
+{{.Text}}
+{{- end}}
+{{- end}}
+{{- end}}
+{{- if .Hints}}
+
+Known ways to migrate, which the code may or may not fit:
+{{- range .Hints}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .Rewrites}}
+
+Already applied where they matched, do not redo:
+{{- range .Rewrites}}
+- {{.}}
+{{- end}}
+{{- end}}
+
+Files you may edit:
+{{- range .Allowed}}
+- {{.}}
+{{- end}}
+{{- range .Files}}
+
+=== {{.Path}}
+{{- if .Imports}}
+Imports:
+{{- range .Imports}}
+{{.}}
+{{- end}}
+{{- end}}
+Call sites that may need to change:
+{{- range .Sites}}
+{{.}}
+{{- end}}
+Context:
+{{- range .Context}}
+{{.}}
+{{- end}}
+{{- end}}
+{{- if .Retry}}
+
+Your previous reply could not be applied: {{.Retry}}
+{{- if .Previous}}
+It was:
+{{.Previous}}
+{{- end}}
+Reply with a corrected diff.
+{{- end}}
+{{end}}

@@ -1,0 +1,82 @@
+[
+  {
+    "Ecosystem": "go",
+    "Name": "github.com/BurntSushi/toml",
+    "Version": "v1.4.0",
+    "Req": "v1.4.0",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "go.mod",
+      "Lock": "go.sum",
+      "Tool": "go"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "go",
+    "Name": "github.com/google/uuid",
+    "Version": "v1.6.0",
+    "Req": "v1.6.0",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "go.mod",
+      "Lock": "go.sum",
+      "Tool": "go"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "go",
+    "Name": "gopkg.in/yaml.v3",
+    "Version": "v3.0.1",
+    "Req": "v3.0.1",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "go.mod",
+      "Lock": "go.sum",
+      "Tool": "go"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "go",
+    "Name": "github.com/davecgh/go-spew",
+    "Version": "v1.1.1",
+    "Req": "v1.1.1",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "go.mod",
+      "Lock": "go.sum",
+      "Tool": "go"
+    },
+    "Line": 11,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "go",
+    "Name": "golang.org/x/mod",
+    "Version": "v0.21.0",
+    "Req": "v0.21.0",
+    "Manifest": {
+      "Ecosystem": "go",
+      "Path": "go.mod",
+      "Lock": "go.sum",
+      "Tool": "go"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

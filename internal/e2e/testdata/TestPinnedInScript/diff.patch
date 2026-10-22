@@ -1,0 +1,13 @@
+diff --git a/scripts/install.sh b/scripts/install.sh
+index 0000000..0000000 100644
+--- a/scripts/install.sh
++++ b/scripts/install.sh
+@@ -2,7 +2,7 @@
+ # Installs the tools the build needs into ./bin.
+ set -eu
+ 
+-PROTOC_VERSION=25.1
++PROTOC_VERSION=36.2
+ 
+ mkdir -p bin
+ curl -fsSL -o protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"

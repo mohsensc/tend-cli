@@ -1,0 +1,429 @@
+{
+  "Name": "github.com/go-chi/chi",
+  "Releases": [
+    {
+      "Version": "v0.9.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.0.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v1.5.5",
+      "Time": "2023-09-07T09:35:12Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v2.0.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v2.1.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.0.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.1+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.2+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.3+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.4+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.1.5+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.2.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.2.1+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.3.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.3.1+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.3.2+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.3.3+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v3.3.4+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.0-rc2+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": true,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.1+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.2+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.3+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.0.4+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.1.0+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.1.1+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v4.1.2+incompatible",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.1",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.2",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.3",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.4",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.5",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.6",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.7",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.8",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.9",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.10",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.11",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.12",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.13",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.0.14",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.1.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.0",
+      "Time": "0001-01-01T00:00:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.1",
+      "Time": "2025-01-20T20:41:44Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.2",
+      "Time": "2025-06-20T12:21:10Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.3",
+      "Time": "2025-08-26T17:56:01Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.4",
+      "Time": "2026-01-14T16:02:00Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.2.5",
+      "Time": "2026-02-05T11:05:34Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.3.0",
+      "Time": "2026-05-22T15:16:13Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.3.1",
+      "Time": "2026-07-05T18:51:45Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.3.2",
+      "Time": "2026-08-20T09:37:52Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.4.0",
+      "Time": "2026-10-12T11:22:20Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "v5.5.0",
+      "Time": "2026-10-14T13:20:04Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    }
+  ],
+  "Latest": "v5.5.0",
+  "Repo": "https://github.com/go-chi/chi",
+  "Deprecated": "Please upgrade to the latest major version: go get github.com/go-chi/chi/v5",
+  "Replacement": ""
+}

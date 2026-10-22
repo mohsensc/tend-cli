@@ -1,0 +1,34 @@
+[
+  {
+    "Ecosystem": "pip",
+    "Name": "certifi",
+    "Version": "",
+    "Req": "\u003e=2024.2.2",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements/base.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 1,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pillow",
+    "Version": "",
+    "Req": "\u003e=10.0,\u003c11",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "reqs/requirements/base.txt",
+      "Lock": "",
+      "Tool": "pip"
+    },
+    "Line": 2,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

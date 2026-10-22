@@ -1,0 +1,6 @@
+files: [pom.xml]
+locked: false
+note: no lockfile
+--- pom.xml
+19: -    <jackson.version>2.15.2</jackson.version>
+19: +    <jackson.version>2.17.0</jackson.version>

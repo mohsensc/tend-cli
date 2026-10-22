@@ -1,0 +1,30 @@
+{
+  "Name": "@isaacs/string-locale-compare",
+  "Releases": [
+    {
+      "Version": "1.0.0",
+      "Time": "2021-09-21T21:53:43.341Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.0.1",
+      "Time": "2021-09-21T22:09:44.845Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    },
+    {
+      "Version": "1.1.0",
+      "Time": "2021-09-28T18:14:13.693Z",
+      "Pre": false,
+      "Yanked": false,
+      "Deprecated": ""
+    }
+  ],
+  "Latest": "1.1.0",
+  "Repo": "https://github.com/isaacs/string-locale-compare",
+  "Deprecated": "",
+  "Replacement": ""
+}

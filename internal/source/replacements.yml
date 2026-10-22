@@ -1,0 +1,33 @@
+- eco: npm
+  name: request
+  note: "request is deprecated (Feb 2020)"
+  url: https://github.com/request/request/issues/3142
+  options:
+    - {to: undici, why: "Node's own HTTP client and what fetch runs on in Node 18+; promises only, and nothing like request's options object"}
+    - {to: node-fetch, why: "the fetch API as a package, and small; ESM-only since v3, so CommonJS code stays on v2"}
+    - {to: axios, why: "closest to request's options-object style, with interceptors; the largest of the three"}
+- {eco: npm, name: node-sass, to: sass, url: https://sass-lang.com/blog/libsass-is-deprecated/}
+- {eco: npm, name: babel-eslint, to: "@babel/eslint-parser", url: https://github.com/babel/babel-eslint}
+- {eco: npm, name: tslint, to: eslint, url: https://github.com/palantir/tslint/issues/4534}
+- eco: npm
+  name: moment
+  url: https://momentjs.com/docs/#/-project-status/
+  options:
+    - {to: dayjs, why: "moment's API in 2 kB, so most calls carry over; time zones and some formats need plugins"}
+    - {to: luxon, why: "from moment's maintainers; immutable, with time zones built in, but a different API"}
+    - {to: date-fns, why: "plain functions over the native Date and tree-shakes well; every call site changes shape"}
+- {eco: npm, name: "@types/*", note: "follows its package"}   # handled in plan grouping, listed for readers
+- {eco: pip, name: pycrypto, to: pycryptodome, url: https://github.com/pycrypto/pycrypto/issues/173}
+- {eco: pip, name: nose, to: pytest, url: https://nose.readthedocs.io/en/latest/#note-to-users}
+- {eco: pip, name: sklearn, to: scikit-learn, url: https://pypi.org/project/sklearn/}
+- {eco: go, name: github.com/golang/protobuf, to: google.golang.org/protobuf, url: https://go.dev/blog/protobuf-apiv2}
+- {eco: go, name: github.com/dgrijalva/jwt-go, to: github.com/golang-jwt/jwt/v5, url: https://github.com/dgrijalva/jwt-go/issues/462}
+- {eco: go, name: github.com/pkg/errors, to: errors, note: "stdlib errors since Go 1.13; archived", url: https://github.com/pkg/errors}
+- {eco: go, name: golang.org/x/lint, to: honnef.co/go/tools/cmd/staticcheck, url: https://github.com/golang/lint}
+- {eco: go, name: github.com/satori/go.uuid, to: github.com/google/uuid, url: https://github.com/satori/go.uuid/issues/73}
+- {eco: actions, name: actions/create-release, to: softprops/action-gh-release, url: https://github.com/actions/create-release}
+- {eco: actions, name: actions/upload-release-asset, to: softprops/action-gh-release, url: https://github.com/actions/upload-release-asset}
+- {eco: actions, name: actions/setup-ruby, to: ruby/setup-ruby, url: https://github.com/actions/setup-ruby}
+- {eco: rubygems, name: therubyracer, to: mini_racer, url: https://github.com/rubyjs/therubyracer}
+- {eco: composer, name: fzaninotto/faker, to: fakerphp/faker, url: https://github.com/fzaninotto/Faker}
+- {eco: nuget, name: microsoft.aspnet.webapi.client, note: "see alternatePackage from nuget", url: https://www.nuget.org/packages/Microsoft.AspNet.WebApi.Client}

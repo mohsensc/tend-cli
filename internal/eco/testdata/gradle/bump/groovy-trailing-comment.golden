@@ -1,0 +1,6 @@
+files: [build.gradle]
+locked: false
+note: no lockfile
+--- build.gradle
+22: -    implementation("org.xerial:sqlite-jdbc:3.43.0.0") // https://github.com/xerial/sqlite-jdbc
+22: +    implementation("org.xerial:sqlite-jdbc:3.46.1.0") // https://github.com/xerial/sqlite-jdbc

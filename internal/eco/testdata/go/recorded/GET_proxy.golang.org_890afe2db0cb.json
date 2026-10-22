@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/mattn/go-sqlite3/@v/v2.0.1+incompatible.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v2.0.1+incompatible\",\"Time\":\"2019-11-18T16:19:53Z\"}"
+}

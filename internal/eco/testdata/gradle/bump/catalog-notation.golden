@@ -1,0 +1,6 @@
+files: [gradle/libs.versions.toml]
+locked: false
+note: gradle not found
+--- gradle/libs.versions.toml
+10: -gson = "com.google.code.gson:gson:2.10.1"
+10: +gson = "com.google.code.gson:gson:2.11.0"

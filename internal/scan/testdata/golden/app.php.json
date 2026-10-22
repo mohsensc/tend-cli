@@ -1,0 +1,174 @@
+{
+  "Lang": "php",
+  "Imports": [
+    {
+      "File": "app.php",
+      "Line": 5,
+      "Package": "Stripe\\StripeClient",
+      "Binding": "StripeClient",
+      "Names": null
+    },
+    {
+      "File": "app.php",
+      "Line": 6,
+      "Package": "GuzzleHttp\\Client",
+      "Binding": "Http",
+      "Names": null
+    },
+    {
+      "File": "app.php",
+      "Line": 7,
+      "Package": "Acme\\Util\\format_money",
+      "Binding": "format_money",
+      "Names": null
+    },
+    {
+      "File": "app.php",
+      "Line": 8,
+      "Package": "Aws\\S3\\S3Client",
+      "Binding": "S3Client",
+      "Names": null
+    },
+    {
+      "File": "app.php",
+      "Line": 8,
+      "Package": "Aws\\Sqs\\SqsClient",
+      "Binding": "Queue",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 16,
+      "Col": 29,
+      "Chain": [
+        "StripeClient"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe\\StripeClient"
+      ],
+      "Text": "$this-\u003estripe = new StripeClient($key);"
+    },
+    {
+      "Line": 17,
+      "Col": 27,
+      "Chain": [
+        "Http"
+      ],
+      "Call": true,
+      "Quals": [
+        "GuzzleHttp\\Client"
+      ],
+      "Text": "$this-\u003ehttp = new Http(['base_uri' =\u003e 'https://api.example.com']);"
+    },
+    {
+      "Line": 22,
+      "Col": 16,
+      "Chain": [
+        "stripe",
+        "charges",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe\\StripeClient"
+      ],
+      "Text": "$this-\u003estripe-\u003echarges-\u003ecreate(['amount' =\u003e 2000]);"
+    },
+    {
+      "Line": 23,
+      "Col": 19,
+      "Chain": [
+        "S3Client"
+      ],
+      "Call": true,
+      "Quals": [
+        "Aws\\S3\\S3Client"
+      ],
+      "Text": "$s3 = new S3Client([]);"
+    },
+    {
+      "Line": 24,
+      "Col": 9,
+      "Chain": [
+        "$s3",
+        "putObject"
+      ],
+      "Call": true,
+      "Quals": [
+        "Aws\\S3\\S3Client"
+      ],
+      "Text": "$s3-\u003eputObject(['Bucket' =\u003e 'b']);"
+    },
+    {
+      "Line": 26,
+      "Col": 19,
+      "Chain": [
+        "Aws",
+        "Sqs",
+        "SqsClient"
+      ],
+      "Call": true,
+      "Quals": [
+        "Aws\\Sqs\\SqsClient"
+      ],
+      "Text": "$q = new \\Aws\\Sqs\\SqsClient([]);"
+    },
+    {
+      "Line": 27,
+      "Col": 10,
+      "Chain": [
+        "Stripe",
+        "Stripe",
+        "setApiKey"
+      ],
+      "Call": true,
+      "Quals": [
+        "Stripe\\Stripe\\setApiKey"
+      ],
+      "Text": "\\Stripe\\Stripe::setApiKey('sk');"
+    },
+    {
+      "Line": 28,
+      "Col": 14,
+      "Chain": [
+        "format_money"
+      ],
+      "Call": true,
+      "Quals": [
+        "Acme\\Util\\format_money"
+      ],
+      "Text": "echo format_money(5); # Stripe\\Stripe::x()"
+    },
+    {
+      "Line": 29,
+      "Col": 16,
+      "Chain": [
+        "http",
+        "request"
+      ],
+      "Call": true,
+      "Quals": [
+        "GuzzleHttp\\Client"
+      ],
+      "Text": "$this-\u003ehttp-\u003erequest('DELETE', '/v1/orders/1');"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "app.php",
+      "Line": 17,
+      "Method": "",
+      "URL": "https://api.example.com",
+      "Host": "api.example.com"
+    },
+    {
+      "File": "app.php",
+      "Line": 29,
+      "Method": "DELETE",
+      "URL": "/v1/orders/1",
+      "Host": "api.example.com"
+    }
+  ]
+}

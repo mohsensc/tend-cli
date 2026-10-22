@@ -1,0 +1,5 @@
+deps:
+  - name: protoc
+    file: scripts/install.sh
+    match: 'PROTOC_VERSION=(?P<v>[0-9.]+)'
+    source: github:protocolbuffers/protobuf

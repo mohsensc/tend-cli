@@ -1,0 +1,6 @@
+files: [Gemfile]
+locked: false
+note: bundle not found in PATH
+--- Gemfile
+6: -gem 'pg', '>= 1.1'
+6: +gem 'pg', '>= 2.0.0'

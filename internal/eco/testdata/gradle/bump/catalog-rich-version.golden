@@ -1,0 +1,6 @@
+files: [gradle/libs.versions.toml]
+locked: false
+note: gradle not found
+--- gradle/libs.versions.toml
+3: -junit = { strictly = "5.10.0" }
+3: +junit = { strictly = "5.11.0" }

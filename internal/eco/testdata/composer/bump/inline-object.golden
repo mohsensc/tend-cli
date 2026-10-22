@@ -1,0 +1,6 @@
+files: [sub/composer.json]
+locked: false
+note: no composer.lock
+--- sub/composer.json
+3: -    "require": {"monolog/monolog": "^2.9", "php": ">=7.4"},
+3: +    "require": {"monolog/monolog": "^3.5", "php": ">=7.4"},

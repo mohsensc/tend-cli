@@ -1,0 +1,10 @@
+{
+  "url": "https://api.osv.dev/v1/querybatch",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"results\":[{\"vulns\":[{\"id\":\"GHSA-vh95-rmgr-6w4m\",\"modified\":\"2026-03-13T22:11:31.390433Z\"},{\"id\":\"GHSA-xvch-5gv4-984h\",\"modified\":\"2026-03-13T22:11:59.523514Z\"}]},{\"vulns\":[{\"id\":\"GHSA-w73w-5m7g-f7qc\",\"modified\":\"2026-09-10T03:49:05.293395Z\"},{\"id\":\"GO-2020-0017\",\"modified\":\"2026-07-08T06:49:40.526819Z\"}]},{}]}"
+}

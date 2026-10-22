@@ -1,0 +1,14 @@
+[
+  {
+    "node_id": "PR_kwDOABCDE85old",
+    "html_url": "https://github.com/acme/shop/pull/9",
+    "number": 9,
+    "state": "closed",
+    "title": "Bump stripe to 15.0.0",
+    "body": "old body",
+    "merged_at": "2026-09-30T12:00:00Z",
+    "draft": false,
+    "head": {"ref": "tend/npm-stripe-15.0.0"},
+    "base": {"ref": "main"}
+  }
+]

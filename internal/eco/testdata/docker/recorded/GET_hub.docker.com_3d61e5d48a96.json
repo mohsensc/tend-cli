@@ -1,0 +1,16 @@
+{
+  "url": "https://hub.docker.com/v2/repositories/library/node/tags?name=-alpine&page=2&page_size=100",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ],
+    "X-Ratelimit-Remaining": [
+      "179"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792580435"
+    ]
+  },
+  "body": "{\n  \"count\": 2702,\n  \"next\": \"https://hub.docker.com/v2/repositories/library/node/tags?name=-alpine&page=3&page_size=100\",\n  \"previous\": \"https://hub.docker.com/v2/repositories/library/node/tags?name=-alpine&page=1&page_size=100\",\n  \"results\": [\n    {\n      \"name\": \"26.5.1-alpine3.23\",\n      \"tag_last_pushed\": \"2026-07-30T20:42:42.611943Z\",\n      \"last_updated\": \"2026-07-30T20:42:42.611943Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"26.5.1-alpine\",\n      \"tag_last_pushed\": \"2026-07-30T20:42:40.737083Z\",\n      \"last_updated\": \"2026-07-30T20:42:40.737083Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"26.5-alpine3.24\",\n      \"tag_last_pushed\": \"2026-07-30T20:42:20.870963Z\",\n      \"last_updated\": \"2026-07-30T20:42:20.870963Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"26.5-alpine3.23\",\n      \"tag_last_pushed\": \"2026-07-30T20:42:18.837917Z\",\n      \"last_updated\": \"2026-07-30T20:42:18.837917Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"26.5-alpine\",\n      \"tag_last_pushed\": \"2026-07-30T20:42:16.731148Z\",\n      \"last_updated\": \"2026-07-30T20:42:16.731148Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"24.18.1-alpine3.24\",\n      \"tag_last_pushed\": \"2026-07-30T20:40:37.113724Z\",\n      \"last_updated\": \"2026-07-30T20:40:37.113724Z\",\n      \"tag_status\": \"active\"\n    },\n    {\n      \"name\": \"24.18.1-alpine3.23\",\n      \"tag_last_pushed\": \"2026-07-30T20:40:35.120069Z\",\n      \"last_updated\": \"2026-07-30T20:40:35.120069Z\",\n      \"tag_status\": \"active\"\n    }\n  ]\n}\n"
+}

@@ -1,0 +1,19 @@
+{
+  "url": "https://api.github.com/repos/request/request/releases?per_page=100",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "\"5ba35d87e0442b200c01f138ca6ac53df0793120d43c219b2203f9e344c13219\""
+    ],
+    "X-Ratelimit-Remaining": [
+      "4988"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792582191"
+    ]
+  },
+  "body": "[]"
+}

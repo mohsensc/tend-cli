@@ -1,0 +1,82 @@
+[
+  {
+    "Ecosystem": "pip",
+    "Name": "requests",
+    "Version": "2.32.3",
+    "Req": "*",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "pipfile/Pipfile",
+      "Lock": "pipfile/Pipfile.lock",
+      "Tool": "pipenv"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "flask",
+    "Version": "3.0.3",
+    "Req": "==3.0.3",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "pipfile/Pipfile",
+      "Lock": "pipfile/Pipfile.lock",
+      "Tool": "pipenv"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pytest",
+    "Version": "8.3.3",
+    "Req": "\u003e=8",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "pipfile/Pipfile",
+      "Lock": "pipfile/Pipfile.lock",
+      "Tool": "pipenv"
+    },
+    "Line": 12,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pluggy",
+    "Version": "1.5.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "pipfile/Pipfile",
+      "Lock": "pipfile/Pipfile.lock",
+      "Tool": "pipenv"
+    },
+    "Line": 0,
+    "Dev": true,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "urllib3",
+    "Version": "2.2.3",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "pipfile/Pipfile",
+      "Lock": "pipfile/Pipfile.lock",
+      "Tool": "pipenv"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

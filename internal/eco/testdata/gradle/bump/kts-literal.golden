@@ -1,0 +1,6 @@
+files: [app/build.gradle.kts]
+locked: false
+note: gradle not found
+--- app/build.gradle.kts
+11: -    implementation("com.google.guava:guava:32.1.2-jre")
+11: +    implementation("com.google.guava:guava:33.0.0-jre")

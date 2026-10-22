@@ -1,0 +1,6 @@
+files: [Dockerfile]
+locked: false
+note: no lockfile
+--- Dockerfile
+22: -FROM localhost:5000/team/tool:v1.2.3
+22: +FROM localhost:5000/team/tool:v1.3.0

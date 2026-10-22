@@ -1,0 +1,8 @@
+updates:
+  minor: true
+
+# Model APIs tend reads as a client. Neither publishes an OpenAPI document
+# worth tracking here.
+ignore:
+  - {ecosystem: api, name: "api.anthropic.com"}
+  - {ecosystem: api, name: "api.groq.com"}

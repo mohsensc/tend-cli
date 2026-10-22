@@ -1,0 +1,120 @@
+{
+  "base": "main",
+  "dropped": [
+    {
+      "change": {
+        "deps": [
+          {
+            "dev": false,
+            "direct": true,
+            "ecosystem": "go",
+            "line": 5,
+            "manifest": {
+              "ecosystem": "go",
+              "lock": "go.sum",
+              "path": "go.mod",
+              "tool": "go"
+            },
+            "name": "example.com/fixture/crypto",
+            "req": "v1.0.0",
+            "version": "v1.0.0"
+          }
+        ],
+        "id": "go/example.com/fixture/crypto@v1.1.0",
+        "kind": "update",
+        "level": "minor",
+        "published": "2026-10-05T10:00:00Z",
+        "sites": [
+          {
+            "call": true,
+            "chain": [
+              "crypto",
+              "Sign"
+            ],
+            "col": 44,
+            "file": "main.go",
+            "line": 9,
+            "text": "func sign(msg, key string) string { return crypto.Sign([]byte(msg), key) }"
+          },
+          {
+            "call": true,
+            "chain": [
+              "crypto",
+              "Verify"
+            ],
+            "col": 9,
+            "file": "main.go",
+            "line": 15,
+            "text": "return crypto.Verify([]byte(msg), key, sig)"
+          }
+        ],
+        "to": "v1.1.0"
+      },
+      "detail": "minor, 2 sites but no security, deprecation or breaking change",
+      "reason": "noise"
+    }
+  ],
+  "notes": [],
+  "open": null,
+  "queue": [
+    {
+      "deps": [
+        {
+          "dev": false,
+          "direct": true,
+          "ecosystem": "go",
+          "line": 5,
+          "manifest": {
+            "ecosystem": "go",
+            "lock": "go.sum",
+            "path": "go.mod",
+            "tool": "go"
+          },
+          "name": "example.com/fixture/crypto",
+          "req": "v1.0.0",
+          "version": "v1.0.0"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "osv",
+          "text": "Sign passes the key to hash.Sum as the slice to append to, so every signature starts with the key itself, hex encoded. Anyone who sees a signature can sign as the owner of the key. Sign returns only the MAC from v1.0.1 on.",
+          "title": "GO-2026-0001 Sign leaks key material",
+          "url": "https://osv.dev/vulnerability/GO-2026-0001"
+        }
+      ],
+      "id": "go/example.com/fixture/crypto@v1.0.1",
+      "kind": "security",
+      "level": "patch",
+      "published": "2026-10-19T12:00:00Z",
+      "severity": "high",
+      "sites": [
+        {
+          "call": true,
+          "chain": [
+            "crypto",
+            "Sign"
+          ],
+          "col": 44,
+          "file": "main.go",
+          "line": 9,
+          "text": "func sign(msg, key string) string { return crypto.Sign([]byte(msg), key) }"
+        },
+        {
+          "call": true,
+          "chain": [
+            "crypto",
+            "Verify"
+          ],
+          "col": 9,
+          "file": "main.go",
+          "line": 15,
+          "text": "return crypto.Verify([]byte(msg), key, sig)"
+        }
+      ],
+      "to": "v1.0.1"
+    }
+  ],
+  "repo": "acme/go-vuln",
+  "untracked": []
+}

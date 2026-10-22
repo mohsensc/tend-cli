@@ -1,0 +1,187 @@
+{
+  "Lang": "java",
+  "Imports": [
+    {
+      "File": "App.java",
+      "Line": 3,
+      "Package": "com.stripe.Stripe",
+      "Binding": "Stripe",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 4,
+      "Package": "com.stripe.model.Charge",
+      "Binding": "Charge",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 5,
+      "Package": "com.stripe.param.*",
+      "Binding": "",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 6,
+      "Package": "com.stripe.net.ApiResource.GSON",
+      "Binding": "GSON",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 7,
+      "Package": "org.junit.Assert.assertEquals",
+      "Binding": "assertEquals",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 8,
+      "Package": "java.net.http.HttpClient",
+      "Binding": "HttpClient",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 9,
+      "Package": "java.net.URI",
+      "Binding": "URI",
+      "Names": null
+    },
+    {
+      "File": "App.java",
+      "Line": 10,
+      "Package": "org.junit.Test",
+      "Binding": "Test",
+      "Names": null
+    }
+  ],
+  "Sites": [
+    {
+      "Line": 13,
+      "Col": 37,
+      "Chain": [
+        "HttpClient",
+        "newHttpClient"
+      ],
+      "Call": true,
+      "Quals": [
+        "java.net.http.HttpClient.newHttpClient"
+      ],
+      "Text": "private final HttpClient http = HttpClient.newHttpClient();"
+    },
+    {
+      "Line": 15,
+      "Col": 6,
+      "Chain": [
+        "Test"
+      ],
+      "Call": false,
+      "Quals": [
+        "org.junit.Test"
+      ],
+      "Text": "@Test"
+    },
+    {
+      "Line": 17,
+      "Col": 9,
+      "Chain": [
+        "Stripe",
+        "apiKey"
+      ],
+      "Call": false,
+      "Quals": [
+        "com.stripe.Stripe.apiKey"
+      ],
+      "Text": "Stripe.apiKey = \"sk_test\";"
+    },
+    {
+      "Line": 18,
+      "Col": 25,
+      "Chain": [
+        "Charge",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "com.stripe.model.Charge.create"
+      ],
+      "Text": "Charge charge = Charge.create(new ChargeCreateParams());"
+    },
+    {
+      "Line": 21,
+      "Col": 9,
+      "Chain": [
+        "Charge",
+        "retrieve"
+      ],
+      "Call": true,
+      "Quals": [
+        "com.stripe.model.Charge.retrieve"
+      ],
+      "Text": "Charge.retrieve(\"ch_1\");"
+    },
+    {
+      "Line": 22,
+      "Col": 9,
+      "Chain": [
+        "assertEquals"
+      ],
+      "Call": true,
+      "Quals": [
+        "org.junit.Assert.assertEquals"
+      ],
+      "Text": "assertEquals(1, 1);"
+    },
+    {
+      "Line": 23,
+      "Col": 9,
+      "Chain": [
+        "GSON",
+        "toJson"
+      ],
+      "Call": true,
+      "Quals": [
+        "com.stripe.net.ApiResource.GSON.toJson"
+      ],
+      "Text": "GSON.toJson(charge);"
+    },
+    {
+      "Line": 25,
+      "Col": 18,
+      "Chain": [
+        "URI",
+        "create"
+      ],
+      "Call": true,
+      "Quals": [
+        "java.net.URI.create"
+      ],
+      "Text": ".uri(URI.create(\"https://api.stripe.com/v1/charges\"))"
+    },
+    {
+      "Line": 28,
+      "Col": 9,
+      "Chain": [
+        "http",
+        "send"
+      ],
+      "Call": true,
+      "Quals": [
+        "java.net.http.HttpClient.newHttpClient"
+      ],
+      "Text": "http.send(req, null);"
+    }
+  ],
+  "URLs": [
+    {
+      "File": "App.java",
+      "Line": 25,
+      "Method": "",
+      "URL": "https://api.stripe.com/v1/charges",
+      "Host": "api.stripe.com"
+    }
+  ]
+}

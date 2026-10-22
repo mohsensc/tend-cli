@@ -1,0 +1,38 @@
+{
+  "base": "main",
+  "dropped": [],
+  "notes": [],
+  "open": null,
+  "queue": [
+    {
+      "api": {
+        "method": "GET",
+        "path": "/v1/orders/{id}/legacy",
+        "provider": "fixture",
+        "what": "operation deprecated"
+      },
+      "evidence": [
+        {
+          "source": "openapi",
+          "text": "Fetch an order in the legacy shape\n\nUse GET /v1/orders/{id} instead; it returns the total as an amount and a currency.",
+          "title": "fixture spec 2025-01-01",
+          "url": "https://api.fixture.dev/openapi.json"
+        }
+      ],
+      "id": "api/fixture/GET /v1/orders/{id}/legacy",
+      "kind": "deprecation",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "app/orders.py",
+          "line": 25,
+          "text": "/v1/orders/%s/legacy"
+        }
+      ],
+      "sunset": "2027-03-01T00:00:00Z"
+    }
+  ],
+  "repo": "acme/py-api",
+  "untracked": []
+}

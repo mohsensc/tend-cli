@@ -1,0 +1,26 @@
+# Known ways off a deprecated or removed operation or field, matched on
+# provider, method, path and field. Options with safe: true can be applied
+# and proven without a model; the rest are offered to the maintainer.
+
+- provider: stripe
+  method: POST
+  path: /v1/charges
+  options:
+    - title: Move to PaymentIntents
+      detail: >-
+        Stripe's recommended replacement. charges.create becomes
+        paymentIntents.create with confirm: true and payment_method in place of
+        source. A payment that needs authentication comes back as
+        requires_action instead of failing, so the code reading the result has
+        to handle that status; that part is not mechanical.
+      safe: false
+      codemod:
+        renames: {charges.create: paymentIntents.create}
+        paths: {/v1/charges: /v1/payment_intents}
+        fields: {source: payment_method}
+    - title: Move to Checkout Sessions
+      detail: >-
+        Stripe hosts the payment page and handles authentication, so the least
+        payment code stays in this repo. It turns an API call into a redirect,
+        which changes the checkout flow, not just the call.
+      safe: false

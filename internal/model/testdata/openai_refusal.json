@@ -1,0 +1,12 @@
+{
+  "id": "chatcmpl-9fWxPs",
+  "object": "chat.completion",
+  "model": "model-id",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": null, "refusal": "I can't help with that."},
+      "finish_reason": "stop"
+    }
+  ]
+}

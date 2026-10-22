@@ -1,0 +1,16 @@
+{
+  "url": "https://repo1.maven.org/maven2/com/google/code/gson/gson/maven-metadata.xml",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/xml"
+    ],
+    "Etag": [
+      "W/\"51240cf1ce1f25b935d15ec195f6661a\""
+    ],
+    "Last-Modified": [
+      "Thu, 23 Apr 2026 19:13:14 GMT"
+    ]
+  },
+  "body": "\u003c?xml version=\"1.0\" encoding=\"UTF-8\"?\u003e\n\u003cmetadata\u003e\n  \u003cgroupId\u003ecom.google.code.gson\u003c/groupId\u003e\n  \u003cartifactId\u003egson\u003c/artifactId\u003e\n  \u003cversioning\u003e\n    \u003clatest\u003e2.14.0\u003c/latest\u003e\n    \u003crelease\u003e2.14.0\u003c/release\u003e\n    \u003cversions\u003e\n      \u003cversion\u003e1.1\u003c/version\u003e\n      \u003cversion\u003e1.4\u003c/version\u003e\n      \u003cversion\u003e1.5\u003c/version\u003e\n      \u003cversion\u003e1.6\u003c/version\u003e\n      \u003cversion\u003e1.7\u003c/version\u003e\n      \u003cversion\u003e1.7.1\u003c/version\u003e\n      \u003cversion\u003e1.7.2\u003c/version\u003e\n      \u003cversion\u003e2.0\u003c/version\u003e\n      \u003cversion\u003e2.1\u003c/version\u003e\n      \u003cversion\u003e2.2\u003c/version\u003e\n      \u003cversion\u003e2.2.1\u003c/version\u003e\n      \u003cversion\u003e2.2.2\u003c/version\u003e\n      \u003cversion\u003e2.2.3\u003c/version\u003e\n      \u003cversion\u003e2.2.4\u003c/version\u003e\n      \u003cversion\u003e2.3\u003c/version\u003e\n      \u003cversion\u003e2.3.1\u003c/version\u003e\n      \u003cversion\u003e2.4\u003c/version\u003e\n      \u003cversion\u003e2.5\u003c/version\u003e\n      \u003cversion\u003e2.6\u003c/version\u003e\n      \u003cversion\u003e2.6.1\u003c/version\u003e\n      \u003cversion\u003e2.6.2\u003c/version\u003e\n      \u003cversion\u003e2.7\u003c/version\u003e\n      \u003cversion\u003e2.8.0\u003c/version\u003e\n      \u003cversion\u003e2.8.1\u003c/version\u003e\n      \u003cversion\u003e2.8.2\u003c/version\u003e\n      \u003cversion\u003e2.8.3\u003c/version\u003e\n      \u003cversion\u003e2.8.4\u003c/version\u003e\n      \u003cversion\u003e2.8.5\u003c/version\u003e\n      \u003cversion\u003e2.8.6\u003c/version\u003e\n      \u003cversion\u003e2.8.7\u003c/version\u003e\n      \u003cversion\u003e2.8.8\u003c/version\u003e\n      \u003cversion\u003e2.8.9\u003c/version\u003e\n      \u003cversion\u003e2.9.0\u003c/version\u003e\n      \u003cversion\u003e2.9.1\u003c/version\u003e\n      \u003cversion\u003e2.10\u003c/version\u003e\n      \u003cversion\u003e2.10.1\u003c/version\u003e\n      \u003cversion\u003e2.11.0\u003c/version\u003e\n      \u003cversion\u003e2.12.0\u003c/version\u003e\n      \u003cversion\u003e2.12.1\u003c/version\u003e\n      \u003cversion\u003e2.13.0\u003c/version\u003e\n      \u003cversion\u003e2.13.1\u003c/version\u003e\n      \u003cversion\u003e2.13.2-rc1\u003c/version\u003e\n      \u003cversion\u003e2.13.2\u003c/version\u003e\n      \u003cversion\u003e2.14.0\u003c/version\u003e\n    \u003c/versions\u003e\n    \u003clastUpdated\u003e20260423191314\u003c/lastUpdated\u003e\n  \u003c/versioning\u003e\n\u003c/metadata\u003e\n"
+}

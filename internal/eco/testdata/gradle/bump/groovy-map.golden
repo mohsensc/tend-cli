@@ -1,0 +1,6 @@
+files: [build.gradle]
+locked: false
+note: no lockfile
+--- build.gradle
+17: -    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+17: +    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.12.0'

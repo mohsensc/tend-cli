@@ -1,0 +1,16 @@
+{
+  "url": "https://proxy.golang.org/github.com/go-chi/chi/@v/v1.5.5.mod",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ],
+    "Etag": [
+      "\"1525b2f9347f0d274e0a8d05917b70996cea52009fbfea048725d4739a8f46ed\""
+    ],
+    "Last-Modified": [
+      "Thu, 07 Sep 2023 09:38:22 GMT"
+    ]
+  },
+  "body": "// Deprecated: Please upgrade to the latest major version: go get github.com/go-chi/chi/v5\nmodule github.com/go-chi/chi\n\ngo 1.16\n"
+}

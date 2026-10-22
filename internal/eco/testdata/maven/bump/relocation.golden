@@ -1,0 +1,10 @@
+files: [api/pom.xml]
+locked: false
+note: no lockfile
+--- api/pom.xml
+44: -      <groupId>mysql</groupId>
+44: +      <groupId>com.mysql</groupId>
+45: -      <artifactId>mysql-connector-java</artifactId>
+45: +      <artifactId>mysql-connector-j</artifactId>
+47: -        8.0.33
+47: +        8.4.0

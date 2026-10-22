@@ -1,0 +1,178 @@
+[
+  {
+    "Ecosystem": "pip",
+    "Name": "httpx",
+    "Version": "0.27.2",
+    "Req": "\u003e=0.27,\u003c1",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pydantic",
+    "Version": "2.9.2",
+    "Req": "==2.9.2",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pyyaml",
+    "Version": "6.0.2",
+    "Req": "\u003e=6.0,\u003c7",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "psycopg2-binary",
+    "Version": "",
+    "Req": "\u003e=2.9",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 12,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "pytest",
+    "Version": "8.3.3",
+    "Req": "\u003e=8",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 14,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "ruff",
+    "Version": "0.6.9",
+    "Req": "==0.6.9",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 15,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "mkdocs",
+    "Version": "",
+    "Req": "\u003e=1.6",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 19,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "mypy",
+    "Version": "",
+    "Req": "\u003e=1.11",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 20,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "anyio",
+    "Version": "4.6.2",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "idna",
+    "Version": "3.10",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "pip",
+    "Name": "sniffio",
+    "Version": "1.3.1",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "pip",
+      "Path": "uv/pyproject.toml",
+      "Lock": "uv/uv.lock",
+      "Tool": "uv"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

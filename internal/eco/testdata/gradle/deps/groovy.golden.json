@@ -1,0 +1,114 @@
+[
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.jetbrains.kotlin:kotlin-gradle-plugin",
+    "Version": "1.9.0",
+    "Req": "$kotlin_version",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.squareup.retrofit2:retrofit",
+    "Version": "2.9.0",
+    "Req": "2.9.0",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 16,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.apache.commons:commons-text",
+    "Version": "1.10.0",
+    "Req": "1.10.0",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 17,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.projectlombok:lombok",
+    "Version": "1.18.30",
+    "Req": "1.18.30",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 18,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "junit:junit",
+    "Version": "4.13.2",
+    "Req": "${junitVersion}",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 20,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "androidx.test:runner",
+    "Version": "1.5.2",
+    "Req": "1.5.2",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 21,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.xerial:sqlite-jdbc",
+    "Version": "3.43.0.0",
+    "Req": "3.43.0.0",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "groovy/build.gradle",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 22,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

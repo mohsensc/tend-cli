@@ -1,0 +1,15 @@
+{
+  "name": "yarn-classic-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@isaacs/string-locale-compare": "^1.1.0",
+    "debug": "^4.3.4"
+  },
+  "devDependencies": {
+    "is-number": "^7.0.0"
+  }
+}

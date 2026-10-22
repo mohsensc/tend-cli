@@ -1,0 +1,22 @@
+{
+  "url": "https://api.github.com/repos/protocolbuffers/protobuf",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "W/\"84d13064f77d8b5a49931e3bb9addadb05256326df106fe6676cbdec87f78b9f\""
+    ],
+    "Last-Modified": [
+      "Wed, 21 Oct 2026 09:51:42 GMT"
+    ],
+    "X-Ratelimit-Remaining": [
+      "4983"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792589631"
+    ]
+  },
+  "body": "{\"full_name\":\"protocolbuffers/protobuf\",\"html_url\":\"https://github.com/protocolbuffers/protobuf\",\"archived\":false,\"default_branch\":\"main\",\"pushed_at\":\"2026-10-21T10:15:06Z\"}"
+}

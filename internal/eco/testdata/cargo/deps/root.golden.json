@@ -1,0 +1,130 @@
+[
+  {
+    "Ecosystem": "cargo",
+    "Name": "serde",
+    "Version": "1.0.200",
+    "Req": "1.0",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "anyhow",
+    "Version": "1.0.82",
+    "Req": "1.0.80",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "tokio",
+    "Version": "",
+    "Req": "1",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "proc-macro2",
+    "Version": "1.0.81",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "rand_core",
+    "Version": "0.6.4",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "serde_derive",
+    "Version": "1.0.200",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "syn",
+    "Version": "1.0.109",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "syn",
+    "Version": "2.0.60",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

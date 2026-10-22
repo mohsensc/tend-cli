@@ -1,0 +1,1 @@
+{"error":{"message":"Rate limit reached for model `model-id` on tokens per minute (TPM): Limit 8000, Used 7097, Requested 1406. Please try again in 3.7725s.","type":"tokens","code":"rate_limit_exceeded"}}

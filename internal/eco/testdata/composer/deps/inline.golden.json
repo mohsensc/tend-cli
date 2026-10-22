@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "composer",
+    "Name": "monolog/monolog",
+    "Version": "",
+    "Req": "^2.9",
+    "Manifest": {
+      "Ecosystem": "composer",
+      "Path": "sub/composer.json",
+      "Lock": "",
+      "Tool": "composer"
+    },
+    "Line": 3,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

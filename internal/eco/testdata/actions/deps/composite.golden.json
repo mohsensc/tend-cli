@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "actions",
+    "Name": "actions/checkout",
+    "Version": "v3",
+    "Req": "v3",
+    "Manifest": {
+      "Ecosystem": "actions",
+      "Path": "action.yml",
+      "Lock": "",
+      "Tool": "actions"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

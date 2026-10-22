@@ -1,0 +1,94 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    env:
+      CGO_ENABLED: "0"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: build and package
+        run: |
+          tag=$GITHUB_REF_NAME
+          bin=tend
+          [ "$GOOS" = windows ] && bin=tend.exe
+          mkdir -p stage dist
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=$tag -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o "stage/$bin" ./cmd/tend
+          name=tend_${tag#v}_${GOOS}_${GOARCH}
+          if [ "$GOOS" = windows ]; then
+            (cd stage && zip -q "../dist/$name.zip" "$bin")
+          else
+            tar -C stage -czf "dist/$name.tar.gz" "$bin"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # The signing key lives in this environment, whose required reviewers
+    # stand between a pushed tag and a signature.
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - name: checksums and signature
+        env:
+          TEND_SIGNING_KEY: ${{ secrets.TEND_SIGNING_KEY }}
+        run: |
+          (cd dist && sha256sum tend_* > checksums.txt)
+          go run ./internal/selfupdate/sign -in dist/checksums.txt > dist/checksums.txt.sig
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=
+          case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-from-tag $pre dist/*
+          if [ -z "$pre" ]; then
+            major=${GITHUB_REF_NAME%%.*}
+            git tag -f "$major"
+            git push -f origin "$major"
+          fi

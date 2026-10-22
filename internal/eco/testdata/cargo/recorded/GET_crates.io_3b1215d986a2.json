@@ -1,0 +1,10 @@
+{
+  "url": "https://crates.io/api/v1/crates/itoa",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\n  \"crate\": {\n    \"id\": \"itoa\",\n    \"name\": \"itoa\",\n    \"max_version\": \"1.0.18\",\n    \"max_stable_version\": \"1.0.18\",\n    \"newest_version\": \"1.0.18\",\n    \"repository\": \"https://github.com/dtolnay/itoa\",\n    \"homepage\": null,\n    \"documentation\": \"https://docs.rs/itoa\"\n  },\n  \"versions\": [\n    {\n      \"num\": \"0.1.0\",\n      \"yanked\": false,\n      \"created_at\": \"2016-06-25T21:50:33.832Z\",\n      \"updated_at\": \"2017-11-30T03:32:39.681448Z\",\n      \"license\": \"MIT/Apache-2.0\",\n      \"crate\": \"itoa\"\n    },\n    {\n      \"num\": \"0.1.1\",\n      \"yanked\": false,\n      \"created_at\": \"2016-06-25T22:11:59.936596Z\",\n      \"updated_at\": \"2017-11-30T03:52:18.390826Z\",\n      \"license\": \"MIT/Apache-2.0\",\n      \"crate\": \"itoa\"\n    },\n    {\n      \"num\": \"0.2.0\",\n      \"yanked\": false,\n      \"created_at\": \"2017-01-24T00:46:50.544524Z\",\n      \"updated_at\": \"2017-11-30T04:07:31.349368Z\",\n      \"license\": \"MIT/Apache-2.0\",\n      \"crate\": \"itoa\"\n    },\n    {\n      \"num\": \"1.0.17\",\n      \"yanked\": false,\n      \"created_at\": \"2025-12-27T06:56:40.320008Z\",\n      \"updated_at\": \"2025-12-27T06:56:40.320008Z\",\n      \"license\": \"MIT OR Apache-2.0\",\n      \"crate\": \"itoa\"\n    },\n    {\n      \"num\": \"1.0.18\",\n      \"yanked\": false,\n      \"created_at\": \"2026-03-20T00:12:37.043881Z\",\n      \"updated_at\": \"2026-03-20T00:12:37.043881Z\",\n      \"license\": \"MIT OR Apache-2.0\",\n      \"crate\": \"itoa\"\n    }\n  ]\n}\n"
+}

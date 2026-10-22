@@ -1,0 +1,34 @@
+[
+  {
+    "Ecosystem": "cargo",
+    "Name": "anyhow",
+    "Version": "1.0.82",
+    "Req": "1.0.80",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/shared/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "cargo",
+    "Name": "serde_json",
+    "Version": "1.0.115",
+    "Req": "=1.0.115",
+    "Manifest": {
+      "Ecosystem": "cargo",
+      "Path": "crates/shared/Cargo.toml",
+      "Lock": "Cargo.lock",
+      "Tool": "cargo"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

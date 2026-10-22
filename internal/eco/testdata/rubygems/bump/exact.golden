@@ -1,0 +1,6 @@
+files: [Gemfile]
+locked: false
+note: bundle not found in PATH
+--- Gemfile
+21: -  gem 'webmock', '3.19.1'
+21: +  gem 'webmock', '3.20.0'

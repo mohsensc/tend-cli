@@ -1,0 +1,6 @@
+{
+  "info": {"name": "fixturelib", "version": "1.0.0", "summary": "Reads rows from the fixture store.", "project_urls": null, "classifiers": ["Development Status :: 5 - Production/Stable"]},
+  "releases": {
+    "1.0.0": [{"filename": "fixturelib-1.0.0-py3-none-any.whl", "packagetype": "bdist_wheel", "upload_time_iso_8601": "2025-06-02T10:00:00.000000Z", "yanked": false, "yanked_reason": null}]
+  }
+}

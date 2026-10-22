@@ -1,0 +1,6 @@
+files: [reqs/requirements.txt]
+locked: false
+note: no lockfile
+--- reqs/requirements.txt
+7: -Django==4.2.16
+7: +Django==5.1.2

@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/golang/protobuf/@v/v1.4.0.info",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"Version\":\"v1.4.0\",\"Time\":\"2020-04-13T19:43:07Z\"}"
+}

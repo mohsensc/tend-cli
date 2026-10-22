@@ -1,0 +1,16 @@
+{
+  "url": "https://proxy.golang.org/github.com/go-chi/chi/v5/@v/v5.5.0.mod",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ],
+    "Etag": [
+      "\"7eb620f0fce870d93eaba87bf6f8c36284db786108030ca229a5016461797090\""
+    ],
+    "Last-Modified": [
+      "Wed, 14 Oct 2026 13:21:31 GMT"
+    ]
+  },
+  "body": "module github.com/go-chi/chi/v5\n\n// Chi supports the four most recent major versions of Go.\n// See https://github.com/go-chi/chi/issues/963.\ngo 1.24\n"
+}

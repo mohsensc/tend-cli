@@ -1,0 +1,87 @@
+{
+  "base": "main",
+  "dropped": [],
+  "notes": [],
+  "open": {
+    "base": "main",
+    "body": "## fixture GET /v1/orders/{id}/legacy\n\n**Why**: deprecation · operation deprecated · sunset 2027-03-01\n\n### What changed upstream\n\n- **fixture spec 2025-01-01** · [source](https://api.fixture.dev/openapi.json)\n  ```\n  Fetch an order in the legacy shape\n  Use GET /v1/orders/{id} instead; it returns the total as an amount and a currency.\n  ```\n\n### Touched in this repo\n\nNothing was changed in the code. No model is configured to move the call site, and there is nothing to bump.\n\nWhere the code uses it:\n\n- `app/orders.py:25` `/v1/orders/%s/legacy`\n\n### Proof\n\n| step | base (main@BASE) | patched |\n|---|---|---|\n| `python3 -m unittest` | ok · 0s | not run |\n\n<sub>tend · comment `tend skip` or `tend retry`</sub>\n<!-- tend id=\"api/fixture/GET /v1/orders/{id}/legacy\" base=\"BASE\" rev=\"1\" -->\n",
+    "branch": "tend/api-fixture-get-v1-orders-id-legacy",
+    "draft": false,
+    "nodeID": "PR_1",
+    "number": 1,
+    "state": "open",
+    "title": "Migrate off deprecated GET /v1/orders/{id}/legacy",
+    "url": "https://github.com/acme/py-api/pull/1"
+  },
+  "queue": [
+    {
+      "api": {
+        "field": "total_cents",
+        "method": "GET",
+        "path": "/v1/orders",
+        "provider": "fixture",
+        "what": "response field removed"
+      },
+      "evidence": [
+        {
+          "source": "openapi",
+          "text": "List orders\nGET /v1/orders: response field removed total_cents",
+          "title": "fixture spec 2026-10-01",
+          "url": "https://api.fixture.dev/openapi.json"
+        }
+      ],
+      "id": "api/fixture/GET /v1/orders#total_cents",
+      "kind": "breaking",
+      "published": "2026-10-21T12:00:00Z",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "app/orders.py",
+          "line": 9,
+          "text": "/v1/orders"
+        },
+        {
+          "call": false,
+          "chain": [
+            "total_cents"
+          ],
+          "col": 29,
+          "file": "app/orders.py",
+          "line": 17,
+          "text": "cents += order[\"total_cents\"]"
+        }
+      ]
+    },
+    {
+      "api": {
+        "method": "GET",
+        "path": "/v1/orders/{id}/legacy",
+        "provider": "fixture",
+        "what": "operation deprecated"
+      },
+      "evidence": [
+        {
+          "source": "openapi",
+          "text": "Fetch an order in the legacy shape\n\nUse GET /v1/orders/{id} instead; it returns the total as an amount and a currency.",
+          "title": "fixture spec 2026-10-01",
+          "url": "https://api.fixture.dev/openapi.json"
+        }
+      ],
+      "id": "api/fixture/GET /v1/orders/{id}/legacy",
+      "kind": "deprecation",
+      "sites": [
+        {
+          "call": false,
+          "col": 0,
+          "file": "app/orders.py",
+          "line": 25,
+          "text": "/v1/orders/%s/legacy"
+        }
+      ],
+      "sunset": "2027-03-01T00:00:00Z"
+    }
+  ],
+  "repo": "acme/py-api",
+  "untracked": []
+}

@@ -1,0 +1,17 @@
+diff --git a/Dockerfile b/Dockerfile
+index 0000000..0000000 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,10 +1,10 @@
+-FROM node:16-alpine AS build
++FROM node:24-alpine AS build
+ WORKDIR /src
+ COPY server.js .
+ RUN node --check server.js
+ ENV NODE_ENV=production
+ 
+-FROM node:16-alpine
++FROM node:24-alpine
+ WORKDIR /app
+ COPY --from=build /src/server.js .
+ USER node

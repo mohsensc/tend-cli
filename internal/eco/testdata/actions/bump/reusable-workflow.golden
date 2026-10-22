@@ -1,0 +1,6 @@
+files: [.github/workflows/ci.yml]
+locked: false
+note: no lockfile
+--- .github/workflows/ci.yml
+21: -    uses: acme/workflows/.github/workflows/release.yml@v1.2
+21: +    uses: acme/workflows/.github/workflows/release.yml@v2.1

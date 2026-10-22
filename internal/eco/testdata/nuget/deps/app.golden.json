@@ -1,0 +1,162 @@
+[
+  {
+    "Ecosystem": "nuget",
+    "Name": "newtonsoft.json",
+    "Version": "13.0.1",
+    "Req": "13.0.1",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 6,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "serilog",
+    "Version": "3.1.1",
+    "Req": "3.1.1",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 7,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "stylecop.analyzers",
+    "Version": "1.2.0-beta.507",
+    "Req": "1.2.0-beta.507",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 10,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "microsoft.sourcelink.github",
+    "Version": "8.0.0",
+    "Req": "8.0.0",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 11,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "dapper",
+    "Version": "2.0.123",
+    "Req": "[2.0.0,3.0.0)",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 14,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "polly",
+    "Version": "8.2.1",
+    "Req": "8.*",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 15,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "humanizer",
+    "Version": "2.14.1",
+    "Req": "2.14.1",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 17,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "humanizer.core",
+    "Version": "2.14.1",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "microsoft.build.tasks.git",
+    "Version": "8.0.0",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "nuget",
+    "Name": "system.memory",
+    "Version": "4.5.5",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "nuget",
+      "Path": "src/App/App.csproj",
+      "Lock": "src/App/packages.lock.json",
+      "Tool": "dotnet"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

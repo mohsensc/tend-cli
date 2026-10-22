@@ -1,0 +1,22 @@
+{
+  "url": "https://api.github.com/repos/actions/checkout/tags?per_page=100",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json; charset=utf-8"
+    ],
+    "Etag": [
+      "W/\"54c7ae7dffd007eb06c787004dc99e513a288296f3da97c9ed888e36f5e8cd20\""
+    ],
+    "Last-Modified": [
+      "Wed, 21 Oct 2026 09:38:17 GMT"
+    ],
+    "X-Ratelimit-Remaining": [
+      "57"
+    ],
+    "X-Ratelimit-Reset": [
+      "1792582190"
+    ]
+  },
+  "body": "[\n  {\n    \"name\": \"v7.0.1\",\n    \"commit\": {\n      \"sha\": \"3d3c42e5aac5ba805825da76410c181273ba90b1\"\n    }\n  },\n  {\n    \"name\": \"v7\",\n    \"commit\": {\n      \"sha\": \"3d3c42e5aac5ba805825da76410c181273ba90b1\"\n    }\n  },\n  {\n    \"name\": \"v6.1.0\",\n    \"commit\": {\n      \"sha\": \"d23441a48e516b6c34aea4fa41551a30e30af803\"\n    }\n  },\n  {\n    \"name\": \"v6\",\n    \"commit\": {\n      \"sha\": \"d23441a48e516b6c34aea4fa41551a30e30af803\"\n    }\n  },\n  {\n    \"name\": \"v6-beta\",\n    \"commit\": {\n      \"sha\": \"71cf2267d89c5cb81562390fa70a37fa40b1305e\"\n    }\n  },\n  {\n    \"name\": \"v5.1.0\",\n    \"commit\": {\n      \"sha\": \"fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09\"\n    }\n  },\n  {\n    \"name\": \"v5\",\n    \"commit\": {\n      \"sha\": \"fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09\"\n    }\n  },\n  {\n    \"name\": \"v4.4.0\",\n    \"commit\": {\n      \"sha\": \"11d5960a326750d5838078e36cf38b85af677262\"\n    }\n  },\n  {\n    \"name\": \"v4.2.2\",\n    \"commit\": {\n      \"sha\": \"11bd71901bbe5b1630ceea73d27597364c9af683\"\n    }\n  },\n  {\n    \"name\": \"v4.0.0\",\n    \"commit\": {\n      \"sha\": \"1e31de5234b9f8995739874a8ce0492dc87873e2\"\n    }\n  },\n  {\n    \"name\": \"v4\",\n    \"commit\": {\n      \"sha\": \"11d5960a326750d5838078e36cf38b85af677262\"\n    }\n  },\n  {\n    \"name\": \"v3.7.0\",\n    \"commit\": {\n      \"sha\": \"a37ce9120846195fa4ece8f58b268e6043cb2f26\"\n    }\n  },\n  {\n    \"name\": \"v3\",\n    \"commit\": {\n      \"sha\": \"a37ce9120846195fa4ece8f58b268e6043cb2f26\"\n    }\n  },\n  {\n    \"name\": \"v2.8.0\",\n    \"commit\": {\n      \"sha\": \"0717577d45739eb3c851188b29f50ed6c0b2194e\"\n    }\n  },\n  {\n    \"name\": \"v2\",\n    \"commit\": {\n      \"sha\": \"0717577d45739eb3c851188b29f50ed6c0b2194e\"\n    }\n  },\n  {\n    \"name\": \"v2-beta\",\n    \"commit\": {\n      \"sha\": \"a6747255bd19d7a757dbdda8c654a9f84db19839\"\n    }\n  },\n  {\n    \"name\": \"v1.2.0\",\n    \"commit\": {\n      \"sha\": \"50fbc622fc4ef5163becd7fab6573eac35f8462e\"\n    }\n  },\n  {\n    \"name\": \"v1.0.0\",\n    \"commit\": {\n      \"sha\": \"af513c7a016048ae468971c52ed77d9562c7c819\"\n    }\n  },\n  {\n    \"name\": \"v1\",\n    \"commit\": {\n      \"sha\": \"50fbc622fc4ef5163becd7fab6573eac35f8462e\"\n    }\n  },\n  {\n    \"name\": \"1.0.0\",\n    \"commit\": {\n      \"sha\": \"af513c7a016048ae468971c52ed77d9562c7c819\"\n    }\n  }\n]\n"
+}

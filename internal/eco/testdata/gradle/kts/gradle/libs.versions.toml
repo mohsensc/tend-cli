@@ -1,0 +1,18 @@
+[versions]
+okhttp = "4.11.0"
+junit = { strictly = "5.10.0" }
+kotlin = "1.9.10"
+
+[libraries]
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+gson = "com.google.code.gson:gson:2.10.1"
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.15.2" }
+coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core" }
+
+[bundles]
+network = ["okhttp", "okhttp-logging"]
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

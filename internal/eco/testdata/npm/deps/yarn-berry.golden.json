@@ -1,0 +1,66 @@
+[
+  {
+    "Ecosystem": "npm",
+    "Name": "@isaacs/string-locale-compare",
+    "Version": "1.1.0",
+    "Req": "^1.1.0",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "package.json",
+      "Lock": "yarn.lock",
+      "Tool": "yarn"
+    },
+    "Line": 8,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "npm",
+    "Name": "debug",
+    "Version": "4.4.3",
+    "Req": "^4.3.4",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "package.json",
+      "Lock": "yarn.lock",
+      "Tool": "yarn"
+    },
+    "Line": 9,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "npm",
+    "Name": "is-number",
+    "Version": "7.0.0",
+    "Req": "^7.0.0",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "package.json",
+      "Lock": "yarn.lock",
+      "Tool": "yarn"
+    },
+    "Line": 13,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "npm",
+    "Name": "ms",
+    "Version": "2.1.3",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "npm",
+      "Path": "package.json",
+      "Lock": "yarn.lock",
+      "Tool": "yarn"
+    },
+    "Line": 0,
+    "Dev": false,
+    "Direct": false,
+    "Pin": ""
+  }
+]

@@ -1,0 +1,411 @@
+package patch
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/gitx"
+	"github.com/mohsensc/tend-cli/internal/model"
+	"github.com/mohsensc/tend-cli/internal/scan"
+)
+
+const agentSystem = `You move code in a git repository onto an upstream change so that it keeps working. You work through tools: read and grep to look around, edit to change a file, run to run the project's own install, build or test commands, and done when the change is complete.
+
+Rules:
+- Change only what the upstream change requires: no renames, reordering or cleanups.
+- Do not add comments, logging or prints.
+- Keep the existing formatting, indentation and quoting.
+- edit replaces text you copied from read; give enough of it to be unique in the file.
+- Run the tests before you call done. done runs every command; when one fails you get its output and keep going.`
+
+const (
+	readMax  = 300  // lines one read returns
+	grepMax  = 100  // lines one grep returns
+	toolText = 8000 // bytes of a tool's answer the model sees
+)
+
+func schema(props map[string]any, required ...string) map[string]any {
+	return map[string]any{"type": "object", "properties": props, "required": required}
+}
+
+func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
+
+func num(desc string) map[string]any { return map[string]any{"type": "integer", "description": desc} }
+
+var agentTools = []model.Tool{
+	{Name: "read", Description: "Read a file's lines, numbered. from and to are 1-based and inclusive; leave them out for the start of the file.",
+		Params: schema(map[string]any{"path": str("repo-relative path"), "from": num("first line"), "to": num("last line")}, "path")},
+	{Name: "grep", Description: "Search the repository's files with an extended regular expression. glob narrows the files, such as src/**/*.js.",
+		Params: schema(map[string]any{"pattern": str("extended regular expression"), "glob": str("pathspec glob")}, "pattern")},
+	{Name: "edit", Description: "Replace old with new in a file. old must occur exactly once.",
+		Params: schema(map[string]any{"path": str("repo-relative path"), "old": str("exact text to replace"), "new": str("replacement text")}, "path", "old", "new")},
+	{Name: "run", Description: "Run the project's install, build or test commands on the files as they are now.",
+		Params: schema(map[string]any{"name": map[string]any{"type": "string", "enum": []string{"install", "build", "test"}}}, "name")},
+	{Name: "done", Description: "Say the change is complete. Every command runs; when one fails, its output comes back and the work goes on.",
+		Params: schema(map[string]any{"summary": str("what was changed, in a sentence")}, "summary")},
+}
+
+// session is one agent run over a worktree: what it may touch and what it did.
+type session struct {
+	t       *tree
+	in      job
+	o       Options
+	ctx     context.Context
+	steps   int
+	counts  map[string]int
+	edited  []string
+	results []string // pass or fail of each run, in order
+	log     *os.File
+}
+
+// work hands the remaining sites to a model that calls tools. It ends when the
+// project's commands pass on the tree the model left, or when the budget runs
+// out; the model saying it is done is not enough.
+func work(ctx context.Context, t *tree, in job, o Options, p *core.Patch, a model.Agent) error {
+	s := &session{t: t, in: in, o: o, ctx: ctx, counts: map[string]int{}}
+	if o.Transcript != "" {
+		if err := os.MkdirAll(filepath.Dir(o.Transcript), 0o755); err == nil {
+			s.log, _ = os.Create(o.Transcript)
+		}
+	}
+	if s.log != nil {
+		defer s.log.Close()
+	}
+	brief, err := s.brief()
+	if err != nil {
+		return err
+	}
+	turns := []model.Turn{{Role: "user", Text: brief}}
+	used := 0
+	for {
+		if s.steps >= o.turns() {
+			return fmt.Errorf("the model used all %d of its turns (%s)", o.turns(), s.summary())
+		}
+		if o.Tokens > 0 && used >= o.Tokens {
+			return fmt.Errorf("the model spent its %d tokens (%s)", o.Tokens, s.summary())
+		}
+		r, err := a.Chat(ctx, agentSystem, turns, agentTools)
+		if err != nil {
+			return fmt.Errorf("%w (%s)", err, s.summary())
+		}
+		used += r.Tokens
+		turns = append(turns, model.Turn{Role: "assistant", Text: r.Text, Calls: r.Calls})
+		if len(r.Calls) == 0 {
+			s.steps++
+			turns = append(turns, model.Turn{Role: "user", Text: "Use the tools: edit to change files, run to check them, done when the change is complete."})
+			continue
+		}
+		for _, c := range r.Calls {
+			s.steps++
+			out, finished := s.call(c)
+			s.record(c, out)
+			turns = append(turns, model.Turn{Role: "tool", CallID: c.ID, Text: core.Clip(out, toolText)})
+			if finished {
+				p.Model = true
+				p.Edited = s.edited
+				p.Applied = append(p.Applied, "the model edited "+strings.Join(s.edited, ", "))
+				p.Note = s.summary()
+				o.logf("the model finished in %d steps", s.steps)
+				return nil
+			}
+		}
+	}
+}
+
+func (o Options) turns() int {
+	if o.Turns > 0 {
+		return o.Turns
+	}
+	return 30
+}
+
+// brief is the first message: the change, what was already done, where the
+// code uses it, and the failure that brought tend here, if any.
+func (s *session) brief() (string, error) {
+	_, user, err := prompt(s.t, s.in, s.o, "", "")
+	if err != nil {
+		return "", err
+	}
+	// edit also takes test files, which the diff prompt does not offer.
+	user = strings.Replace(user, "Files you may edit:", "Files you may edit, along with test files:", 1)
+	return user, nil
+}
+
+func (s *session) call(c model.ToolCall) (string, bool) {
+	s.counts[c.Name]++
+	var args struct {
+		Path, Pattern, Glob, Old, New, Name, Summary string
+		From, To                                     int
+	}
+	if err := json.Unmarshal(c.Args, &args); err != nil {
+		return "error: the arguments are not a JSON object: " + err.Error(), false
+	}
+	switch c.Name {
+	case "read":
+		return s.read(args.Path, args.From, args.To), false
+	case "grep":
+		return s.grep(args.Pattern, args.Glob), false
+	case "edit":
+		return s.edit(args.Path, args.Old, args.New), false
+	case "run":
+		cmds, ok := s.commands(args.Name)
+		if !ok {
+			return "error: run takes install, build or test", false
+		}
+		return s.run(cmds), false
+	case "done":
+		if len(s.edited) == 0 {
+			return "error: nothing was edited; the sites listed at the start still need the change", false
+		}
+		out := s.run(s.o.Commands)
+		return out, strings.HasPrefix(out, "passed")
+	}
+	return "error: no tool named " + c.Name, false
+}
+
+// credentials name files that hold keys and tokens by their base name. The
+// model never reads them, whatever the repository has committed.
+var credentials = []string{".env", ".env.*", "*.pem", "*.key", "*.p12", "id_rsa*", "id_ed25519*", ".npmrc", ".pypirc", ".netrc", ".git-credentials"}
+
+func credential(p string) bool {
+	base := path.Base(filepath.ToSlash(p))
+	for _, c := range credentials {
+		if ok, _ := path.Match(c, base); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// inside resolves a repo-relative path and refuses anything that leaves the
+// worktree, through .. or a symlink, and files named like credentials.
+func (s *session) inside(p string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(p))
+	if p == "" || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%q is not a path inside the repository", p)
+	}
+	if credential(clean) {
+		return "", fmt.Errorf("%q may hold credentials, and tend does not hand those to a model", p)
+	}
+	root, err := filepath.EvalSymlinks(s.t.wt)
+	if err != nil {
+		return "", err
+	}
+	// The file itself may not exist yet; what it would resolve to is decided
+	// by the nearest part of the path that does.
+	at := filepath.Join(root, clean)
+	real, err := filepath.EvalSymlinks(at)
+	for err != nil && at != root {
+		at = filepath.Dir(at)
+		real, err = filepath.EvalSymlinks(at)
+	}
+	if err != nil || real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
+		return "", fmt.Errorf("%q leads outside the repository", p)
+	}
+	if at == filepath.Join(root, clean) && credential(real) {
+		return "", fmt.Errorf("%q may hold credentials, and tend does not hand those to a model", p)
+	}
+	return filepath.ToSlash(clean), nil
+}
+
+func (s *session) read(p string, from, to int) string {
+	rel, err := s.inside(p)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	b := s.t.read(rel)
+	if b == nil {
+		return "error: no file " + rel
+	}
+	lines := strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
+	from = max(from, 1)
+	if to <= 0 || to > len(lines) {
+		to = len(lines)
+	}
+	to = min(to, from+readMax-1)
+	if from > to {
+		return fmt.Sprintf("error: %s has %d lines", rel, len(lines))
+	}
+	var res strings.Builder
+	for n := from; n <= to; n++ {
+		fmt.Fprintf(&res, "%d| %s\n", n, lines[n-1])
+	}
+	if to < len(lines) {
+		fmt.Fprintf(&res, "(%d more lines)\n", len(lines)-to)
+	}
+	return res.String()
+}
+
+func (s *session) grep(pattern, glob string) string {
+	args := []string{"grep", "-n", "-I", "-E", "-e", pattern, "--"}
+	if glob != "" {
+		// A plain pathspec reads ** as two stars, so src/**/*.js would skip
+		// the files right under src.
+		if strings.Contains(glob, "**") && !strings.HasPrefix(glob, ":") {
+			glob = ":(glob)" + glob
+		}
+		args = append(args, glob)
+	}
+	for _, c := range credentials {
+		args = append(args, ":(exclude,glob)**/"+c)
+	}
+	out, err := gitx.Raw(s.ctx, s.t.wt, args...)
+	if err != nil && strings.TrimSpace(out) == "" {
+		if strings.Contains(err.Error(), "exit status 1") {
+			return "no matches"
+		}
+		return "error: " + err.Error()
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) > grepMax {
+		lines = append(lines[:grepMax], fmt.Sprintf("(%d more matches)", len(lines)-grepMax))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// edit changes a site file, a manifest the change explains, or a test.
+func (s *session) edit(p, old, now string) string {
+	rel, err := s.inside(p)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	if !slices.Contains(s.in.allowed, rel) && !scan.IsTest(rel) {
+		return "error: " + rel + " is not one of the files this change explains; edit the files listed at the start, or tests"
+	}
+	b := s.t.read(rel)
+	if b == nil {
+		return "error: no file " + rel
+	}
+	switch n := bytes.Count(b, []byte(old)); {
+	case old == "":
+		return "error: old is empty"
+	case n == 0:
+		return "error: old does not occur in " + rel + "; read the file and copy the text exactly"
+	case n > 1:
+		return fmt.Sprintf("error: old occurs %d times in %s; include more of the surrounding text", n, rel)
+	}
+	if err := s.t.write(rel, bytes.Replace(b, []byte(old), []byte(now), 1)); err != nil {
+		return "error: " + err.Error()
+	}
+	if !slices.Contains(s.edited, rel) {
+		s.edited = append(s.edited, rel)
+		slices.Sort(s.edited)
+	}
+	return "edited " + rel
+}
+
+func (s *session) commands(name string) (core.Commands, bool) {
+	all := s.o.Commands
+	switch name {
+	case "install":
+		return core.Commands{Install: all.Install}, true
+	case "build":
+		return core.Commands{Install: all.Install, Build: all.Build}, true
+	case "test":
+		return all, true
+	}
+	return core.Commands{}, false
+}
+
+// run stages the tree, so the clean-up after the commands keeps the edits,
+// and runs the commands on it.
+func (s *session) run(cmds core.Commands) string {
+	if _, err := gitx.Raw(s.ctx, s.t.wt, "add", "-A"); err != nil {
+		return "error: " + err.Error()
+	}
+	r, err := s.o.Prove(s.ctx, cmds)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	if r.Pass {
+		s.results = append(s.results, "passed")
+		return fmt.Sprintf("passed: %d commands", len(r.Steps))
+	}
+	s.results = append(s.results, "failed")
+	for _, st := range r.Steps {
+		if st.Skipped == "" && st.Exit != 0 {
+			return fmt.Sprintf("failed: %s exited %d\n%s", st.Cmd, st.Exit, tail(st.Tail, feedbackMax))
+		}
+	}
+	return "failed"
+}
+
+// summary condenses what the model did for the PR: its steps, the files it
+// edited and how its runs of the commands went.
+func (s *session) summary() string {
+	var parts []string
+	for _, tool := range []string{"read", "grep", "edit", "run"} {
+		if n := s.counts[tool]; n > 0 {
+			parts = append(parts, plural(n, tool))
+		}
+	}
+	res := fmt.Sprintf("%d steps", s.steps)
+	if len(parts) > 0 {
+		res += ": " + strings.Join(parts, ", ")
+	}
+	if len(s.results) > 0 {
+		res += "; the commands " + outcomes(s.results)
+	}
+	return res
+}
+
+// outcomes tells how the runs went, repeats folded: "failed twice, then passed".
+func outcomes(results []string) string {
+	if !slices.Contains(results, "failed") && len(results) == 2 {
+		return "passed both times they ran"
+	}
+	if !slices.Contains(results, "failed") && len(results) > 2 {
+		return fmt.Sprintf("passed all %d times they ran", len(results))
+	}
+	var res []string
+	for i := 0; i < len(results); {
+		j := i
+		for j < len(results) && results[j] == results[i] {
+			j++
+		}
+		res = append(res, results[i]+times(j-i))
+		i = j
+	}
+	return strings.Join(res, ", then ")
+}
+
+func times(n int) string {
+	switch n {
+	case 1:
+		return ""
+	case 2:
+		return " twice"
+	}
+	return fmt.Sprintf(" %d times", n)
+}
+
+func plural(n int, tool string) string {
+	one, many := tool, tool+"s"
+	if tool == "grep" {
+		one, many = "search", "searches"
+	}
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+func (s *session) record(c model.ToolCall, out string) {
+	if s.log == nil {
+		return
+	}
+	b, _ := json.Marshal(struct {
+		Tool   string          `json:"tool"`
+		Args   json.RawMessage `json:"args"`
+		Result string          `json:"result"`
+	}{c.Name, c.Args, core.Clip(out, 2000)})
+	_, _ = s.log.Write(append(b, '\n'))
+}

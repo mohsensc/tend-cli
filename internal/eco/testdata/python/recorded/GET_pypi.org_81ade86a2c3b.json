@@ -1,0 +1,10 @@
+{
+  "url": "https://pypi.org/pypi/tend-fixture-nope/json",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"message\": \"Not Found\"}"
+}

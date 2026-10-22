@@ -1,0 +1,6 @@
+files: [src/Directory.Packages.props]
+locked: false
+note: dotnet not found in PATH
+--- src/Directory.Packages.props
+7: -    <PackageVersion Include="Moq" Version="4.20.70" />
+7: +    <PackageVersion Include="Moq" Version="4.20.72" />

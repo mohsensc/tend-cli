@@ -1,0 +1,354 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Shop",
+    "version": "2.4.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.shop.test/v2/"
+    }
+  ],
+  "paths": {
+    "/orders": {
+      "get": {
+        "summary": "List orders",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "deprecated": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "$ref": "#/components/requestBodies/NewOrder"
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/One"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true
+        },
+        {
+          "name": "expand",
+          "in": "query"
+        }
+      ],
+      "get": {
+        "summary": "Fetch an order",
+        "deprecated": true,
+        "x-sunset": "2027-03-01",
+        "parameters": [
+          {
+            "name": "expand",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/One"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "204": {
+            "description": "deleted"
+          }
+        }
+      }
+    },
+    "/orders/{id}/refund": {
+      "post": {
+        "x-deprecated-at": "2026-06-01T12:00:00Z",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/orders/legacy": {
+      "get": {
+        "description": "Old listing, kept for one more year.",
+        "x-github": {
+          "removalDate": "2026-08-28"
+        },
+        "responses": {
+          "204": {
+            "description": "gone"
+          }
+        }
+      }
+    },
+    "/items/{sku}.json": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.shop+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{name:[a-z]{2,}}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "a file"
+          }
+        }
+      }
+    },
+    "/broken": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false
+      }
+    },
+    "requestBodies": {
+      "NewOrder": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NewOrder"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "One": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Order"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Base": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "Order": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base"
+          },
+          {
+            "type": "object",
+            "required": [
+              "total"
+            ],
+            "properties": {
+              "total": {
+                "$ref": "#/components/schemas/Money"
+              },
+              "total_cents": {
+                "type": "integer",
+                "deprecated": true
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "coupon": {
+                "type": "string",
+                "nullable": true
+              },
+              "parent": {
+                "$ref": "#/components/schemas/Order"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              },
+              "payment": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Card"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Bank"
+                  }
+                ]
+              },
+              "tax": {
+                "$ref": "#/components/schemas/Money",
+                "deprecated": true
+              }
+            }
+          }
+        ]
+      },
+      "Money": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "Price": {
+        "$ref": "#/components/schemas/Money"
+      },
+      "Line": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "integer"
+          }
+        }
+      },
+      "Card": {
+        "type": "object",
+        "required": [
+          "last4"
+        ],
+        "properties": {
+          "last4": {
+            "type": "string"
+          }
+        }
+      },
+      "Bank": {
+        "type": "object",
+        "properties": {
+          "iban": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NewOrder": {
+        "type": "object",
+        "required": [
+          "lines"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Line"
+            }
+          },
+          "coupon": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

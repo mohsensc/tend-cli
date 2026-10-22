@@ -1,0 +1,14 @@
+# tend.yml: tend runs on its defaults, so every key here is optional and
+# commented out. Uncomment what you want to change; every key is described at
+# https://github.com/mohsensc/tend-cli/blob/main/docs/config.md
+
+# updates:                 # which changes get a pull request
+#   minor: false           # plain bumps your code does not need are off
+#   patch: false
+
+# ignore:                  # what tend leaves alone
+#   - name: lodash
+#     reason: pinned on purpose
+
+# deliver:
+#   reviewers: []          # who is asked to review tend's pull requests

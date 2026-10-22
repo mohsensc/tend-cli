@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "api"
+version = "1.0.0"
+description = ""
+authors = ["Example <dev@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31"
+"Flask" = { version = "~2.3", extras = ["async"] }
+boto3 = { git = "https://github.com/boto/boto3.git", tag = "1.35.0" }
+sqlalchemy = "2.0.35"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

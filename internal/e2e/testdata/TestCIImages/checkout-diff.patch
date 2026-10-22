@@ -1,0 +1,14 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 0000000..0000000 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -9,7 +9,7 @@ jobs:
+     outputs:
+       sha: ${{ steps.meta.outputs.sha }}
+     steps:
+-      - uses: actions/checkout@v2
++      - uses: actions/checkout@v7
+       - id: meta
+-        run: echo "::set-output name=sha::$(git rev-parse HEAD)"
++        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+       - run: node --check server.js

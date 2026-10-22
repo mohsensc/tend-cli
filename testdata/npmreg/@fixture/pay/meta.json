@@ -1,0 +1,15 @@
+{
+  "name": "@fixture/pay",
+  "dist-tags": {
+    "latest": "2.0.0"
+  },
+  "time": {
+    "created": "2025-01-10T09:00:00.000Z",
+    "modified": "2026-09-01T09:00:00.000Z",
+    "1.4.0": "2025-01-10T09:00:00.000Z",
+    "2.0.0": "2026-09-01T09:00:00.000Z"
+  },
+  "deprecated": {
+    "1.4.0": "1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*"
+  }
+}

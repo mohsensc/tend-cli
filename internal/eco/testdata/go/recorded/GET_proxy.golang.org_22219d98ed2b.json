@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/example.com/tend/nope/@v/list",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ]
+  },
+  "body": "not found: example.com/tend/nope@latest: unrecognized import path \"example.com/tend/nope\": reading https://example.com/tend/nope?go-get=1: 404 Not Found"
+}

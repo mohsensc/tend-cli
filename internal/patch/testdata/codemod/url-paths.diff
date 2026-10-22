@@ -1,0 +1,15 @@
+diff --git a/src/client.js b/src/client.js
+index 9078775..ca65049 100644
+--- a/src/client.js
++++ b/src/client.js
+@@ -1,6 +1,6 @@
+ const base = 'https://api.fixture.dev';
+-export const one = (id) => fetch(`https://api.fixture.dev/v1/orders/${id}?expand=items`);
+-export const all = () => fetch(base + '/v1/orders');
+-export const items = (id) => fetch(`/v1/orders/${id}/items`);
++export const one = (id) => fetch(`https://api.fixture.dev/v2/orders/${id}?expand=items`);
++export const all = () => fetch(base + '/v2/orders');
++export const items = (id) => fetch(`/v2/orders/${id}/lines`);
+ export const bad = (id) => fetch('/v1/orders/' + id);
+-export const raw = "/v1/orders/ord_42";
++export const raw = "/v2/orders/ord_42";

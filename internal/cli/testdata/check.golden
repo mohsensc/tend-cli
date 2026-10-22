@@ -1,0 +1,22 @@
+tend: 5 queued, 3 skipped, 1 open PR (#12)
+
+  1  security     example.com/fixture/crypto  v1.0.0 → v1.0.1        GO-2026-0001 high · 1 site · open PR #12
+  2  breaking     fixture API                 GET /v1/orders         field total_cents removed · 1 site
+  3  deprecation  @fixture/pay                1.4.0 → 2.0.0          2 sites
+  4  deprecation  node (Dockerfile)           16-alpine → 22-alpine  EOL 2023-09-11 · Dockerfile:1
+  5  deprecation  moment                      2.29.4                 2 options
+
+skipped: 2 noise, 1 cooldown   (tend check --all)
+
+untracked:
+  vendor/lib: a git submodule, pinned to a commit; tend does not move submodules
+  no spec:
+    api.one.example
+    api.two.example
+  in tend.yml:
+    apis:
+      - {name: one.example, hosts: [api.one.example], spec: <OpenAPI spec URL>}
+      - {name: two.example, hosts: [api.two.example], spec: <OpenAPI spec URL>}
+
+notes:
+  - npm: broken: registry returned 503

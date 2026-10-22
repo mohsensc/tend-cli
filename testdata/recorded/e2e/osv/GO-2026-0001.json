@@ -1,0 +1,15 @@
+{
+  "id": "GO-2026-0001",
+  "summary": "Sign leaks key material",
+  "details": "Sign passes the key to hash.Sum as the slice to append to, so every signature starts with the key itself, hex encoded. Anyone who sees a signature can sign as the owner of the key. Sign returns only the MAC from v1.0.1 on.",
+  "aliases": ["GHSA-2wfj-8r3m-6cqp"],
+  "published": "2026-10-19T12:00:00Z",
+  "modified": "2026-10-19T12:00:00Z",
+  "database_specific": {"severity": "HIGH"},
+  "affected": [
+    {
+      "package": {"name": "example.com/fixture/crypto", "ecosystem": "Go"},
+      "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.0.1"}]}]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+diff --git a/src/billing.js b/src/billing.js
+index 46623c1..46a46a6 100644
+--- a/src/billing.js
++++ b/src/billing.js
+@@ -1,20 +1,20 @@
+ const pay = require('@fixture/pay');
+ 
+ async function charge(amount) {
+-  const res = await pay.charges.create({ amount, currency: 'usd' });
+-  return pay?.charges?.retrieve(res.id);
++  const res = await pay.paymentIntents.create({ amount, currency: 'usd' });
++  return pay?.paymentIntents?.retrieve(res.id);
+ }
+ 
+ function legacy(id) {
+-  return pay['charges']["retrieve"](id);
++  return pay['paymentIntents']["retrieve"](id);
+ }
+ 
+ const later = pay
+-  .charges
++  .paymentIntents
+   .create;
+ 
+ // pay.charges.create in a comment is not a site
+-const nested = pay.v1.charges.create;
+-pay.refunds.create({ charge: 'ch_1' });
+-pay.charges.capture('ch_1');
++const nested = pay.v1.paymentIntents.create;
++pay.refunds.make({ charge: 'ch_1' });
++pay.paymentIntents.capture.now('ch_1');
+ pay['charges'].capture('ch_2');

@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/!burnt!sushi/toml/v2/@v/list",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ]
+  },
+  "body": "not found: module github.com/BurntSushi/toml/v2: no matching versions for query \"latest\""
+}

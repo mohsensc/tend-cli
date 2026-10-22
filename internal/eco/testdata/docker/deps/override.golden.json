@@ -1,0 +1,18 @@
+[
+  {
+    "Ecosystem": "docker",
+    "Name": "library/postgres",
+    "Version": "16",
+    "Req": "postgres:16",
+    "Manifest": {
+      "Ecosystem": "docker",
+      "Path": "docker-compose.override.yml",
+      "Lock": "",
+      "Tool": "docker"
+    },
+    "Line": 3,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

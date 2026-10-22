@@ -1,0 +1,6 @@
+files: [Gemfile]
+locked: false
+note: bundle not found in PATH
+--- Gemfile
+25: -gem 'faraday', '~> 2.9', groups: [:default, :test]
+25: +gem 'faraday2', '~> 3.0', groups: [:default, :test]

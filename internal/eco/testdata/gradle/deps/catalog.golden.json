@@ -1,0 +1,98 @@
+[
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.squareup.okhttp3:okhttp",
+    "Version": "4.11.0",
+    "Req": "okhttp",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 2,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.squareup.okhttp3:logging-interceptor",
+    "Version": "4.11.0",
+    "Req": "okhttp",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 2,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.junit.jupiter:junit-jupiter",
+    "Version": "5.10.0",
+    "Req": "junit",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 3,
+    "Dev": true,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.google.code.gson:gson",
+    "Version": "2.10.1",
+    "Req": "2.10.1",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 10,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "com.fasterxml.jackson:jackson-bom",
+    "Version": "2.15.2",
+    "Req": "2.15.2",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 11,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  },
+  {
+    "Ecosystem": "gradle",
+    "Name": "org.jetbrains.kotlinx:kotlinx-coroutines-core",
+    "Version": "",
+    "Req": "",
+    "Manifest": {
+      "Ecosystem": "gradle",
+      "Path": "kts/gradle/libs.versions.toml",
+      "Lock": "",
+      "Tool": "gradle"
+    },
+    "Line": 12,
+    "Dev": false,
+    "Direct": true,
+    "Pin": ""
+  }
+]

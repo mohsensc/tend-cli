@@ -1,0 +1,10 @@
+{
+  "url": "https://proxy.golang.org/github.com/mattn/go-sqlite3/v3/@v/list",
+  "status": 404,
+  "header": {
+    "Content-Type": [
+      "text/plain; charset=UTF-8"
+    ]
+  },
+  "body": "not found: module github.com/mattn/go-sqlite3/v3: no matching versions for query \"latest\""
+}
