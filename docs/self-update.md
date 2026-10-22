@@ -45,4 +45,4 @@ the same way.
 ## Running on its own repository
 
 tend maintains itself: [.github/workflows/tend.yml](../.github/workflows/tend.yml)
-runs it daily on this repository, with `updates: {minor: true}`.
+runs it weekly on this repository, with `updates: {minor: true}`.
