@@ -12,6 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 0}
       - uses: mohsensc/tend-cli@v1
         with: {model-key: "${{ secrets.TEND_MODEL_KEY }}"}

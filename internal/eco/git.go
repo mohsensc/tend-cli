@@ -3,10 +3,12 @@ package eco
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -52,9 +54,10 @@ var (
 var gitShas sync.Map
 
 func (gitRefs) Detect(root string) ([]core.Manifest, error) {
-	files, err := walk(root, ".pre-commit-config.yaml", "*.tf", "package.json", "Dockerfile", "Dockerfile.*", "*.dockerfile",
+	names := []string{".pre-commit-config.yaml", "*.tf", "package.json",
 		"Makefile", "*.mk", "*.sh", ".github/workflows/*.yml", ".github/workflows/*.yaml",
-		"requirements*.txt", "pyproject.toml", "setup.cfg", "Pipfile", "Cargo.toml", "Gemfile")
+		"requirements*.txt", "pyproject.toml", "setup.cfg", "Pipfile", "Cargo.toml", "Gemfile"}
+	files, err := walkFunc(root, func(rel string) bool { return isDockerfile(rel) || matches(rel, names) })
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +158,7 @@ func preCommitPins(b []byte, pin func(owner, repo, ref string, line int) core.De
 }
 
 func (gitRefs) Meta(ctx context.Context, f core.Fetcher, name string) (*core.Meta, error) {
+	gitClient.set(f)
 	m, tags, err := githubMeta(ctx, f, name)
 	if err != nil {
 		return nil, fmt.Errorf("git: %w", err)
@@ -178,8 +182,8 @@ func (gitRefs) Bump(ctx context.Context, root string, d core.Dep, to, toName str
 		return nil, fmt.Errorf("git: %s: no line %d in %s", d.Name, d.Line, d.Manifest.Path)
 	}
 	line := strings.TrimRight(lines[d.Line-1], "\r")
-	next, ok := releaseURLs(line, d.Name, d.Req, to)
-	if !ok {
+	next, release := releaseURLs(line, d.Name, d.Req, to)
+	if !release {
 		next = strings.Replace(line, d.Req, to, 1)
 	}
 	if d.Pin != "" {
@@ -199,7 +203,15 @@ func (gitRefs) Bump(ctx context.Context, root string, d core.Dep, to, toName str
 	if next == line {
 		return &core.Bump{Note: "no lockfile"}, nil
 	}
-	if err := rewriteLine(p, d.Line, line, next); err != nil {
+	if release && d.Pin == "" {
+		lines[d.Line-1] = next + strings.TrimPrefix(lines[d.Line-1], line)
+		if err := releaseSums(ctx, d, lines, line, next, to); err != nil {
+			return nil, err
+		}
+		if err := writeKeepMode(p, []byte(strings.Join(lines, "\n"))); err != nil {
+			return nil, err
+		}
+	} else if err := rewriteLine(p, d.Line, line, next); err != nil {
 		return nil, err
 	}
 	res := &core.Bump{Files: []string{d.Manifest.Path}, Note: "no lockfile"}
@@ -264,6 +276,195 @@ func releaseURLs(line, repo, from, to string) (string, bool) {
 	}
 	b.WriteString(line[prev:])
 	return b.String(), ok
+}
+
+var gitClient fetcherBox
+
+var (
+	sumHex    = regexp.MustCompile(`[0-9A-Fa-f]{64,}`)
+	sumVarRef = regexp.MustCompile(`\$\{?([A-Za-z_]\w*)`)
+	sumVarRe  = regexp.MustCompile(`(?i)sha|checksum|digest`)
+)
+
+type sumAt struct {
+	line int
+	hex  string
+}
+
+func releaseSums(ctx context.Context, d core.Dep, lines []string, was, now, to string) error {
+	at := d.Line - 1
+	first, last := at, at
+	for first > 0 && strings.HasSuffix(strings.TrimRight(lines[first-1], "\r"), `\`) {
+		first--
+	}
+	for last+1 < len(lines) && strings.HasSuffix(strings.TrimRight(lines[last], "\r"), `\`) {
+		last++
+	}
+	first, last = max(first-3, 0), min(last+3, len(lines)-1)
+	var sums []sumAt
+	vars := map[string]bool{}
+	for i := first; i <= last; i++ {
+		sums = append(sums, sumsIn(i, lines[i])...)
+		for _, m := range sumVarRef.FindAllStringSubmatch(lines[i], -1) {
+			if sumVarRe.MatchString(m[1]) {
+				vars[m[1]] = true
+			}
+		}
+	}
+	for name := range vars {
+		set := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\s*(?:[:?]?=|:)\s*["']?[0-9A-Fa-f]{64}\b`)
+		for i, l := range lines {
+			if (i < first || i > last) && set.MatchString(l) {
+				sums = append(sums, sumsIn(i, l)...)
+			}
+		}
+	}
+	if len(sums) == 0 {
+		return nil
+	}
+	where := fmt.Sprintf("%s:%d", d.Manifest.Path, sums[0].line+1)
+	refuse := func(why string) error {
+		return fmt.Errorf("git: %s: %s pins a sha256 of the asset; %s: %w", d.Name, where, why, core.ErrNotSupported)
+	}
+	oldAsset, newAsset := releaseAsset(was, d.Name, d.Req), releaseAsset(now, d.Name, to)
+	if newAsset == "" || strings.ContainsAny(newAsset, "$`(){}*") {
+		return refuse("tend cannot tell which asset " + now + " downloads")
+	}
+	f := gitClient.get()
+	if f == nil {
+		return refuse("tend has no GitHub client to read the new asset's digest")
+	}
+	before, err := releaseDigests(ctx, f, d.Name, d.Req, oldAsset)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	after, err := releaseDigests(ctx, f, d.Name, to, newAsset)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	known := map[string]bool{}
+	for name, dg := range before {
+		if name != oldAsset {
+			known[dg] = true
+		}
+	}
+	for _, dg := range after {
+		known[dg] = true
+	}
+	old := before[oldAsset]
+	var left []string
+	for _, s := range sums {
+		if h := strings.ToLower(s.hex); !known[h] && !slices.Contains(left, h) {
+			left = append(left, h)
+		}
+	}
+	switch {
+	case old != "" && !slices.Contains(left, old):
+		return nil
+	case old == "" && len(left) == 0:
+		return nil
+	case old == "" && len(left) > 1:
+		return refuse(fmt.Sprintf("tend cannot tell which of %d checksums is %s's", len(left), oldAsset))
+	case old == "":
+		old = left[0]
+	}
+	next := after[newAsset]
+	if next == "" {
+		return refuse("tend cannot find the digest of " + newAsset + " in release " + to)
+	}
+	n := 0
+	for _, s := range sums {
+		if strings.EqualFold(s.hex, old) {
+			n++
+		}
+	}
+	if n != 1 {
+		return refuse(fmt.Sprintf("its checksum appears %d times", n))
+	}
+	for _, s := range sums {
+		if strings.EqualFold(s.hex, old) {
+			if strings.ToUpper(s.hex) == s.hex {
+				next = strings.ToUpper(next)
+			}
+			lines[s.line] = strings.Replace(lines[s.line], s.hex, next, 1)
+		}
+	}
+	return nil
+}
+
+func sumsIn(i int, l string) []sumAt {
+	var res []sumAt
+	for _, m := range sumHex.FindAllStringIndex(l, -1) {
+		if m[1]-m[0] == 64 && !strings.HasSuffix(l[:m[0]], "@sha256:") {
+			res = append(res, sumAt{i, l[m[0]:m[1]]})
+		}
+	}
+	return res
+}
+
+func releaseAsset(line, repo, tag string) string {
+	for _, m := range releaseDL.FindAllStringSubmatchIndex(line, -1) {
+		if strings.EqualFold(line[m[2]:m[3]]+"/"+line[m[4]:m[5]], repo) && line[m[6]:m[7]] == tag {
+			end := m[1] + strings.IndexAny(line[m[1]:]+" ", " \t\"'`)>")
+			return line[m[1]:end]
+		}
+	}
+	return ""
+}
+
+type githubAsset struct {
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
+	URL    string `json:"browser_download_url"`
+}
+
+func releaseDigests(ctx context.Context, f core.Fetcher, repo, tag, want string) (map[string]string, error) {
+	var rel struct {
+		Assets []githubAsset `json:"assets"`
+	}
+	u := "https://api.github.com/repos/" + repo + "/releases/tags/" + url.PathEscape(tag)
+	ok, err := getDoc(ctx, f, u, &rel)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("no GitHub release %s of %s", tag, repo)
+	}
+	res := map[string]string{}
+	var sumFiles []githubAsset
+	for _, a := range rel.Assets {
+		if dg, ok := strings.CutPrefix(a.Digest, "sha256:"); ok && len(dg) == 64 {
+			res[a.Name] = strings.ToLower(dg)
+		}
+		lower := strings.ToLower(a.Name)
+		if strings.Contains(lower, "checksums") || strings.Contains(lower, "sha256sums") || strings.HasSuffix(lower, ".sha256") || strings.HasSuffix(lower, ".sha256sum") {
+			sumFiles = append(sumFiles, a)
+		}
+	}
+	for _, a := range sumFiles {
+		if res[want] != "" {
+			break
+		}
+		got, err := f.Get(ctx, a.URL)
+		if err != nil || got.Status != 200 {
+			continue
+		}
+		own := strings.TrimSuffix(strings.TrimSuffix(a.Name, ".sha256sum"), ".sha256")
+		for _, l := range strings.Split(string(got.Body), "\n") {
+			fields := strings.Fields(l)
+			if len(fields) == 0 || len(fields[0]) != 64 || !sumHex.MatchString(fields[0]) {
+				continue
+			}
+			name := own
+			if len(fields) > 1 {
+				name = path.Base(strings.TrimPrefix(fields[len(fields)-1], "*"))
+			}
+			if res[name] == "" {
+				res[name] = strings.ToLower(fields[0])
+			}
+		}
+	}
+	return res, nil
 }
 
 // replaceVersion replaces each copy of version from in s that stands alone:

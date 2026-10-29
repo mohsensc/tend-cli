@@ -2,13 +2,16 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"strings"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/deliver"
 	"github.com/mohsensc/tend-cli/internal/plan"
+	"github.com/mohsensc/tend-cli/internal/state"
 )
 
 // trackMarker finds tend's tracking issue among the repository's issues.
@@ -32,11 +35,22 @@ func (s *session) track(ctx context.Context, p *plan.Plan, base string) {
 	if is.Number != 0 && is.Body == body && is.Open == open {
 		return
 	}
+	for range 2 {
+		if !s.trackOnce(ctx, tr, is, body, open) {
+			return
+		}
+		*is = state.Issue{}
+	}
+}
+
+// trackOnce brings the tracking issue is to body and open. It reports
+// whether the issue is gone, deleted or moved, so a fresh one is due.
+func (s *session) trackOnce(ctx context.Context, tr core.Tracker, is *state.Issue, body string, open bool) bool {
 	if is.Number == 0 {
 		found, err := tr.FindIssue(ctx, trackMarker)
 		if err != nil {
 			s.logf("cannot look for the tracking issue: %v", err)
-			return
+			return false
 		}
 		if found != nil {
 			is.Number, is.Body, is.Open = found.Number, found.Body, found.Open
@@ -48,20 +62,24 @@ func (s *session) track(ctx context.Context, p *plan.Plan, base string) {
 		made, err := tr.CreateIssue(ctx, trackTitle, body, s.cfg.Deliver.Labels)
 		if err != nil {
 			s.logf("cannot open the tracking issue: %v", err)
-			return
+			return false
 		}
 		is.Number, is.Body, is.Open = made.Number, body, true
 		s.logf("opened #%d, which lists what tend could not do on its own", made.Number)
 	case is.Body != body || is.Open != open:
-		if err := tr.EditIssue(ctx, is.Number, body, open); err != nil {
+		if err := tr.EditIssue(ctx, is.Number, body, open); errors.Is(err, deliver.ErrGone) {
+			s.logf("the tracking issue #%d is gone; tend looks for another", is.Number)
+			return true
+		} else if err != nil {
 			s.logf("cannot update the tracking issue #%d: %v", is.Number, err)
-			return
+			return false
 		}
 		if is.Open && !open {
 			s.logf("closed #%d: everything it listed is done", is.Number)
 		}
 		is.Body, is.Open = body, open
 	}
+	return false
 }
 
 // undone lists, a line each with why, what tend tried on base and could
@@ -69,10 +87,21 @@ func (s *session) track(ctx context.Context, p *plan.Plan, base string) {
 // deprecated packages it knows no replacement for.
 func (s *session) undone(p *plan.Plan, base string) []string {
 	var res []string
+	queued := map[string]bool{}
+	if p != nil {
+		for _, ch := range p.Queue {
+			queued[ch.ID] = true
+		}
+	}
 	for _, id := range slices.Sorted(maps.Keys(s.st.Seen)) {
-		if x := s.st.Seen[id]; x.Verdict == "unsupported" && base != "" && x.Base == base {
+		x := s.st.Seen[id]
+		switch {
+		case x.Verdict == "unsupported" && base != "" && x.Base == base:
 			first, _, _ := strings.Cut(x.Detail, "\n")
-			res = append(res, fmt.Sprintf("- `%s`: could not be made or proven on %s: %s", id, core.Short(base), strings.TrimSuffix(first, ".")))
+			res = append(res, fmt.Sprintf("- `%s`: could not be made or proven on %s: %s", id, core.Short(base), deliver.Clause(first)))
+		case x.Verdict == "queued" && x.Failed != "" && queued[id]:
+			first, _, _ := strings.Cut(x.Failed, "\n")
+			res = append(res, fmt.Sprintf("- `%s`: could not be made or proven on %s (the base has moved on since; tend tries it again): %s", id, core.Short(x.FailedBase), deliver.Clause(first)))
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(s.st.Parked)) {
@@ -91,7 +120,7 @@ func (s *session) undone(p *plan.Plan, base string) []string {
 			if slices.ContainsFunc(gone, func(d core.Dep) bool { return len(ch.Deps) > 0 && d.Name == ch.Deps[0].Name }) {
 				continue
 			}
-			if ch.API == nil && ch.To == "" && ch.ToName == "" && len(ch.Options) == 0 && len(ch.Deps) > 0 {
+			if ch.Kind == core.Deprecation && ch.API == nil && ch.To == "" && ch.ToName == "" && len(ch.Options) == 0 && len(ch.Deps) > 0 {
 				res = append(res, fmt.Sprintf("- `%s`: deprecated, and tend knows no replacement for it, so it stays", ch.Deps[0].Name))
 			}
 		}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/eco"
 	"github.com/mohsensc/tend-cli/internal/fetch"
+	"github.com/mohsensc/tend-cli/internal/ver"
 )
 
 const (
@@ -63,7 +66,10 @@ type osvEntry struct {
 	} `json:"severity"`
 	Affected []struct {
 		Package osvPkg `json:"package"`
-		Ranges  []struct {
+		DB      struct {
+			Informational string `json:"informational"`
+		} `json:"database_specific"`
+		Ranges []struct {
 			Type   string              `json:"type"`
 			Events []map[string]string `json:"events"`
 		} `json:"ranges"`
@@ -88,31 +94,187 @@ func (s *OSV) Changes(ctx context.Context, inv *core.Inventory) ([]core.Change, 
 	if err != nil {
 		return nil, err
 	}
-	var res []core.Change
+	var hit []*hitDep
 	for _, d := range inv.Deps {
 		u := upstream(s.Upstream, d)
 		q, ok := osvFor(u)
 		if !ok {
 			continue
 		}
-		var advs []advisory
-		// One issue can come back under several ids, a GitHub advisory and
-		// its Go or PyPI twin among them; the first stands for the rest.
-		taken := map[string]bool{}
-		for _, id := range hits[q] {
-			e := entries[id]
-			if e == nil || e.Withdrawn != "" || taken[id] {
-				continue
-			}
-			taken[id] = true
-			for _, a := range e.Aliases {
-				taken[a] = true
-			}
-			advs = append(advs, e.advisory(u, q))
+		h := &hitDep{d: d, u: u, q: q, taken: map[string]bool{}}
+		h.take(hits[q], entries, q)
+		hit = append(hit, h)
+	}
+	if err := s.clear(ctx, hit, entries); err != nil {
+		return nil, err
+	}
+	var res []core.Change
+	for _, h := range hit {
+		res = append(res, securityChanges(h.d, h.advs)...)
+		if len(h.notices) > 0 {
+			res = append(res, notice(h.d, h.notices))
 		}
-		res = append(res, securityChanges(d, advs)...)
 	}
 	return res, nil
+}
+
+// hitDep is what OSV says of one dep: the advisories that hit it, the
+// notices about it, and the ids already counted.
+type hitDep struct {
+	d, u    core.Dep
+	q       osvQuery
+	advs    []advisory
+	notices []core.Evidence
+	taken   map[string]bool
+}
+
+// take counts the advisories ids name against the version q asks about. One
+// issue can come back under several ids, a GitHub advisory and its Go or
+// PyPI twin among them; the first stands for the rest.
+func (h *hitDep) take(ids []string, entries map[string]*osvEntry, q osvQuery) []advisory {
+	var res []advisory
+	for _, id := range ids {
+		e := entries[id]
+		if e == nil || e.Withdrawn != "" || h.taken[id] {
+			continue
+		}
+		h.taken[id] = true
+		for _, a := range e.Aliases {
+			h.taken[a] = true
+		}
+		a := e.advisory(h.u, q)
+		switch e.informational(h.u, q) {
+		case "unmaintained", "notice":
+			h.notices = append(h.notices, a.ev)
+			continue
+		case "unsound":
+			a.severity = "low"
+		}
+		h.advs = append(h.advs, a)
+		res = append(res, a)
+	}
+	return res
+}
+
+// fix is the release that fixes every advisory h has a fix for, "" for none.
+func (h *hitDep) fix() string {
+	res := ""
+	for _, a := range h.advs {
+		if a.fixed != "" && (res == "" || ver.Less(res, a.fixed)) {
+			res = a.fixed
+		}
+	}
+	return res
+}
+
+// clearMax caps how many times a fix is checked against OSV for advisories
+// of its own.
+const clearMax = 5
+
+// clear checks the release each dep's fix moves it to against OSV, since a
+// release can fix the advisories on the version in use and be hit by
+// others that never touched it: axios 0.21.1 moves to 0.33.0, which two
+// advisories introduced since 0.27.2 still hit. Each fix rises to one
+// those miss too, a round at a time, and the advisories that hit it are
+// counted with the rest; merge then moves them all to the highest fix.
+func (s *OSV) clear(ctx context.Context, hit []*hitDep, entries map[string]*osvEntry) error {
+	want := map[*hitDep]string{}
+	for _, h := range hit {
+		want[h] = h.fix()
+	}
+	for range clearMax {
+		at := map[osvQuery][]*hitDep{}
+		var qs []osvQuery
+		for _, h := range hit {
+			if want[h] == "" {
+				continue
+			}
+			q := h.q
+			q.Version = want[h]
+			if at[q] == nil {
+				qs = append(qs, q)
+			}
+			at[q] = append(at[q], h)
+		}
+		if len(qs) == 0 {
+			break
+		}
+		hits, err := s.query(ctx, qs)
+		if err != nil {
+			return err
+		}
+		fresh := map[osvQuery][]string{}
+		for q, ids := range hits {
+			for _, id := range ids {
+				if _, ok := entries[id]; !ok {
+					fresh[q] = append(fresh[q], id)
+				}
+			}
+		}
+		more, err := s.entries(ctx, fresh)
+		if err != nil {
+			return err
+		}
+		maps.Copy(entries, more)
+		moved := false
+		for _, q := range qs {
+			for _, h := range at[q] {
+				next := want[h]
+				for _, a := range h.take(hits[q], entries, q) {
+					if a.fixed != "" && ver.Less(next, a.fixed) {
+						next = a.fixed
+					}
+				}
+				if next != want[h] {
+					want[h], moved = next, true
+				} else {
+					want[h] = ""
+				}
+			}
+		}
+		if !moved {
+			break
+		}
+	}
+	return nil
+}
+
+// notice is what an informational advisory, such as RustSec's
+// unmaintained, says of d: a deprecation with no fix, with the ways off it
+// the catalog or the notice itself names.
+func notice(d core.Dep, evs []core.Evidence) core.Change {
+	ch := core.Change{Kind: core.Deprecation, Deps: []core.Dep{d}, Evidence: evs}
+	if one, opts, ok := Replacement(d.Ecosystem, d.Name); ok {
+		if one != nil {
+			opts = []core.Option{*one}
+		}
+		ch.Options = opts
+	} else {
+		for _, ev := range evs {
+			if m := useInstead.FindStringSubmatch(ev.Title + "\n" + ev.Text); m != nil {
+				ch.Options = []core.Option{{Title: "Switch to " + m[1], Detail: ev.URL, ToName: m[1]}}
+				break
+			}
+		}
+	}
+	ch.ID = core.ChangeID(&ch)
+	return ch
+}
+
+// useInstead finds the replacement a notice names: "use `terminal_size`
+// instead", "Consider using [`nu-ansi-term`]".
+var useInstead = regexp.MustCompile(`(?i)(?:use|consider using|switch to|migrate to)\s+\[?` + "`" + `([A-Za-z0-9_.:/-]+)` + "`")
+
+// informational is what kind of notice e is for d, as RustSec marks one in
+// the affected entry: unmaintained, unsound or notice; "" for a
+// vulnerability.
+func (e *osvEntry) informational(d core.Dep, q osvQuery) string {
+	for _, a := range e.Affected {
+		if a.Package.Ecosystem == q.Package.Ecosystem && sameName(d.Ecosystem, a.Package.Name, d.Name) {
+			return a.DB.Informational
+		}
+	}
+	return ""
 }
 
 // upstream is d as its registry names it, d itself when there is no mapping.
@@ -132,10 +294,41 @@ func osvFor(d core.Dep) (osvQuery, bool) {
 		return osvQuery{}, false
 	}
 	v, ok := plainVersion(d)
+	if !ok && d.Version == "" {
+		v, ok = reqFloor(d.Req)
+	}
 	if !ok {
 		return osvQuery{}, false
 	}
 	return osvQuery{Package: osvPkg{Name: d.Name, Ecosystem: e.Traits().OSV}, Version: v}, true
+}
+
+// reqFloor is the least version a requirement admits, for a dep no
+// lockfile pins: "0.2.11" for cargo's 0.2.11 or ^0.2.11, 2.1 for >=2.1. A
+// requirement with no floor, * or <3, or one that leaves the floor out, as
+// >1.0 does, has none. The manifest allows that version, so an advisory on
+// it is a real exposure, and raising the floor fixes it.
+func reqFloor(req string) (string, bool) {
+	first := strings.TrimSpace(req)
+	if i := strings.IndexAny(first, ",|;"); i >= 0 {
+		first = strings.TrimSpace(first[:i])
+	}
+	if f := strings.Fields(first); len(f) > 1 && !strings.ContainsAny(f[0], "0123456789") {
+		first = f[0] + f[1]
+	} else if len(f) > 0 {
+		first = f[0]
+	}
+	v := strings.TrimLeft(first, "^~=v ")
+	if strings.HasPrefix(first, ">=") {
+		v = strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(first, ">=")), "v")
+	}
+	if v == "" || strings.ContainsAny(v, "<>*xX!") {
+		return "", false
+	}
+	if _, ok := ver.Parse(v); !ok {
+		return "", false
+	}
+	return v, true
 }
 
 // query returns the advisory ids per query, following page tokens until each

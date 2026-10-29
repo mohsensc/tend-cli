@@ -185,7 +185,7 @@ func TestSecurityChangesOrder(t *testing.T) {
 		have = append(have, c.To+"/"+c.Severity+"/"+c.Level+"/"+strings.Join(tags(c.Evidence), ","))
 	}
 	want := []string{
-		"v1.9.0/critical/minor/nine,nine again",
+		"v1.9.0/critical/minor/nine again,nine",
 		"v1.10.0//minor/ten",
 		"v2.0.0//major/major",
 		"/low//none",

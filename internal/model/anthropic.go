@@ -100,11 +100,14 @@ func (a *anthropic) Chat(ctx context.Context, system string, turns []Turn, tools
 		switch t.Role {
 		case "assistant":
 			var blocks []anthropicBlock
-			if t.Text != "" {
+			if strings.TrimSpace(t.Text) != "" {
 				blocks = append(blocks, anthropicBlock{Type: "text", Text: t.Text})
 			}
 			for _, c := range t.Calls {
 				blocks = append(blocks, anthropicBlock{Type: "tool_use", ID: c.ID, Name: c.Name, Input: object(c.Args)})
+			}
+			if len(blocks) == 0 {
+				blocks = []anthropicBlock{{Type: "text", Text: noReply}}
 			}
 			msgs = append(msgs, anthropicTurn{Role: "assistant", Content: blocks})
 		case "tool":
@@ -115,7 +118,11 @@ func (a *anthropic) Chat(ctx context.Context, system string, turns []Turn, tools
 			}
 			msgs = append(msgs, anthropicTurn{Role: "user", Content: []anthropicBlock{b}})
 		default:
-			msgs = append(msgs, anthropicTurn{Role: "user", Content: []anthropicBlock{{Type: "text", Text: t.Text}}})
+			text := t.Text
+			if strings.TrimSpace(text) == "" {
+				text = noText
+			}
+			msgs = append(msgs, anthropicTurn{Role: "user", Content: []anthropicBlock{{Type: "text", Text: text}}})
 		}
 	}
 	var defs []anthropicTool

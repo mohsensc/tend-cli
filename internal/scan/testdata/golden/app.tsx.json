@@ -366,21 +366,24 @@
       "Line": 23,
       "Method": "POST",
       "URL": "https://api.example.com/v1/orders",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "const res = await axios.post('https://api.example.com/v1/orders', { total_cents: 5 });"
     },
     {
       "File": "app.tsx",
       "Line": 24,
       "Method": "DELETE",
       "URL": "/v1/orders/${id}",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "const r2 = await fetch(`${BASE}/v1/orders/${id}`, {"
     },
     {
       "File": "app.tsx",
       "Line": 37,
       "Method": "",
       "URL": "https://docs.example.com/x",
-      "Host": "docs.example.com"
+      "Host": "docs.example.com",
+      "Text": "return \u003ca href=\"https://docs.example.com/x\"\u003eDon't {stripe.balance.retrieve()}\u003c/a\u003e;"
     }
   ]
 }

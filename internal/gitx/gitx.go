@@ -4,6 +4,7 @@ package gitx
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,16 +13,21 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/proc"
 )
 
 // Cmd is one git call: where it runs, what it adds to the environment and
-// what it reads on stdin.
+// what it reads on stdin. Git runs in a process group of its own, so an
+// interrupt at the terminal reaches tend alone, unless Terminal says it may
+// need the terminal, as ssh does to ask for a passphrase.
 type Cmd struct {
-	Dir   string
-	Env   []string
-	Stdin string
+	Dir      string
+	Env      []string
+	Stdin    string
+	Terminal bool
 }
 
 // Run runs git in dir and returns its output with the surrounding space trimmed.
@@ -35,6 +41,11 @@ func Raw(ctx context.Context, dir string, args ...string) (string, error) {
 	return Cmd{Dir: dir}.Run(ctx, args...)
 }
 
+// waitDelay is how long Run waits, once git is killed, for what git started
+// to let go of its output: a stuck git-remote-https or ssh would hold it,
+// and the run with it, long after a cancel.
+const waitDelay = 2 * time.Second
+
 // Run runs git and returns what it wrote to stdout. Hooks and the file
 // system monitor never run, whatever a config says, and git sees tend's
 // environment without its tokens. A worktree that was pinned uses the git dir
@@ -44,12 +55,21 @@ func (c Cmd) Run(ctx context.Context, args ...string) (string, error) {
 	if runtime.GOOS == "windows" {
 		null = "NUL"
 	}
-	full := append([]string{"-c", "core.hooksPath=" + null, "-c", "core.fsmonitor=false"}, args...)
+	full := []string{"-c", "core.hooksPath=" + null, "-c", "core.fsmonitor=false"}
+	pin, isPinned := pinned(c.Dir)
+	if isPinned && pin.exclude != "" {
+		full = append(full, "-c", "core.excludesFile="+pin.exclude)
+	}
+	full = append(full, args...)
 	cmd := exec.CommandContext(ctx, bin(), full...)
+	cmd.WaitDelay = waitDelay
+	if !c.Terminal {
+		proc.Group(cmd)
+	}
 	cmd.Dir = c.Dir
 	cmd.Env = append(local(core.Scrub(os.Environ(), nil)), "GIT_TERMINAL_PROMPT=0")
-	if wt, gitDir, ok := pinned(c.Dir); ok {
-		cmd.Env = append(cmd.Env, "GIT_DIR="+gitDir, "GIT_WORK_TREE="+wt)
+	if isPinned {
+		cmd.Env = append(cmd.Env, "GIT_DIR="+pin.gitDir, "GIT_WORK_TREE="+pin.dir)
 	}
 	cmd.Env = append(cmd.Env, c.Env...)
 	if c.Stdin != "" {
@@ -62,9 +82,27 @@ func (c Cmd) Run(ctx context.Context, args ...string) (string, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return out.String(), fmt.Errorf("git %s: %s", args[0], msg)
+		return out.String(), &Error{msg: fmt.Sprintf("git %s: %s", args[0], msg), err: err}
 	}
 	return out.String(), nil
+}
+
+// Error is a git call that failed: what git said, and how it exited.
+type Error struct {
+	msg string
+	err error
+}
+
+func (e *Error) Error() string { return e.msg }
+func (e *Error) Unwrap() error { return e.err }
+
+// Code is the status git exited with, or -1 when err is not git exiting.
+func Code(err error) int {
+	var x *exec.ExitError
+	if errors.As(err, &x) {
+		return x.ExitCode()
+	}
+	return -1
 }
 
 // located are the variables that tell git which repository, index or object
@@ -95,27 +133,33 @@ var bin = sync.OnceValue(func() string {
 	return "git"
 })
 
-var pins sync.Map // worktree dir -> its git dir
+var pins sync.Map // worktree dir -> pin
+
+type pin struct{ dir, gitDir, exclude string }
 
 // Pin ties the worktree at dir to gitDir. A command that later rewrites
 // dir/.git to point at a git dir of its own, with hooks or filters in its
-// config, then changes nothing tend runs there.
-func Pin(dir, gitDir string) { pins.Store(filepath.Clean(dir), gitDir) }
+// config, then changes nothing tend runs there. Exclude, when set, is the
+// excludes file git reads there in place of the user's own.
+func Pin(dir, gitDir, exclude string) {
+	dir = filepath.Clean(dir)
+	pins.Store(dir, pin{dir, gitDir, exclude})
+}
 
 // Unpin forgets the worktree at dir.
 func Unpin(dir string) { pins.Delete(filepath.Clean(dir)) }
 
 // pinned finds the pinned worktree dir is in, if any.
-func pinned(dir string) (wt, gitDir string, ok bool) {
+func pinned(dir string) (pin, bool) {
 	if dir == "" {
-		return "", "", false
+		return pin{}, false
 	}
 	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
 		if v, ok := pins.Load(d); ok {
-			return d, v.(string), true
+			return v.(pin), true
 		}
 		if filepath.Dir(d) == d {
-			return "", "", false
+			return pin{}, false
 		}
 	}
 }

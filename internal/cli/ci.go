@@ -38,8 +38,16 @@ func (s *session) settleCommit(ctx context.Context) (*outcome, error) {
 		s.logf("cannot fetch %s to look for %s: %v", o.Branch, core.Short(o.Commit), err)
 		return nil, nil
 	}
+	if err := s.push.Deepen(ctx, o.Branch, o.Commit, o.At); err != nil {
+		s.logf("cannot fetch the history of %s to look for %s: %v", o.Branch, core.Short(o.Commit), err)
+		return &outcome{Action: "waiting", Summary: fmt.Sprintf("waiting to find %s on %s, which tend pushed there", core.Short(o.Commit), o.Branch)}, nil
+	}
 	ref := "refs/remotes/" + s.remote + "/" + o.Branch
 	if _, err := gitx.Run(ctx, s.root, "merge-base", "--is-ancestor", o.Commit, ref); err != nil {
+		if gitx.Code(err) != 1 {
+			s.logf("cannot tell whether %s is still on %s: %v", core.Short(o.Commit), o.Branch, err)
+			return &outcome{Action: "waiting", Summary: fmt.Sprintf("waiting to find %s on %s, which tend pushed there", core.Short(o.Commit), o.Branch)}, nil
+		}
 		s.st.Open = nil
 		s.st.Parked[o.ID] = state.Parked{Reason: "rejected", To: core.TargetOf(o.ID), At: s.e.Now()}
 		if core.CatchUp(o.ID) {
@@ -52,16 +60,24 @@ func (s *session) settleCommit(ctx context.Context) (*outcome, error) {
 	switch {
 	case err != nil && waited < ciWait:
 		s.logf("cannot read CI on %s: %v", core.Short(o.Commit), err)
-		return &outcome{Action: "waiting", line: fmt.Sprintf("waiting to read CI on %s, which tend pushed to %s", core.Short(o.Commit), o.Branch)}, nil
+		return &outcome{Action: "waiting", Summary: fmt.Sprintf("waiting to read CI on %s, which tend pushed to %s", core.Short(o.Commit), o.Branch)}, nil
 	case err != nil:
 		s.logf("cannot read CI on %s after %s, so tend takes it as passed: %v", core.Short(o.Commit), ciWait, err)
 	case ci.State == "pending" && waited < ciWait:
-		return &outcome{Action: "waiting", line: fmt.Sprintf("waiting on CI for %s, which tend pushed to %s", core.Short(o.Commit), o.Branch)}, nil
+		return &outcome{Action: "waiting", Summary: fmt.Sprintf("waiting on CI for %s, which tend pushed to %s", core.Short(o.Commit), o.Branch)}, nil
 	case ci.State == "pending":
 		s.logf("CI on %s has not finished after %s, so tend takes it as passed", core.Short(o.Commit), ciWait)
 	case ci.State == "failure":
 		before, err := s.checks(ctx, o.Commit+"^")
-		if err == nil && before.State == "failure" {
+		if err != nil && waited < ciWait {
+			s.logf("cannot read CI on the commit before %s: %v", core.Short(o.Commit), err)
+			return &outcome{Action: "waiting", Summary: fmt.Sprintf("CI fails on %s; waiting to read CI on the commit before it", core.Short(o.Commit))}, nil
+		}
+		if err != nil {
+			s.logf("CI fails on %s, and after %s tend still cannot read CI on the commit before it, so it leaves the commit in place: %v", core.Short(o.Commit), ciWait, err)
+			break
+		}
+		if before.State == "failure" {
 			s.logf("CI fails on %s, as it did on the commit before it, so tend's change is not what broke it", core.Short(o.Commit))
 			break
 		}
@@ -130,7 +146,7 @@ func (s *session) revert(ctx context.Context, o *state.OpenPR, ci core.CI) (*out
 	}
 	if _, err := gitx.Run(ctx, wt.Dir, "revert", "--no-commit", o.Commit); err != nil {
 		park(fmt.Sprintf("CI failed on %s (%s), and reverting it does not apply cleanly; revert it by hand", short, failed))
-		return &outcome{Action: "unproven", line: fmt.Sprintf("CI fails on %s and tend cannot revert it cleanly", short), code: exitUnproven}, nil
+		return &outcome{Action: "unproven", Summary: fmt.Sprintf("CI fails on %s and tend cannot revert it cleanly", short), code: exitUnproven}, nil
 	}
 	if _, err := gitx.Run(ctx, wt.Dir, "add", "-A"); err != nil {
 		return nil, err
@@ -157,7 +173,7 @@ func (s *session) revert(ctx context.Context, o *state.OpenPR, ci core.CI) (*out
 		}
 		if !run.Pass {
 			park(fmt.Sprintf("CI failed on %s (%s), and the revert does not pass the project's commands either: %s; revert it by hand", short, failed, broke(run)))
-			return &outcome{Action: "unproven", line: fmt.Sprintf("CI fails on %s and its revert fails too", short), code: exitUnproven}, nil
+			return &outcome{Action: "unproven", Summary: fmt.Sprintf("CI fails on %s and its revert fails too", short), code: exitUnproven}, nil
 		}
 	}
 	subject, err := gitx.Run(ctx, s.root, "log", "-1", "--format=%s", o.Commit)
@@ -172,11 +188,11 @@ func (s *session) revert(ctx context.Context, o *state.OpenPR, ci core.CI) (*out
 	sha, err := deliver.Commit(ctx, wt, s.push, o.Branch)
 	switch {
 	case errors.Is(err, deliver.ErrMoved):
-		return &outcome{Action: "moved", line: err.Error() + "; the next run reverts on the new tip"}, nil
+		return &outcome{Action: "moved", Summary: err.Error() + "; the next run reverts on the new tip"}, nil
 	case err != nil:
 		return nil, err
 	}
 	park(fmt.Sprintf("reverted in %s: CI failed on %s (%s)", core.Short(sha), short, failed))
 	s.logf("CI failed on %s (%s); reverted it in %s", short, failed, core.Short(sha))
-	return &outcome{Action: "reverted", Commit: sha, Branch: o.Branch, line: fmt.Sprintf("reverted %s on %s: CI failed (%s)", short, o.Branch, failed)}, nil
+	return &outcome{Action: "reverted", Commit: sha, Branch: o.Branch, Summary: fmt.Sprintf("reverted %s on %s: CI failed (%s)", short, o.Branch, failed)}, nil
 }

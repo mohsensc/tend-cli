@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -14,7 +15,12 @@ import (
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/deliver"
 	"github.com/mohsensc/tend-cli/internal/model"
+	"github.com/mohsensc/tend-cli/internal/state"
 )
+
+// treeTrailer is the one trailer tend's commits carry: the tree they were
+// proven on.
+var treeTrailer = regexp.MustCompile(`^Tend-Tree: [0-9a-f]{40}$`)
 
 // script is a model that writes the migration in replies/<name>.diff and finds
 // nothing to say when vetting asks about it.
@@ -106,7 +112,7 @@ func TestNodeDeprecation(t *testing.T) {
 		t.Fatalf("%d commits on the branch, want 1", len(cs))
 	}
 	c := cs[0]
-	if c.subject != "Migrate off deprecated @fixture/pay 1.x" || c.author != maintainer.Name+" <"+maintainer.Email+">" || c.trailers != "" {
+	if c.subject != "Migrate off deprecated @fixture/pay 1.x" || c.author != maintainer.Name+" <"+maintainer.Email+">" || !treeTrailer.MatchString(c.trailers) {
 		t.Errorf("commit = %+v", c)
 	}
 	if !slices.Equal(c.files, []string{"package-lock.json", "package.json", "src/billing.js"}) {
@@ -251,7 +257,7 @@ test('charges go to the charges endpoint', async () => {
 	if d := w.diff(pr.Branch); d != "" {
 		t.Errorf("a decision PR changed files:\n%s", d)
 	}
-	if cs := w.commits(pr.Branch); len(cs) != 1 || cs[0].files != nil || cs[0].body != "" {
+	if cs := w.commits(pr.Branch); len(cs) != 1 || cs[0].files != nil || !treeTrailer.MatchString(cs[0].body) {
 		t.Errorf("want one empty commit, got %+v", cs)
 	}
 	if pr.Draft {
@@ -374,7 +380,7 @@ func TestFormat(t *testing.T) {
 	if !pr.Draft {
 		t.Error("not a draft")
 	}
-	for _, want := range []string{"Tests already fail on `main@BASE`", "| `go vet ./... && go test ./...` | failed (exit 1)"} {
+	for _, want := range []string{"`go vet ./... && go test ./...` fails on `main@BASE` and passes with this change", "| `go vet ./... && go test ./...` | failed (exit 1)"} {
 		if !strings.Contains(w.stable(pr.Body), want) {
 			t.Errorf("body lacks %q:\n%s", want, pr.Body)
 		}
@@ -392,7 +398,7 @@ func TestAPIDeprecationThenRemoval(t *testing.T) {
 
 	w.tend("run").want(t, 0)
 	pr := onlyPR(t, w)
-	if pr.Title != "Migrate off deprecated GET /v1/orders/{id}/legacy" {
+	if pr.Title != "Migrate off deprecated fixture GET /v1/orders/{id}/legacy" {
 		t.Errorf("title %q", pr.Title)
 	}
 	w.golden("decision-body.md", pr.Body)
@@ -413,7 +419,7 @@ func TestAPIDeprecationThenRemoval(t *testing.T) {
 	w.closeByHuman(1)
 	w.model = script(t, "py-api")
 	res := w.tend("run").want(t, 0)
-	if !strings.HasPrefix(res.stdout, "tend: opened #2 Handle removed field total_cents on GET /v1/orders ") {
+	if !strings.HasPrefix(res.stdout, "tend: opened #2 Handle removed field total_cents on fixture GET /v1/orders ") {
 		t.Fatalf("run said %q", res.stdout)
 	}
 	if p := w.state().Parked["api/fixture/GET /v1/orders/{id}/legacy"]; p.Reason != "rejected" || p.PR != 1 {
@@ -759,7 +765,8 @@ func TestCommentSkip(t *testing.T) {
 	}
 }
 
-// `tend retry` redoes the work even when nothing moved.
+// `tend retry` redoes the work even when nothing moved, and says the PR it
+// came to the same answer for is up to date.
 func TestCommentRetry(t *testing.T) {
 	need(t, "node", "npm")
 	w := setup(t, "node-sdk")
@@ -769,8 +776,8 @@ func TestCommentRetry(t *testing.T) {
 	w.forge.Now = func() time.Time { return now.Add(time.Hour) }
 	w.say(1, "maintainer", "OWNER", "tend retry")
 	w.model = script(t, "node-sdk")
-	if res := w.tend("run").want(t, 0); !strings.HasPrefix(res.stdout, "tend: updated #1 ") {
-		t.Errorf("retry: %q", res.stdout)
+	if res := w.tend("run").want(t, 0); !strings.HasPrefix(res.stdout, "tend: #1 ") || !strings.Contains(res.stdout, " is up to date ") || !strings.Contains(res.stderr, "proving patched") {
+		t.Errorf("retry: %q\n%s", res.stdout, res.stderr)
 	}
 }
 
@@ -902,11 +909,13 @@ func TestLockHeld(t *testing.T) {
 	w := setup(t, "empty")
 	w.tend("check").want(t, 0)
 	dir := filepath.Dir(w.statePath())
-	if err := os.WriteFile(filepath.Join(dir, "lock"), []byte(fmt.Sprintf("4242 %d\n", time.Now().Unix())), 0o644); err != nil {
+	release, err := state.Lock(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer release()
 	res := w.tend("run").want(t, 1)
-	if !strings.Contains(res.stderr, "pid 4242") {
+	if !strings.Contains(res.stderr, fmt.Sprintf("pid %d", os.Getpid())) {
 		t.Errorf("stderr %q does not name the holder", res.stderr)
 	}
 }

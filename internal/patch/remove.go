@@ -3,7 +3,6 @@ package patch
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -31,17 +30,16 @@ func Remove(ctx context.Context, wt string, deps []core.Dep, o Options, p *core.
 		if !ok {
 			return fmt.Errorf("patch: %s cannot remove dependencies", group[0].Ecosystem)
 		}
-		b, err := r.Remove(ctx, wt, group)
-		var tm core.ToolMissing
-		if err != nil && !errors.As(err, &tm) {
-			return fmt.Errorf("patch: %s: %w", group[0].Manifest.Path, err)
-		}
-		if b == nil {
-			b = &core.Bump{Note: err.Error()}
-		}
 		var names []string
 		for _, d := range group {
 			names = append(names, d.Name)
+		}
+		b, err := r.Remove(ctx, wt, group)
+		if err != nil {
+			return fmt.Errorf("patch: %s: %w", group[0].Manifest.Path, err)
+		}
+		if b == nil || len(b.Files) == 0 {
+			return fmt.Errorf("patch: %s: removing %s changed nothing", group[0].Manifest.Path, strings.Join(names, ", "))
 		}
 		files := uniq(b.Files)
 		o.logf("removed %s from %s", strings.Join(names, ", "), group[0].Manifest.Path)

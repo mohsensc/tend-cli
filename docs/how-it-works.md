@@ -78,7 +78,10 @@ queue belongs to one stage, by the first of these rules that matches:
 The stages run in that order. Fixes come first because they fix what is
 wrong now, and the first PR carries the test baseline the rest is proven
 against. Runtimes and build tools come before majors, since new majors need
-new runtimes; the majors are then proven on the runtime they will ship on.
+new runtimes. The proof runs on whatever runtime the runner has, or the one
+`verify.container` names, not on the pin a change moves; the Proof section
+says which it ran on, and warns when that is not the pinned major (see
+[limitations](limitations.md)).
 Migrations come last, written against current libraries.
 
 Each catch-up PR carries its stage and whatever is left of the stages
@@ -195,8 +198,10 @@ where the base stops; that PR opens as a draft and says so.
 The commands run on the host by default. A freshly bumped dependency is code
 that executes during the proof. On Linux, tend makes its own process
 unreadable to the commands it starts, so they cannot read its token from
-`/proc`; on macOS and Windows, a process running as the same user can still
-read tend's environment. `verify.container` is the real boundary: set it to an
+`/proc`. That holds only when no process above tend holds the token too: a
+launcher has to `exec` tend, as the Action does, or run it as a container's
+first process. On macOS and Windows, a process running as the same user can
+still read tend's environment. `verify.container` is the real boundary: set it to an
 image and each command runs through `docker run` with only the worktree
 mounted. If docker is missing the proof fails and says why; it does not fall
 back to the host.
@@ -211,8 +216,10 @@ patch reads exist in the spec? Is the old symbol still used anywhere? Did the
 lockfile move more than the bump needs? Was debug output or a comment added?
 A Python debug print that was its block's only statement becomes `pass`. Is
 anything now unreferenced? Each finding is fixed, dropped, or left flagged in the
-PR, and a flag makes the PR a draft. A patch that vetting changed is proven
-again.
+PR. A flag from symbols, fields, leftovers, lockfile, commands, scope or tests
+makes the PR a draft; dead code, debug output that is not a whole statement,
+and the model's answers are listed for the reviewer without holding the PR
+back. A patch that vetting changed is proven again.
 
 ## Model providers
 
@@ -223,7 +230,8 @@ once that it is running without one.
 
 With one, the call sites no codemod covers are the model's work. A model with
 tool calling works the change the way a person would: it reads and searches
-the worktree, edits the files the change explains and their tests, and runs
+the worktree, edits the files the change explains and the tests that reach
+them, never the tests tend wrote, and runs
 your install, build and test commands, by name and never as a shell line it
 wrote. It is done when every command passes on the tree it leaves, not when it
 says so. A failed run goes back to it, and running out of `model.turns` or
@@ -324,7 +332,8 @@ tend remembers things in `$TEND_HOME`, by default `~/.cache/tend` on Linux,
 of HTTP responses, pruned after a week; one `state.json` per repository (what
 was seen, what you rejected, which PR is open, how far the catch-up got, the
 tracking issue); spec snapshots; the logs of the
-last run of each change; and the worktree while a run is in progress. Nothing
+last run of each change; and the worktree while a run is in progress, which a
+dry run that prepared a PR, or `--keep`, leaves until the next run. Nothing
 is written inside your repository.
 
 The state is a cache. Deleting it costs a few extra requests: open PRs, and

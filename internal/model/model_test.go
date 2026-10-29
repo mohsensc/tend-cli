@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -692,3 +694,138 @@ func TestSteps(t *testing.T) {
 		t.Errorf("chats = %+v", s.Chats)
 	}
 }
+
+func TestChatEmptyTurns(t *testing.T) {
+	for _, empty := range []string{"", "\n", "  "} {
+		turns := []Turn{{Role: "user", Text: "hi"}, {Role: "assistant", Text: empty}, {Role: "user", Text: empty}}
+		t.Run("anthropic "+strconv.Quote(empty), func(t *testing.T) {
+			srv := serve(t, reply{200, "anthropic_tools.json", ""})
+			m, _ := newAnthropic(config.Model{Provider: "anthropic", Model: "model-id"}, "k")
+			m.url = srv.URL
+			if _, err := m.Chat(context.Background(), "", turns, tools); err != nil {
+				t.Fatal(err)
+			}
+			msgs := srv.bodies[0]["messages"].([]any)
+			if len(msgs) != 3 {
+				t.Fatalf("%d messages, want 3 so the roles still alternate", len(msgs))
+			}
+			for _, m := range msgs {
+				content, ok := m.(map[string]any)["content"].([]any)
+				if !ok || len(content) == 0 {
+					t.Fatalf("message %v has no content blocks", m)
+				}
+				for _, b := range content {
+					b := b.(map[string]any)
+					if text, ok := b["text"].(string); b["type"] == "text" && (!ok || strings.TrimSpace(text) == "") {
+						t.Errorf("message %v has a blank text block", m)
+					}
+				}
+			}
+		})
+		t.Run("openai "+strconv.Quote(empty), func(t *testing.T) {
+			srv := serve(t, reply{200, "openai_tools.json", ""})
+			m, _ := newOpenAI(config.Model{Provider: "openai", Model: "model-id"}, "k")
+			m.url = srv.URL
+			if _, err := m.Chat(context.Background(), "", turns, tools); err != nil {
+				t.Fatal(err)
+			}
+			msgs := srv.bodies[0]["messages"].([]any)
+			if len(msgs) != 3 {
+				t.Fatalf("%d messages, want 3", len(msgs))
+			}
+			for _, m := range msgs {
+				m := m.(map[string]any)
+				if _, ok := m["content"].(string); !ok && m["tool_calls"] == nil {
+					t.Errorf("message %v has no content and no tool calls", m)
+				}
+			}
+		})
+	}
+}
+
+func TestOpenAIChatCallsOnly(t *testing.T) {
+	srv := serve(t, reply{200, "openai_tools.json", ""})
+	m, _ := newOpenAI(config.Model{Provider: "openai", Model: "model-id"}, "k")
+	m.url = srv.URL
+	turns := []Turn{{Role: "user", Text: "hi"}, {Role: "assistant", Calls: []ToolCall{{ID: "c1", Name: "read"}}}, {Role: "tool", CallID: "c1", Text: "x"}}
+	if _, err := m.Chat(context.Background(), "", turns, tools); err != nil {
+		t.Fatal(err)
+	}
+	sent, _ := json.Marshal(srv.bodies[0]["messages"].([]any)[1])
+	if want := `{"content":null,"role":"assistant","tool_calls":[{"function":{"arguments":"{}","name":"read"},"id":"c1","type":"function"}]}`; string(sent) != want {
+		t.Errorf("assistant = %s, want %s", sent, want)
+	}
+}
+
+func hangUpFirst(t *testing.T, ok string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	calls := new(atomic.Int32)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			conn.Close()
+			return
+		}
+		_, _ = w.Write(read(t, ok))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, calls
+}
+
+func TestRetryDroppedConnection(t *testing.T) {
+	srv, calls := hangUpFirst(t, "anthropic_ok.json")
+	m, _ := newAnthropic(config.Model{Provider: "anthropic", Model: "m"}, "k")
+	var waits []time.Duration
+	m.url, m.wait = srv.URL, func(_ context.Context, d time.Duration) error { waits = append(waits, d); return nil }
+	if _, err := m.Complete(context.Background(), "", "p"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 || !reflect.DeepEqual(waits, []time.Duration{time.Second}) {
+		t.Errorf("calls = %d, waits = %v; want a second try after 1s", calls.Load(), waits)
+	}
+}
+
+func TestNoRetryAfterCancel(t *testing.T) {
+	srv, calls := hangUpFirst(t, "anthropic_ok.json")
+	m, _ := newAnthropic(config.Model{Provider: "anthropic", Model: "m"}, "k")
+	ctx, cancel := context.WithCancel(context.Background())
+	m.url, m.wait = srv.URL, func(context.Context, time.Duration) error { return nil }
+	m.http = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		cancel()
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+	if _, err := m.Complete(ctx, "", "p"); err == nil {
+		t.Fatal("no error after cancel")
+	}
+	if calls.Load() > 1 {
+		t.Errorf("calls = %d, want no retry once the context is done", calls.Load())
+	}
+}
+
+func TestNoRetryOnTimeout(t *testing.T) {
+	block := make(chan struct{})
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		<-block
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(block) })
+	m, _ := newAnthropic(config.Model{Provider: "anthropic", Model: "m"}, "k")
+	m.url, m.wait = srv.URL, func(context.Context, time.Duration) error { return nil }
+	m.http.Timeout = 50 * time.Millisecond
+	if _, err := m.Complete(context.Background(), "", "p"); err == nil {
+		t.Fatal("no error after timeout")
+	}
+	if calls.Load() > 1 {
+		t.Errorf("calls = %d, want one: a timed out reply is not sent again", calls.Load())
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

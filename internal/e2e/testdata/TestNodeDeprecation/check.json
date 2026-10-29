@@ -112,6 +112,6 @@
       "to": "2.0.0"
     }
   ],
-  "repo": "acme/node-sdk",
+  "repo": "$TMP/work",
   "untracked": []
 }

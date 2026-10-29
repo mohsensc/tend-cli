@@ -54,6 +54,7 @@ type Batch struct {
 	Kept     []Aside   // they look unused, but tend cannot prove it, or removing them failed
 	Next     []Later   // queued changes left for a later stage
 	Baseline *Baseline `json:",omitempty"` // tests the PR adds first, when the project's own are weak
+	Thin     string    `json:",omitempty"` // why the project's tests cannot prove the batch, when tend could add no baseline
 }
 
 // Baseline is what a catch-up PR adds so that its proof, and every later
@@ -89,8 +90,8 @@ type APIChange struct {
 	Path     string // template as in the spec: "/v1/orders/{id}"
 	Field    string // for field/parameter changes, "" otherwise
 	// What is one of: operation removed | operation deprecated | response field removed |
-	// response field deprecated | parameter removed | parameter deprecated |
-	// required parameter added | request field removed
+	// response field deprecated | response field type changed | parameter removed |
+	// parameter deprecated | required parameter added | request field removed
 	What string
 }
 
@@ -117,6 +118,20 @@ type Codemod struct {
 	Paths   map[string]string // endpoint path -> endpoint path
 	Fields  map[string]string // field -> field; "" drops the field
 	Text    map[string]string // literal line substitutions (actions `::set-output` -> $GITHUB_OUTPUT)
+}
+
+// Lines counts the lines sites sit on: two chains on one line of code are
+// one place to change.
+func Lines(sites []Site) int {
+	type at struct {
+		file string
+		line int
+	}
+	seen := map[at]bool{}
+	for _, s := range sites {
+		seen[at{s.File, s.Line}] = true
+	}
+	return len(seen)
 }
 
 // Calls are the sites of ch in code, leaving out the manifest lines that name

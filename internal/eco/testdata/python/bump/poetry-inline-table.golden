@@ -1,6 +1,6 @@
 files: [poetry/pyproject.toml]
-locked: false
-note: poetry not found
+locked: true
+note: 
 --- poetry/pyproject.toml
 10: -"Flask" = { version = "~2.3", extras = ["async"] }
 10: +"Flask" = { version = "~3.0.3", extras = ["async"] }

@@ -114,6 +114,9 @@ func TestCatchUpLegacy(t *testing.T) {
 	w.golden("4-body.md", pr.Body)
 	w.golden("4-diff.patch", w.diff(pr.Branch)+"\n")
 	w.merge(4)
+	if res := w.tend("check").want(t, 0); strings.Contains(res.stdout, "  first  ") {
+		t.Errorf("check after the last stage merged still lists a stage:\n%s", res.stdout)
+	}
 	w.pull()
 
 	w.model = replies(t)

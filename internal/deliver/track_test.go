@@ -2,6 +2,7 @@ package deliver
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -47,8 +48,9 @@ func TestChecks(t *testing.T) {
 func TestTrackingIssue(t *testing.T) {
 	api := newAPI(t, []step{
 		{req: "GET /repos/acme/shop/issues?state=all&sort=created&direction=desc&per_page=100", resp: `[
-			{"number": 9, "title": "a PR", "body": "<!-- tend tracking -->", "state": "open", "pull_request": {"url": "x"}},
-			{"number": 7, "title": "tend: what it could not do on its own", "body": "list\n<!-- tend tracking -->", "state": "closed"}
+			{"number": 9, "title": "a PR", "body": "<!-- tend tracking -->", "state": "open", "author_association": "OWNER", "pull_request": {"url": "x"}},
+			{"number": 8, "title": "looks like tend's", "body": "<!-- tend tracking -->", "state": "open", "author_association": "NONE", "user": {"type": "User"}},
+			{"number": 7, "title": "tend: what it could not do on its own", "body": "list\n<!-- tend tracking -->", "state": "closed", "author_association": "NONE", "user": {"type": "Bot"}}
 		]`},
 		{req: "GET /repos/acme/shop/labels/tend", resp: `{"name": "tend"}`},
 		{req: "POST /repos/acme/shop/issues", body: `{"body":"b","labels":["tend"],"title":"t"}`, status: 201, resp: `{"number": 12, "title": "t", "body": "b", "state": "open"}`},
@@ -65,5 +67,20 @@ func TestTrackingIssue(t *testing.T) {
 	}
 	if err := api.g.EditIssue(ctx, 12, "c", false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// An issue deleted, or moved to another repo, which GitHub answers with a
+// redirect, is gone: never an edit that went through.
+func TestEditIssueGone(t *testing.T) {
+	for _, status := range []int{410, 404, 301} {
+		st := step{req: "PATCH /repos/acme/shop/issues/7", body: `{"body":"c","state":"open"}`, status: status, resp: `{"message": "gone"}`}
+		if status == 301 {
+			st.header = map[string]string{"Location": "/repos/acme/other/issues/3"}
+		}
+		api := newAPI(t, []step{st})
+		if err := api.g.EditIssue(context.Background(), 7, "c", true); !errors.Is(err, ErrGone) {
+			t.Errorf("%d: EditIssue = %v, want ErrGone", status, err)
+		}
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mohsensc/tend-cli/internal/selfupdate"
 )
 
 func keygen(t *testing.T) (priv string, pub ed25519.PublicKey, pemText string) {
@@ -31,6 +33,13 @@ func keygen(t *testing.T) (priv string, pub ed25519.PublicKey, pemText string) {
 		t.Fatal(err)
 	}
 	return priv, b, lines[2]
+}
+
+func trust(t *testing.T, pub ed25519.PublicKey) {
+	t.Helper()
+	old := wantPublic
+	wantPublic = pub
+	t.Cleanup(func() { wantPublic = old })
 }
 
 func TestKeygen(t *testing.T) {
@@ -61,6 +70,7 @@ func TestKeygen(t *testing.T) {
 
 func TestSign(t *testing.T) {
 	priv, pub, pemText := keygen(t)
+	trust(t, pub)
 	dir := t.TempDir()
 	file := filepath.Join(dir, "checksums.txt")
 	data := []byte("abc123  tend_1.0.0_linux_amd64.tar.gz\n")
@@ -94,6 +104,9 @@ func TestSign(t *testing.T) {
 		t.Log("openssl not found, skipping the cross-check")
 		return
 	}
+	if v, _ := exec.Command("openssl", "version").Output(); !strings.HasPrefix(string(v), "OpenSSL 3") && !strings.HasPrefix(string(v), "OpenSSL 1.1.1") {
+		t.Skip("openssl is " + strings.TrimSpace(string(v)) + ", ed25519 needs OpenSSL 1.1.1 or newer")
+	}
 	pubFile, sigFile := filepath.Join(dir, "pub.pem"), filepath.Join(dir, "sig.bin")
 	if err := os.WriteFile(pubFile, []byte(pemText), 0o644); err != nil {
 		t.Fatal(err)
@@ -113,6 +126,7 @@ func TestSign(t *testing.T) {
 func TestSignAcceptsFullPrivateKey(t *testing.T) {
 	seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
 	full := ed25519.NewKeyFromSeed(seed)
+	trust(t, full.Public().(ed25519.PublicKey))
 	file := filepath.Join(t.TempDir(), "f")
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -130,6 +144,7 @@ func TestSignAcceptsFullPrivateKey(t *testing.T) {
 }
 
 func TestRunErrors(t *testing.T) {
+	trust(t, ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)).Public().(ed25519.PublicKey))
 	file := filepath.Join(t.TempDir(), "f")
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -156,5 +171,57 @@ func TestRunErrors(t *testing.T) {
 				t.Errorf("wrote to stdout on failure: %q", out.String())
 			}
 		})
+	}
+}
+
+func TestSignRefusesAKeyThatWouldNotVerify(t *testing.T) {
+	seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
+	full := ed25519.NewKeyFromSeed(seed)
+	trust(t, full.Public().(ed25519.PublicKey))
+	file := filepath.Join(t.TempDir(), "checksums.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	other := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{9}, ed25519.SeedSize))
+	mismatched := append(append([]byte{}, seed...), other[ed25519.SeedSize:]...)
+
+	tests := []struct {
+		name string
+		key  []byte
+		want string
+	}{
+		{"public half does not match the seed", mismatched, "does not match its seed"},
+		{"another key's seed", other.Seed(), "key.go and action/pubkey.pem hold"},
+		{"another full key", other, "key.go and action/pubkey.pem hold"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := run([]string{"-key", hex.EncodeToString(tc.key), "-in", file}, &out, os.Stderr)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want %q", err, tc.want)
+			}
+			if out.Len() != 0 {
+				t.Errorf("wrote a signature: %q", out.String())
+			}
+		})
+	}
+}
+
+func TestSignTrustsTheShippedKey(t *testing.T) {
+	if !wantPublic.Equal(selfupdate.PublicKey) {
+		t.Fatal("sign checks keys against something other than key.go")
+	}
+	_, pub, _ := keygen(t)
+	if pub.Equal(wantPublic) {
+		t.Fatal("a fresh key matched the shipped one")
+	}
+	file := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	priv, _, _ := keygen(t)
+	if err := run([]string{"-key", priv, "-in", file}, &bytes.Buffer{}, os.Stderr); err == nil {
+		t.Fatal("signed with a key that is not the shipped one")
 	}
 }

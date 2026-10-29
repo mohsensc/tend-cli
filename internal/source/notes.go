@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -80,8 +81,13 @@ func releaseNotes(ctx context.Context, f core.Fetcher, owner, repo, pkg string, 
 		hits = append(hits, hit{v, r})
 	}
 	slices.SortFunc(hits, func(a, b hit) int { return ver.Compare(b.v, a.v) })
+	vs := make([]ver.V, len(hits))
+	for i, h := range hits {
+		vs[i] = h.v
+	}
 	var res []core.Evidence
-	for _, h := range hits[:min(len(hits), notesMax)] {
+	for _, i := range pickNotes(vs) {
+		h := hits[i]
 		title := h.r.Tag
 		if h.r.Name != "" && h.r.Name != h.r.Tag {
 			title += " " + h.r.Name
@@ -145,8 +151,13 @@ func changelogNotes(ctx context.Context, f core.Fetcher, owner, repo string, spa
 			continue
 		}
 		slices.SortFunc(hits, func(a, b section) int { return ver.Compare(b.v, a.v) })
+		vs := make([]ver.V, len(hits))
+		for i, h := range hits {
+			vs[i] = h.v
+		}
 		var res []core.Evidence
-		for _, s := range hits[:min(len(hits), notesMax)] {
+		for _, i := range pickNotes(vs) {
+			s := hits[i]
 			res = append(res, core.Evidence{
 				Source: "changelog",
 				Title:  s.title,
@@ -157,6 +168,36 @@ func changelogNotes(ctx context.Context, f core.Fetcher, owner, repo string, spa
 		return res, nil
 	}
 	return nil, first
+}
+
+// majorNotes caps how many first releases of a major the notes add past
+// the newest notesMax.
+const majorNotes = 4
+
+// pickNotes picks, from versions newest first, which releases' notes to
+// quote: the newest notesMax, and the first release of each major the range
+// crosses, where a rewrite such as openai 1.0.0 says what breaks, however
+// many releases came after it. It returns indexes, newest first.
+func pickNotes(vs []ver.V) []int {
+	keep := map[int]bool{}
+	for i := range min(len(vs), notesMax) {
+		keep[i] = true
+	}
+	first := map[int]int{}
+	for i, v := range vs {
+		first[v.Major()] = i
+	}
+	if len(first) < 2 {
+		return slices.Sorted(maps.Keys(keep))
+	}
+	added := 0
+	for i := len(vs) - 1; i >= 0 && added < majorNotes; i-- {
+		if first[vs[i].Major()] == i && !keep[i] {
+			keep[i] = true
+			added++
+		}
+	}
+	return slices.Sorted(maps.Keys(keep))
 }
 
 type section struct {

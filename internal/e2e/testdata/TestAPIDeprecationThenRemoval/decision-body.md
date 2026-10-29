@@ -16,7 +16,7 @@ Nothing was changed in the code. No model is configured to move the call site, a
 
 Where the code uses it:
 
-- `app/orders.py:25` `/v1/orders/%s/legacy`
+- `app/orders.py:25` `with urllib.request.urlopen(BASE + "/v1/orders/%s/legacy" % order_id) as res:`
 
 ### Proof
 

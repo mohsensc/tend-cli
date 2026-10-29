@@ -23,11 +23,53 @@ type Provider struct {
 	Title     string            `yaml:"title"` // the name as the provider writes it: "GitHub"
 	Hosts     []string          `yaml:"hosts"`
 	Spec      string            `yaml:"spec"`      // URL, or a path relative to the repo root
+	More      []string          `yaml:"-"`         // more specs of the same API, from a spec: list, merged into Spec's
 	Changelog string            `yaml:"changelog"` // RSS, Atom or HTML page, for a provider without a spec
 	SDKs      []SDK             `yaml:"sdks"`
 	Base      string            `yaml:"base"`   // path prefix SDK calls go under: "/v1"
 	Verbs     map[string]string `yaml:"verbs"`  // SDK verb -> "METHOD[/suffix]", over the defaults in chains.go
 	Sunset    string            `yaml:"sunset"` // dotted key on an operation holding its removal date
+}
+
+// UnmarshalYAML takes spec as one URL or a list of them, for an API whose
+// provider splits its spec into several files.
+func (p *Provider) UnmarshalYAML(n *yaml.Node) error {
+	type plain Provider
+	rest := *n
+	rest.Content = nil
+	var spec *yaml.Node
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == "spec" {
+			spec = n.Content[i+1]
+			continue
+		}
+		rest.Content = append(rest.Content, n.Content[i], n.Content[i+1])
+	}
+	if err := rest.Decode((*plain)(p)); err != nil {
+		return err
+	}
+	if spec == nil {
+		return nil
+	}
+	if spec.Kind != yaml.SequenceNode {
+		return spec.Decode(&p.Spec)
+	}
+	var specs []string
+	if err := spec.Decode(&specs); err != nil {
+		return err
+	}
+	if len(specs) > 0 {
+		p.Spec, p.More = specs[0], specs[1:]
+	}
+	return nil
+}
+
+// Specs are all the spec files of the provider, Spec first.
+func (p *Provider) Specs() []string {
+	if p.Spec == "" {
+		return nil
+	}
+	return append([]string{p.Spec}, p.More...)
 }
 
 // Catalog is the built-in list of providers.
@@ -66,7 +108,7 @@ func Merge(cat []Provider, cfg []config.API) []Provider {
 			res[i].Hosts = a.Hosts
 		}
 		if a.Spec != "" {
-			res[i].Spec = a.Spec
+			res[i].Spec, res[i].More = a.Spec, nil
 		}
 		if a.Changelog != "" {
 			res[i].Changelog = a.Changelog

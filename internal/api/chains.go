@@ -33,6 +33,20 @@ var aliases = map[string]string{
 // to the operation it calls: POST /v1/payment_intents. The result is a guess
 // until the spec confirms it.
 func (p *Provider) Operation(chain []string, lang string) (method, path string, ok bool) {
+	return p.guess(chain, lang, false)
+}
+
+// Nested is Operation's other guess for a chain of several resources, each
+// below an item of the one before: customers.sources.create is POST
+// /v1/customers/{id}/sources. ok is false for a chain with one resource.
+func (p *Provider) Nested(chain []string, lang string) (method, path string, ok bool) {
+	if len(chain) < 4 {
+		return "", "", false
+	}
+	return p.guess(chain, lang, true)
+}
+
+func (p *Provider) guess(chain []string, lang string, nested bool) (method, path string, ok bool) {
 	if len(chain) < 2 {
 		return "", "", false
 	}
@@ -46,6 +60,9 @@ func (p *Provider) Operation(chain []string, lang string) (method, path string, 
 		verb = "create"
 	}
 	spec, ok := p.verb(verb)
+	if !ok && len(chain) > 2 && verb != "new" {
+		spec, ok = "POST/{id}/"+snake(verb), true
+	}
 	if !ok {
 		return "", "", false
 	}
@@ -73,7 +90,11 @@ func (p *Provider) Operation(chain []string, lang string) (method, path string, 
 	if suffix != "" {
 		suffix = "/" + suffix
 	}
-	return method, strings.TrimRight(p.Base, "/") + "/" + strings.Join(segs, "/") + suffix, true
+	sep := "/"
+	if nested {
+		sep = "/{id}/"
+	}
+	return method, strings.TrimRight(p.Base, "/") + "/" + strings.Join(segs, sep) + suffix, true
 }
 
 func (p *Provider) verb(v string) (string, bool) {

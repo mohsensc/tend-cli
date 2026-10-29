@@ -41,7 +41,10 @@ const guruList = `{
 }`
 
 func TestGuru(t *testing.T) {
-	dir := directory(context.Background(), &pages{body: map[string]string{apisGuru: guruList}})
+	dir, ok := directory(context.Background(), &pages{body: map[string]string{apisGuru: guruList}})
+	if !ok {
+		t.Fatal("the directory should load")
+	}
 	tests := []struct{ host, want string }{
 		{"api.example-unknown.com", "https://api.apis.guru/v2/specs/example-unknown.com/2.0.0/openapi.json"},
 		{"gmail.googleapis.com", "https://api.apis.guru/v2/specs/googleapis.com/gmail/v1/openapi.json"},
@@ -161,5 +164,55 @@ func TestDiscoverDeadHosts(t *testing.T) {
 	}
 	if !f.limit {
 		t.Error("a probe went out with no deadline of its own")
+	}
+}
+
+// outage fails the directory and serves nothing else.
+type outage struct {
+	mu    sync.Mutex
+	asked []string
+}
+
+func (o *outage) Get(ctx context.Context, u string, opts ...core.FetchOpt) (*core.Response, error) {
+	o.mu.Lock()
+	o.asked = append(o.asked, u)
+	o.mu.Unlock()
+	if u == apisGuru {
+		return nil, errors.New("api.apis.guru: HTTP 503")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &core.Response{Status: 404}, nil
+}
+
+func (o *outage) Post(context.Context, string, []byte, ...core.FetchOpt) (*core.Response, error) {
+	panic("discovery never posts")
+}
+
+func TestDiscoverOutage(t *testing.T) {
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	known := map[string]state.Found{"api.stale.com": {Spec: "https://stale.test/spec.json", At: now.Add(-8 * 24 * time.Hour)}}
+	f := &outage{}
+	got := Discover(context.Background(), f, []string{"api.stripe-like.com", "api.stale.com"}, known, now)
+	if _, ok := got["api.stripe-like.com"]; ok {
+		t.Errorf("a miss while the directory was down was kept: %+v", got)
+	}
+	if got["api.stale.com"] != known["api.stale.com"] {
+		t.Errorf("a host looked up during an outage should keep what was known: %+v", got["api.stale.com"])
+	}
+	before := len(f.asked)
+	Discover(context.Background(), f, []string{"api.stripe-like.com"}, got, now.Add(24*time.Hour))
+	if !slices.Contains(f.asked[before:], apisGuru) {
+		t.Error("the next run should look the host up again")
+	}
+}
+
+func TestDiscoverCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f := &pages{body: map[string]string{apisGuru: guruList}}
+	if got := Discover(ctx, f, []string{"api.foo.dev"}, nil, time.Now()); len(got) != 0 {
+		t.Errorf("a canceled lookup found %+v", got)
 	}
 }

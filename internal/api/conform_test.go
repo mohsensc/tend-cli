@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -432,5 +433,137 @@ func TestCombine(t *testing.T) {
 		if got.Kind != core.Breaking || !slices.Equal(at, []string{"a.js:1", "a.js:3", "b.js:1"}) {
 			t.Errorf("combine = %s %q", got.Kind, at)
 		}
+	}
+}
+
+func TestTypeChangePinnedUntilDone(t *testing.T) {
+	v1 := read(t, "testdata/fixture/v1.yaml")
+	retyped := strings.Replace(v1, "total_cents: {type: integer}", "total_cents: {type: string}", 1)
+	inv := pyAPI(nil, "total_cents")
+	s := specs(t, "v1")
+	inv.Providers = Detect(inv, s.Cat)
+	changes(t, s, inv)
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	s.Fetch = fetcher{fixtureSpec: retyped}
+	want := []string{"breaking api/fixture/GET /v1/orders#total_cents"}
+	for run := range 3 {
+		got := changes(t, s, inv)
+		if !slices.Equal(ids(got), want) {
+			t.Fatalf("run %d = %q", run, ids(got))
+		}
+		if a := got[0].API; a.What != "response field type changed" || !strings.Contains(got[0].Evidence[0].Text, "(integer -> string)") {
+			t.Errorf("run %d change = %+v %q", run, a, got[0].Evidence[0].Text)
+		}
+		if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s.Done = func(id string) bool { return id == "api/fixture/GET /v1/orders#total_cents" }
+	if got := changes(t, s, inv); len(got) != 0 {
+		t.Errorf("a delivered type change is not reported again: %q", ids(got))
+	}
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	s.Done = nil
+	if got := changes(t, s, inv); len(got) != 0 {
+		t.Errorf("a delivered type change should go after one snapshot: %q", ids(got))
+	}
+}
+
+func TestTypeChangeReleasedAtSnapshot(t *testing.T) {
+	v1 := read(t, "testdata/fixture/v1.yaml")
+	inv := pyAPI(nil, "total_cents")
+	s := specs(t, "v1")
+	inv.Providers = Detect(inv, s.Cat)
+	changes(t, s, inv)
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	s.Fetch = fetcher{fixtureSpec: strings.Replace(v1, "total_cents: {type: integer}", "total_cents: {type: string}", 1)}
+	if got := changes(t, s, inv); len(got) != 1 {
+		t.Fatalf("changes = %q", ids(got))
+	}
+	s.Done = func(id string) bool { return id == "api/fixture/GET /v1/orders#total_cents" }
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	s.Done = nil
+	if got := changes(t, s, inv); len(got) != 0 {
+		t.Errorf("a type change done by snapshot time should go: %q", ids(got))
+	}
+}
+
+func TestPinOnlyTheField(t *testing.T) {
+	v1 := read(t, "testdata/fixture/v1.yaml")
+	inv := pyAPI(nil, "total_cents")
+	s := specs(t, "v1")
+	inv.Providers = Detect(inv, s.Cat)
+	changes(t, s, inv)
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	v2 := strings.NewReplacer(
+		"total_cents: {type: integer}", "total_cents: {type: string}\n        note: {type: string}",
+		"        status: {type: string}\n", "",
+		"- {name: status, in: query}", "- {name: status, in: query}\n        - {name: page, in: query}",
+	).Replace(v1)
+	s.Fetch = fetcher{fixtureSpec: v2}
+	if got := ids(changes(t, s, inv)); !slices.Equal(got, []string{"breaking api/fixture/GET /v1/orders#total_cents"}) {
+		t.Fatalf("changes = %q", got)
+	}
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := Load([]byte(read(t, s.File("fixture"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := snap.Ops["GET /v1/orders"]
+	order := o.Response.Items
+	if order == nil || order.Props["total_cents"] == nil || order.Props["total_cents"].Type != "integer" {
+		t.Fatalf("the pinned field should keep its old type: %+v", order)
+	}
+	if order.Props["status"] != nil || order.Props["note"] == nil {
+		t.Errorf("the rest of the op should move on: %q", slices.Sorted(maps.Keys(order.Props)))
+	}
+	if !slices.ContainsFunc(o.Params, func(p Param) bool { return p.Name == "page" }) {
+		t.Errorf("params should move on: %+v", o.Params)
+	}
+	if got := ids(changes(t, s, inv)); !slices.Equal(got, []string{"breaking api/fixture/GET /v1/orders#total_cents"}) {
+		t.Errorf("after the snapshot = %q", got)
+	}
+}
+
+func TestPinParams(t *testing.T) {
+	v1 := read(t, "testdata/fixture/v1.yaml")
+	idx := &index{urls: []core.URLUse{{File: "app/orders.py", Line: 8, Method: "GET", URL: "https://api.fixture.dev/v1/orders?status=open"}}}
+	inv := &core.Inventory{Index: idx}
+	s := specs(t, "v1")
+	changes(t, s, inv)
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	s.Fetch = fetcher{fixtureSpec: strings.Replace(v1, "- {name: status, in: query}", "- {name: state, in: query}\n        - {name: cursor, in: query, required: true}", 1)}
+	want := []string{"breaking api/fixture/GET /v1/orders#cursor", "breaking api/fixture/GET /v1/orders#status"}
+	for run := range 2 {
+		if got := ids(changes(t, s, inv)); !slices.Equal(got, want) {
+			t.Fatalf("run %d = %q", run, got)
+		}
+		if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx.urls[0].URL = "https://api.fixture.dev/v1/orders?state=open&cursor=x"
+	changes(t, s, inv)
+	if err := s.Snapshot("fixture", s.Current("fixture")); err != nil {
+		t.Fatal(err)
+	}
+	idx.urls[0].URL = "https://api.fixture.dev/v1/orders"
+	if got := ids(changes(t, s, inv)); len(got) != 0 {
+		t.Errorf("once fixed the snapshot moves on: %q", got)
 	}
 }

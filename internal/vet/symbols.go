@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/proc"
 )
 
 type status int
@@ -43,6 +45,7 @@ func symbols(ctx context.Context, p *pass) ([]core.Finding, string) {
 		return nil, "no scan index"
 	}
 	r := &resolver{p: p, js: map[string]*jsPkg{}, added: map[string]map[int]string{}, docs: map[string]docResult{}}
+	major := ch.Level == "major"
 	var res []core.Finding
 	var where []string
 	seen := map[string]bool{}
@@ -61,7 +64,7 @@ func symbols(ctx context.Context, p *pass) ([]core.Finding, string) {
 			seen[key] = true
 			st, why, in := r.resolve(ctx, d, names, s)
 			touched := r.touched(s)
-			if st == none || st == unknown && !touched {
+			if st == none || st == unknown && !touched && !major {
 				continue
 			}
 			checked++
@@ -81,7 +84,11 @@ func symbols(ctx context.Context, p *pass) ([]core.Finding, string) {
 			case missing:
 				res = append(res, finding("symbols", s.File, s.Line, "flagged", "%s: %s", call, why))
 			case unknown:
-				res = append(res, finding("symbols", s.File, s.Line, "flagged", "%s not verified: %s", call, why))
+				across := ""
+				if !touched {
+					across = " across the major release"
+				}
+				res = append(res, finding("symbols", s.File, s.Line, "flagged", "%s not verified%s: %s", call, across, why))
 			}
 		}
 	}
@@ -152,28 +159,33 @@ func (r *resolver) resolve(ctx context.Context, d core.Dep, names []string, s co
 }
 
 // importOf finds the import the site's root binds to and returns the package
-// and the chain as names inside that package.
-func (r *resolver) importOf(names []string, s core.Site) (string, []string, bool) {
+// and the chain as names inside that package. bound says the root is the
+// module itself, as a require, a default or a namespace import binds it,
+// rather than one name imported from it.
+func (r *resolver) importOf(names []string, s core.Site) (pkg string, chain []string, bound, ok bool) {
 	for _, n := range names {
 		for _, imp := range r.p.in.Index.Imports(n) {
 			if imp.File != s.File {
 				continue
 			}
 			if imp.Binding == s.Chain[0] {
-				return imp.Package, s.Chain[1:], true
+				return imp.Package, s.Chain[1:], true, true
 			}
 			if slices.Contains(imp.Names, s.Chain[0]) {
-				return imp.Package, s.Chain, true
+				return imp.Package, s.Chain, false, true
 			}
 		}
 	}
-	return "", nil, false
+	return "", nil, false, false
 }
 
 type jsPkg struct {
 	label   string // name@version
 	text    string // every .d.ts file and the entry file
 	exports map[string]bool
+	typed   bool              // it ships typings, or @types has them
+	value   string            // what the module itself is, when it is one named thing: axios for export default axios
+	partial bool              // module.exports is a value whose members a scan of the code cannot read
 	members map[string]status // member answers by "name.m"
 	decls   map[string]string // the line declaring "name.m", when found
 }
@@ -183,14 +195,15 @@ var (
 	jsList  = regexp.MustCompile(`\bexport\s+(?:type\s+)?\{([^}]*)\}`)
 	cjsProp = regexp.MustCompile(`\b(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=`)
 	cjsObj  = regexp.MustCompile(`\bmodule\.exports\s*=\s*\{`)
+	cjsVal  = regexp.MustCompile(`\bmodule\.exports\s*=\s*(?:new\s+)?([^\s{;=][^\s;(]*)`)
+	jsDflt  = regexp.MustCompile(`\bexport\s+default\s+(?:(?:abstract\s+)?class\s+|(?:async\s+)?function\*?\s+)?([A-Za-z_$][\w$]*)`)
+	tsEq    = regexp.MustCompile(`\bexport\s*=\s*([A-Za-z_$][\w$]*)`)
 	jsKey   = regexp.MustCompile(`^\s*(?:async\s+|get\s+|set\s+|\*\s*)?['"]?([A-Za-z_$][\w$]*)`)
 )
 
 func (r *resolver) npm(names []string, s core.Site) (status, string, string) {
-	pkg, chain, ok := r.importOf(names, s)
+	pkg, chain, bound, ok := r.importOf(names, s)
 	if !ok {
-		// The call goes through a value the code made, such as an app a
-		// factory returned, whose members no export declares.
 		return none, "", ""
 	}
 	if len(chain) == 0 {
@@ -202,7 +215,16 @@ func (r *resolver) npm(names []string, s core.Site) (status, string, string) {
 		return unknown, name + " is not installed", ""
 	}
 	in := "in " + js.label + " typings"
+	if !js.typed && len(js.exports) == 0 {
+		return unknown, fmt.Sprintf("%s ships no typings, and its exports cannot be read", js.label), ""
+	}
 	if !js.exports[chain[0]] {
+		if bound && (js.value != "" || js.partial) {
+			return js.ofValue(chain, in)
+		}
+		if !js.typed && js.partial {
+			return unknown, fmt.Sprintf("%s's module.exports is a value whose members cannot be read", js.label), ""
+		}
 		return missing, fmt.Sprintf("`%s` is not exported by %s", chain[0], js.label), in
 	}
 	if len(chain) == 1 {
@@ -220,10 +242,32 @@ func (r *resolver) npm(names []string, s core.Site) (status, string, string) {
 	return resolved, "", in
 }
 
+// ofValue resolves chain as members of what the module itself is: get on
+// axios's default export, whose type extends the class that declares it.
+func (js *jsPkg) ofValue(chain []string, in string) (status, string, string) {
+	opaque := fmt.Sprintf("%s's module.exports is a value whose members cannot be read", js.label)
+	if js.value == "" || js.value == "function" || js.value == "class" {
+		return unknown, opaque, ""
+	}
+	switch js.member(js.value, chain[0]) {
+	case missing:
+		return missing, fmt.Sprintf("`%s` is neither exported by %s nor a member of what it exports", chain[0], js.label), in
+	case unknown:
+		if !js.typed {
+			return unknown, opaque, ""
+		}
+		return unknown, fmt.Sprintf("no declaration of what %s exports to look `%s` up in", js.label, chain[0]), ""
+	}
+	if len(chain) > 1 {
+		return unknown, fmt.Sprintf("checked as far as `%s`", chain[0]), in
+	}
+	return resolved, "", in
+}
+
 // declare keeps the line of the new typings that declares a call the patch
 // wrote, for the question check to show.
 func (r *resolver) declare(names []string, s core.Site) {
-	pkg, chain, ok := r.importOf(names, s)
+	pkg, chain, _, ok := r.importOf(names, s)
 	if !ok || len(chain) != 2 {
 		return
 	}
@@ -265,6 +309,9 @@ func (r *resolver) jsPackage(file, name string) *jsPkg {
 		}
 		if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
 			js := loadJS(cand, name)
+			if js != nil && !js.typed {
+				js.with(filepath.Join(dir, "node_modules", "@types", typesName(name)))
+			}
 			r.js[cand] = js
 			return js
 		}
@@ -275,18 +322,35 @@ func (r *resolver) jsPackage(file, name string) *jsPkg {
 	}
 }
 
+// typesName is where DefinitelyTyped keeps a package's typings under @types:
+// passport, or scope__pkg for @scope/pkg.
+func typesName(name string) string {
+	if s, p, ok := strings.Cut(strings.TrimPrefix(name, "@"), "/"); ok && strings.HasPrefix(name, "@") {
+		return s + "__" + p
+	}
+	return name
+}
+
+// with reads the typings in dir, @types for a package that ships none, into js.
+func (js *jsPkg) with(dir string) {
+	text, typed := dtsIn(dir)
+	if !typed {
+		return
+	}
+	js.text += "\n" + text
+	js.typed = true
+	js.read()
+}
+
 const (
 	jsMax   = 16 << 20
 	declMax = 300
 )
 
-func loadJS(dir, name string) *jsPkg {
-	var meta struct{ Version, Main string }
-	label := name
-	if b, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil && json.Unmarshal(b, &meta) == nil && meta.Version != "" {
-		label += "@" + meta.Version
-	}
+// dtsIn is every typings file under dir, and whether there was one.
+func dtsIn(dir string) (string, bool) {
 	var text strings.Builder
+	typed := false
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || text.Len() > jsMax {
 			return filepath.SkipDir
@@ -299,13 +363,29 @@ func loadJS(dir, name string) *jsPkg {
 			if b, err := os.ReadFile(p); err == nil {
 				text.Write(b)
 				text.WriteByte('\n')
+				typed = true
 			}
 		}
 		return nil
 	})
 	if err != nil {
+		return "", false
+	}
+	return text.String(), typed
+}
+
+func loadJS(dir, name string) *jsPkg {
+	var meta struct{ Version, Main string }
+	label := name
+	if b, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil && json.Unmarshal(b, &meta) == nil && meta.Version != "" {
+		label += "@" + meta.Version
+	}
+	if _, err := os.Stat(dir); err != nil {
 		return nil
 	}
+	dts, typed := dtsIn(dir)
+	var text strings.Builder
+	text.WriteString(dts)
 	entry := meta.Main
 	if entry == "" {
 		entry = "index.js"
@@ -316,7 +396,15 @@ func loadJS(dir, name string) *jsPkg {
 			break
 		}
 	}
-	js := &jsPkg{label: label, text: text.String(), exports: map[string]bool{}}
+	js := &jsPkg{label: label, text: text.String(), typed: typed}
+	js.read()
+	return js
+}
+
+// read finds what js exports in its text: the names, and what the module
+// itself is when it is one value.
+func (js *jsPkg) read() {
+	js.exports, js.members, js.decls = map[string]bool{}, nil, nil
 	for _, m := range jsDecl.FindAllStringSubmatch(js.text, -1) {
 		js.exports[m[1]] = true
 	}
@@ -336,7 +424,22 @@ func loadJS(dir, name string) *jsPkg {
 			js.exports[k] = true
 		}
 	}
-	return js
+	js.value, js.partial = "", false
+	for _, re := range []*regexp.Regexp{tsEq, jsDflt} {
+		if m := re.FindStringSubmatch(js.text); m != nil {
+			js.value = m[1]
+			return
+		}
+	}
+	for _, m := range cjsVal.FindAllStringSubmatch(js.text, -1) {
+		if m[1] == "exports" || strings.HasPrefix(m[1], "require") {
+			continue
+		}
+		js.partial = true
+		if v := m[1]; regexp.MustCompile(`^[A-Za-z_$][\w$]*$`).MatchString(v) {
+			js.value = v
+		}
+	}
 }
 
 // member looks for m inside the declarations of name and inside the type name
@@ -369,27 +472,180 @@ func (js *jsPkg) lookup(name, m string) (status, string) {
 	if res == resolved {
 		return res, decl
 	}
-	typed := regexp.MustCompile(`\b` + q + `\s*\??\s*:\s*(?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*)\s*[;,\n]`)
-	if t := typed.FindStringSubmatch(js.text); t != nil {
-		head := regexp.MustCompile(`\b(?:class|interface)\s+` + regexp.QuoteMeta(t[1]) + `\b[^{;]*\{`)
-		if st, decl := js.lookIn([]*regexp.Regexp{head}, m); st != unknown {
+	if t := js.declType(name); t != "" {
+		if st, decl := js.inType(t, m, map[string]bool{}); st != unknown {
 			return st, decl
 		}
 	}
 	return res, ""
 }
 
+// declType is the type name is declared with, as written: "AxiosStatic" for
+// `declare const axios: AxiosStatic;`, "" when there is none.
+func (js *jsPkg) declType(name string) string {
+	q := regexp.QuoteMeta(name)
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`\b(?:const|let|var)\s+` + q + `\s*:\s*`),
+		regexp.MustCompile(`(?:^|[\s;{,])` + q + `\s*\??\s*:\s*`),
+	} {
+		if loc := re.FindStringIndex(js.text); loc != nil {
+			if t := typeExpr(js.text[loc[1]:]); t != "" && !strings.HasPrefix(t, "{") {
+				return t
+			}
+		}
+	}
+	return ""
+}
+
+// typeExpr is the type written at the start of s: up to the semicolon,
+// comma or end of line that ends it outside any brackets.
+func typeExpr(s string) string {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '{', '(', '[', '<':
+			depth++
+		case '}', ')', ']', '>':
+			if depth == 0 {
+				return strings.TrimSpace(s[:i])
+			}
+			depth--
+		case ';', ',', '=':
+			if depth == 0 {
+				return strings.TrimSpace(s[:i])
+			}
+		case '\n':
+			rest := strings.TrimSpace(s[i:])
+			if depth == 0 && !strings.HasPrefix(rest, "&") && !strings.HasPrefix(rest, "|") && !strings.HasSuffix(strings.TrimSpace(s[:i]), "&") && !strings.HasSuffix(strings.TrimSpace(s[:i]), "|") {
+				return strings.TrimSpace(s[:i])
+			}
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+// splitTop splits s at sep where no bracket is open.
+func splitTop(s string, sep ...byte) []string {
+	var res []string
+	depth, start := 0, 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == '{' || c == '(' || c == '[' || c == '<':
+			depth++
+		case c == '}' || c == ')' || c == ']' || c == '>':
+			depth--
+		case depth == 0 && slices.Contains(sep, c):
+			res = append(res, strings.TrimSpace(s[start:i]))
+			start = i + 1
+		}
+	}
+	return append(res, strings.TrimSpace(s[start:]))
+}
+
+// inType looks for m in a type expression: each part of an intersection or
+// union, an object literal, or a named type, with what it extends. It is
+// missing only when every part was found and none declares m.
+func (js *jsPkg) inType(expr, m string, seen map[string]bool) (status, string) {
+	res := missing
+	for _, part := range splitTop(expr, '&', '|') {
+		var st status
+		var decl string
+		switch {
+		case part == "":
+			continue
+		case strings.HasPrefix(part, "{"):
+			st, decl = blockHas(braceBlock(part, 0), m)
+		case strings.HasPrefix(part, "typeof "):
+			st, decl = js.lookup(strings.TrimSpace(strings.TrimPrefix(part, "typeof ")), m)
+		default:
+			st, decl = js.typeHas(typeName(part), m, seen)
+		}
+		switch st {
+		case resolved:
+			return resolved, decl
+		case unknown:
+			res = unknown
+		}
+	}
+	return res, ""
+}
+
+// typeName is the bare name of a type reference: Chalk for chalk.Chalk<T>.
+func typeName(ref string) string {
+	ref, _, _ = strings.Cut(ref, "<")
+	ref = strings.TrimSpace(ref)
+	return ref[strings.LastIndexByte(ref, '.')+1:]
+}
+
+// typeHas looks for m in the classes, interfaces and type aliases named t,
+// and in what they extend.
+func (js *jsPkg) typeHas(t, m string, seen map[string]bool) (status, string) {
+	if seen[t] || len(seen) > 32 || !regexp.MustCompile(`^[A-Za-z_$][\w$]*$`).MatchString(t) {
+		return unknown, ""
+	}
+	seen[t] = true
+	q := regexp.QuoteMeta(t)
+	found := false
+	var bases []string
+	head := regexp.MustCompile(`\b(?:class|interface)\s+` + q + `\b([^{;]*)\{`)
+	for _, loc := range head.FindAllStringSubmatchIndex(js.text, -1) {
+		found = true
+		if st, decl := blockHas(braceBlock(js.text, loc[1]-1), m); st == resolved {
+			return st, decl
+		}
+		h := js.text[loc[2]:loc[3]]
+		if _, ext, ok := strings.Cut(h, "extends"); ok {
+			ext, _, _ = strings.Cut(ext, "implements")
+			bases = append(bases, splitTop(ext, ',')...)
+		}
+	}
+	alias := regexp.MustCompile(`\btype\s+` + q + `\s*(?:<[^=]*>)?\s*=\s*`)
+	for _, loc := range alias.FindAllStringIndex(js.text, -1) {
+		found = true
+		st, decl := js.inType(typeExpr(js.text[loc[1]:]), m, seen)
+		if st == resolved {
+			return st, decl
+		}
+		if st == unknown {
+			return unknown, ""
+		}
+	}
+	if !found {
+		return unknown, ""
+	}
+	res := missing
+	for _, b := range bases {
+		switch st, decl := js.typeHas(typeName(b), m, seen); st {
+		case resolved:
+			return st, decl
+		case unknown:
+			res = unknown
+		}
+	}
+	return res, ""
+}
+
+// blockHas looks for a member m declared in a type or object body.
+func blockHas(block, m string) (status, string) {
+	if at := memberOf(m).FindStringIndex(block); at != nil {
+		start := strings.LastIndexByte(block[:at[1]], '\n') + 1
+		line, _, _ := strings.Cut(block[start:], "\n")
+		return resolved, core.Clip(strings.TrimSpace(line), declMax)
+	}
+	return missing, ""
+}
+
+func memberOf(m string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[\s;{,(])(?:(?:readonly|static|public|async|get|set|declare|export|function|const|let|var|abstract)\s+)*` + regexp.QuoteMeta(m) + `\s*\??\s*[(:<=,;}]`)
+}
+
 // lookIn also returns the line that declares m, when it is found.
 func (js *jsPkg) lookIn(heads []*regexp.Regexp, m string) (status, string) {
-	member := regexp.MustCompile(`(?:^|[\s;{,(])(?:(?:readonly|static|public|async|get|set|declare|export|function|const|let|var|abstract)\s+)*` + regexp.QuoteMeta(m) + `\s*\??\s*[(:<=,;}]`)
 	res := unknown
 	for _, h := range heads {
 		for _, loc := range h.FindAllStringIndex(js.text, -1) {
-			block := braceBlock(js.text, loc[1]-1)
-			if at := member.FindStringIndex(block); at != nil {
-				start := strings.LastIndexByte(block[:at[1]], '\n') + 1
-				line, _, _ := strings.Cut(block[start:], "\n")
-				return resolved, core.Clip(strings.TrimSpace(line), declMax)
+			if st, decl := blockHas(braceBlock(js.text, loc[1]-1), m); st == resolved {
+				return st, decl
 			}
 			if strings.Contains(js.text[loc[0]:loc[1]], "extends") {
 				continue
@@ -463,10 +719,14 @@ func (r *resolver) golang(ctx context.Context, s core.Site) (status, string) {
 	if len(s.Chain) > 2 {
 		sym += "." + s.Chain[2]
 	}
-	k := pkg + " " + sym
+	target, ok := goTarget(filepath.Join(r.p.in.Dir, filepath.FromSlash(s.File)))
+	if !ok {
+		return unknown, "the file builds only under build tags no platform sets"
+	}
+	k := pkg + " " + sym + " " + target
 	res, ok := r.docs[k]
 	if !ok {
-		res.st, res.why = goDoc(ctx, r.p.in.Dir, pkg, sym)
+		res.st, res.why = goDoc(ctx, r.p.in.Dir, pkg, sym, target)
 		r.docs[k] = res
 	}
 	if res.st == resolved && len(s.Chain) > 3 {
@@ -477,12 +737,18 @@ func (r *resolver) golang(ctx context.Context, s core.Site) (status, string) {
 
 // goDoc asks go doc whether pkg has sym, from the worktree's module. go.mod is
 // read only: a change go doc made to it would be committed without being vetted.
-func goDoc(ctx context.Context, dir, pkg, sym string) (status, string) {
+func goDoc(ctx context.Context, dir, pkg, sym, target string) (status, string) {
 	ctx, cancel := context.WithTimeout(ctx, goDocTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", "doc", pkg, sym)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOFLAGS=-mod=readonly")
+	env := []string{"GOFLAGS=-mod=readonly"}
+	if goos, goarch, ok := strings.Cut(target, "/"); ok {
+		env = append(env, "GOOS="+goos, "GOARCH="+goarch)
+	}
+	cmd.Env = core.Environ(env...)
+	proc.Group(cmd)
+	cmd.WaitDelay = time.Second
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return resolved, ""
@@ -498,6 +764,34 @@ func goDoc(ctx context.Context, dir, pkg, sym string) (status, string) {
 		msg = err.Error()
 	}
 	return unknown, strings.TrimPrefix(msg, "doc: ")
+}
+
+// goTargets are the platforms a file that does not build on this one is
+// looked up for, the common ones first.
+var goTargets = []string{
+	"linux/amd64", "darwin/arm64", "windows/amd64", "freebsd/amd64", "openbsd/amd64", "netbsd/amd64",
+	"dragonfly/amd64", "solaris/amd64", "illumos/amd64", "aix/ppc64", "zos/s390x", "plan9/amd64",
+	"android/arm64", "ios/arm64", "js/wasm", "wasip1/wasm", "linux/arm64", "linux/386", "linux/arm",
+	"linux/s390x", "linux/ppc64le", "linux/riscv64", "linux/mips64", "linux/loong64", "windows/arm64",
+}
+
+// goTarget is the platform the file at p builds for, as GOOS/GOARCH: ""
+// for this one, or the first of goTargets its build constraints and name
+// allow. ok is false when none does, for a file behind a custom tag.
+func goTarget(p string) (string, bool) {
+	dir, name := filepath.Split(p)
+	if ok, err := build.Default.MatchFile(dir, name); err != nil || ok {
+		return "", true
+	}
+	for _, t := range goTargets {
+		c := build.Default
+		c.GOOS, c.GOARCH, _ = strings.Cut(t, "/")
+		c.CgoEnabled = true
+		if ok, err := c.MatchFile(dir, name); err == nil && ok {
+			return t, true
+		}
+	}
+	return "", false
 }
 
 var goMajor = regexp.MustCompile(`^v[0-9]+$`)
@@ -536,7 +830,7 @@ func goImports(file string) map[string]string {
 }
 
 func (r *resolver) pip(names []string, s core.Site) (status, string, string) {
-	mod, chain, ok := r.importOf(names, s)
+	mod, chain, _, ok := r.importOf(names, s)
 	if !ok {
 		return none, "", ""
 	}

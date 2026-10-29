@@ -129,6 +129,11 @@ func (l *lexer) comment() bool {
 		return false
 	case l.lineComment():
 		end := l.eol(l.i)
+		if l.php {
+			if k := bytes.Index(l.src[l.i:end], []byte("?>")); k >= 0 {
+				end = l.i + k
+			}
+		}
 		l.blank(l.i, end)
 		l.i = end
 	case l.block && l.at("/*"):
@@ -217,7 +222,7 @@ func (l *lexer) str() bool {
 		l.closed(l.i+1, string(c), false)
 	case strings.IndexByte(l.quotes, c) >= 0:
 		return l.quoted(c)
-	case l.regex && c == '/' && (l.prev == 0 || strings.IndexByte("(,=:[!&|?;{~", l.prev) >= 0):
+	case l.regex && c == '/' && l.regexAllowed():
 		return l.re()
 	case l.ruby && c == '%':
 		return l.percent()
@@ -290,6 +295,46 @@ func (l *lexer) tmpl() {
 		}
 	}
 	l.fail()
+}
+
+var (
+	regexAfter = map[string]bool{
+		"return": true, "typeof": true, "instanceof": true, "in": true, "of": true, "new": true, "delete": true,
+		"void": true, "throw": true, "case": true, "do": true, "else": true, "yield": true, "await": true,
+	}
+	rubyRegexAfter = map[string]bool{
+		"if": true, "elsif": true, "unless": true, "when": true, "and": true, "or": true, "not": true, "while": true, "until": true,
+	}
+)
+
+func (l *lexer) regexAllowed() bool {
+	switch {
+	case l.prev == 0 || strings.IndexByte("(,=:[!&|?;{~>*%^", l.prev) >= 0:
+		return true
+	case l.prev == '+' || l.prev == '-':
+		j := l.back(l.i)
+		return j < 1 || l.code[j-1] != l.prev
+	case !isIdent(l.prev):
+		return false
+	}
+	end := l.back(l.i) + 1
+	start := end
+	for start > 0 && isIdent(l.code[start-1]) {
+		start--
+	}
+	if start > 0 && l.code[start-1] == '.' {
+		return false
+	}
+	word := l.code[start:end]
+	return regexAfter[string(word)] || l.ruby && rubyRegexAfter[string(word)]
+}
+
+func (l *lexer) back(j int) int {
+	j--
+	for j >= 0 && isSpace(l.code[j]) {
+		j--
+	}
+	return j
 }
 
 func (l *lexer) re() bool {

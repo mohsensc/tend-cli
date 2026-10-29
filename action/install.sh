@@ -24,28 +24,62 @@ tags() {
 	grep -o '"tag_name": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true
 }
 
-# An explicit version wins. Then a full tag in the action ref. Then the newest
-# release inside the ref's major (uses: ...@v1), followed by the one before
-# it, else the newest release.
+releases() {
+	local body
+	body=$(api_get "$api/repos/$repo/releases?per_page=100") || die "could not list releases of $repo"
+	echo "$body" | tags
+}
+
+# tagged prints the release tags that point at commit $1. /tags gives each
+# tag's commit already dereferenced, so annotated tags match too.
+tagged() {
+	local page=1 body count
+	while [ "$page" -le 50 ]; do
+		body=$(api_get "$api/repos/$repo/tags?per_page=100&page=$page") || die "could not list tags of $repo"
+		count=$(echo "$body" | grep -o '"name": *"[^"]*"' | wc -l)
+		echo "$body" | grep -oE '"(name|sha)": *"[^"]*"' | awk -F'"' -v want="$1" '
+			$2 == "name" { name = $4; next }
+			$2 == "sha" && name != "" { if ($4 == want) print name; name = "" }'
+		[ "$count" -ge 100 ] || return 0
+		page=$((page + 1))
+	done
+}
+
+newest() {
+	sort -t. -k1.2,1nr -k2,2nr -k3,3nr | head -n "$1"
+}
+
+# An explicit version wins. Then the action ref: a full tag is used as is; a
+# commit installs the release tagged at that commit; a major (@v1) or a minor
+# (@v1.2) installs the newest release inside it, followed by the one before
+# it. Any other ref, a branch, gets the latest release.
 resolve() {
-	local major list
+	local list sha found pick
 	if [ -n "${1:-}" ]; then
 		echo "v${1#v}"
 		return
 	fi
-	case "$ref" in
-	v[0-9]*.[0-9]*.[0-9]*)
+	if [[ $ref =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
 		echo "$ref"
-		return
-		;;
-	v[0-9]*)
-		major=${ref%%.*}
-		list=$(api_get "$api/repos/$repo/releases?per_page=100" | tags) || die "could not list releases of $repo"
-		{ echo "$list" | grep -E "^${major}\.[0-9]+\.[0-9]+\$" || true; } | sort -t. -k2,2nr -k3,3nr | head -n 2
-		return
-		;;
-	esac
-	api_get "$api/repos/$repo/releases/latest" | tags | sed -n 1p
+	elif [[ $ref =~ ^v[0-9]+$ ]]; then
+		list=$(releases) || exit 1
+		echo "$list" | grep -E "^${ref}\.[0-9]+\.[0-9]+\$" | newest 2 || true
+	elif [[ $ref =~ ^v[0-9]+\.[0-9]+$ ]]; then
+		list=$(releases) || exit 1
+		echo "$list" | grep -E "^${ref%.*}\.${ref#*.}\.[0-9]+\$" | newest 2 || true
+	elif [[ $ref =~ ^[0-9a-fA-F]{40}$ ]]; then
+		sha=$(echo "$ref" | tr A-F a-f)
+		found=$(tagged "$sha") || exit 1
+		pick=$(echo "$found" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | newest 1 || true)
+		[ -n "$pick" ] || pick=$(echo "$found" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$' | head -n 1 || true)
+		[ -n "$pick" ] || die "commit $sha of $repo is not a release; pin a release commit or set the version input"
+		echo "$pick"
+	elif [[ $ref =~ ^v[0-9] ]]; then
+		die "action ref $ref is not a release tag; use @vN, @vN.M, @vN.M.P or a release commit, or set the version input"
+	else
+		[ -z "$ref" ] || echo "tend install: action ref $ref is not a release; installing the latest release" >&2
+		api_get "$api/repos/$repo/releases/latest" | tags | sed -n 1p
+	fi
 }
 
 find_openssl() {
@@ -70,9 +104,8 @@ sha256_of() {
 tags=$(resolve "${1:-}")
 tag=$(echo "$tags" | sed -n 1p)
 [ -n "$tag" ] || die "no release of $repo matches ${1:-${ref:-the latest release}}"
-# The newest release of a major may still be uploading its files when a
-# scheduled run starts; the one before it is installed instead. Either is
-# checked the same way below.
+# A major or minor ref falls back to the release before the newest when the
+# newest has no signed checksums. Either is checked the same way below.
 older=$(echo "$tags" | sed -n 2p)
 if [ -n "$older" ] && ! curl -fsSL --retry 2 -o /dev/null "$dl/$repo/releases/download/$tag/checksums.txt.sig" 2>/dev/null; then
 	echo "tend install: $tag has no signed checksums yet; installing $older" >&2
@@ -128,10 +161,15 @@ else
 fi
 
 dest=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/tend/bin
+entry=$dest
+if [ "$os" = windows ] && command -v cygpath >/dev/null 2>&1; then
+	dest=$(cygpath -u "$dest")
+	entry=$(cygpath -w "$dest")
+fi
 mkdir -p "$dest"
 install -m 0755 "$work/$bin" "$dest/$bin"
 if [ -n "${GITHUB_PATH:-}" ]; then
-	echo "$dest" >>"$GITHUB_PATH"
+	echo "$entry" >>"$GITHUB_PATH"
 else
 	echo "add to PATH: $dest"
 fi

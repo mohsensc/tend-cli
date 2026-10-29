@@ -6,8 +6,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -19,11 +21,14 @@ import (
 )
 
 const (
-	timeout  = 120 * time.Second
+	timeout  = 10 * time.Minute
 	retries  = 3
 	maxWait  = time.Minute
 	maxBody  = 32 << 20
 	replyMax = 8000 // tokens in one reply
+
+	noReply = "(no reply)"
+	noText  = "(empty)"
 )
 
 // presets are providers that speak the chat completions API at their own
@@ -101,8 +106,8 @@ func apiKey(cfg config.Model, usual string, getenv func(string) string) (string,
 	return "", fmt.Errorf("model: no API key: set %s or TEND_MODEL_KEY", usual)
 }
 
-// poster is one JSON POST with retries on 429, 5xx, and a tool call the
-// model sent malformed.
+// poster is one JSON POST with retries on 429, 5xx, a dropped connection, and
+// a tool call the model sent malformed.
 type poster struct {
 	url    string
 	header map[string]string
@@ -129,13 +134,19 @@ func (p *poster) post(ctx context.Context, body any) ([]byte, error) {
 			req.Header.Set(k, v)
 		}
 		resp, err := p.http.Do(req)
-		if err != nil {
-			return nil, err
+		var data []byte
+		if err == nil {
+			data, err = io.ReadAll(io.LimitReader(resp.Body, maxBody))
+			resp.Body.Close()
 		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
-		resp.Body.Close()
 		if err != nil {
-			return nil, err
+			if ctx.Err() != nil || timedOut(err) || attempt == retries {
+				return nil, err
+			}
+			if err := p.sleep(ctx, delay(attempt, "", time.Now())); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		if resp.StatusCode/100 == 2 {
 			return data, nil
@@ -149,6 +160,11 @@ func (p *poster) post(ctx context.Context, body any) ([]byte, error) {
 			return nil, err
 		}
 	}
+}
+
+func timedOut(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
 }
 
 func (p *poster) sleep(ctx context.Context, d time.Duration) error {

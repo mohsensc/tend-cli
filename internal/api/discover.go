@@ -74,8 +74,11 @@ func apiLike(host, lit string) bool {
 // Discover looks for an OpenAPI spec for each host: in the APIs.guru
 // directory, then at the usual paths on the host and on its docs and
 // developer siblings. Hosts are looked up a few at a time. It never sends
-// credentials, and trusts what it found, or did not, for a week. It returns
-// what is known about every host, the old findings included.
+// credentials, and trusts what it found, or did not, for a week. A lookup
+// that could not finish, because the directory was out of reach or ctx ended,
+// is not a finding: such a host keeps what was known of it, or is left out,
+// and is looked up again next time. It returns what is known about every
+// host, the old findings included.
 func Discover(ctx context.Context, f core.Fetcher, hosts []string, known map[string]state.Found, now time.Time) map[string]state.Found {
 	res := map[string]state.Found{}
 	var todo []string
@@ -89,15 +92,21 @@ func Discover(ctx context.Context, f core.Fetcher, hosts []string, known map[str
 	if len(todo) == 0 {
 		return res
 	}
-	dir := directory(ctx, f)
+	dir, ok := directory(ctx, f)
 	specs := make([]string, len(todo))
 	source.Parallel(len(todo), func(i int) {
 		if specs[i] = guru(dir, todo[i]); specs[i] == "" {
 			specs[i] = probe(ctx, f, todo[i])
 		}
 	})
+	sure := ok && ctx.Err() == nil
 	for i, h := range todo {
-		res[h] = state.Found{Spec: specs[i], At: now}
+		switch {
+		case specs[i] != "" || sure:
+			res[h] = state.Found{Spec: specs[i], At: now}
+		case !known[h].At.IsZero():
+			res[h] = known[h]
+		}
 	}
 	return res
 }
@@ -116,15 +125,17 @@ type guruAPI struct {
 	} `json:"versions"`
 }
 
-// directory is APIs.guru's list, empty when it cannot be had.
-func directory(ctx context.Context, f core.Fetcher) map[string]guruAPI {
+// directory is APIs.guru's list; ok is false when it could not be had.
+func directory(ctx context.Context, f core.Fetcher) (map[string]guruAPI, bool) {
 	res := map[string]guruAPI{}
 	got, err := f.Get(ctx, apisGuru, fetch.TTL(foundFor))
 	if err != nil || got.Status != 200 {
-		return res
+		return res, false
 	}
-	_ = json.Unmarshal(got.Body, &res)
-	return res
+	if json.Unmarshal(got.Body, &res) != nil {
+		return map[string]guruAPI{}, false
+	}
+	return res, true
 }
 
 // guru finds the directory's spec for a host: the entry named for the host

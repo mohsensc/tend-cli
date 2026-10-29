@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -107,14 +108,50 @@ func goParse(root, rel string) (*modfile.File, error) {
 	return modfile.Parse(rel, data, nil)
 }
 
+var goEnvFile = sync.OnceValue(func() map[string]string {
+	p := os.Getenv("GOENV")
+	if p == "off" {
+		return nil
+	}
+	if p == "" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return nil
+		}
+		p = filepath.Join(dir, "go", "env")
+	}
+	return readGoEnvFile(p)
+})
+
+func readGoEnvFile(p string) map[string]string {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	res := map[string]string{}
+	for _, l := range strings.Split(string(b), "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(l), "="); ok && k != "" {
+			res[k] = v
+		}
+	}
+	return res
+}
+
+func goSetting(key string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return goEnvFile()[key]
+}
+
 // goProxy is the module proxy Meta reads, from GOPROXY the way the go command
 // would pick it. "direct" has no proxy protocol, so it reads the public one.
 func goProxy(mod string) (string, error) {
-	private := cmp.Or(os.Getenv("GONOPROXY"), os.Getenv("GOPRIVATE"))
+	private := cmp.Or(goSetting("GONOPROXY"), goSetting("GOPRIVATE"))
 	if private != "" && module.MatchPrefixPatterns(private, mod) {
 		return "", fmt.Errorf("%s is private (GOPRIVATE/GONOPROXY): %w", mod, core.ErrNotSupported)
 	}
-	first := os.Getenv("GOPROXY")
+	first := goSetting("GOPROXY")
 	if i := strings.IndexAny(first, ",|"); i >= 0 {
 		first = first[:i]
 	}
@@ -302,21 +339,15 @@ func (gomod) Meta(ctx context.Context, f core.Fetcher, name string) (*core.Meta,
 	meta := &core.Meta{Name: name}
 	paths := map[string][]string{name: vs}
 	order := []string{name}
-	top := goHighestMajor(name, vs)
-	for n, tries := top+1, 0; goMayMove(name) && tries < 20; n, tries = n+1, tries+1 {
-		p := goPathAt(name, n)
-		if p == "" {
-			break
-		}
-		more, found, err := c.list(p)
+	if goMayMove(name) {
+		majors, err := c.majors(name, goHighestMajor(name, vs))
 		if err != nil {
 			return nil, err
 		}
-		if !found || len(more) == 0 {
-			break
+		for _, m := range majors {
+			paths[m.path] = m.vs
+			order = append(order, m.path)
 		}
-		paths[p] = more
-		order = append(order, p)
 	}
 	for _, p := range order {
 		rel, err := c.releases(p, paths[p], meta, p == name)
@@ -334,6 +365,74 @@ func (gomod) Meta(ctx context.Context, f core.Fetcher, name string) (*core.Meta,
 	}
 	meta.Repo = goRepo(name)
 	return meta, nil
+}
+
+// goMajorMax caps how far above the major in use the proxy is asked about.
+const goMajorMax = 1000
+
+type goMajor struct {
+	path string
+	vs   []string
+}
+
+// majors finds the major versions above top that a module has under /vN
+// paths: the next one, the one to move a major at a time to, and the
+// highest, the latest. It gallops, +1, +2, +4 and on until a path is
+// missing, then halves the gap, so go-github's v28 to v90 takes a dozen
+// requests and not sixty.
+func (c goProxyClient) majors(name string, top int) ([]goMajor, error) {
+	seen := map[int][]string{}
+	at := func(n int) (bool, error) {
+		if _, ok := seen[n]; ok {
+			return true, nil
+		}
+		p := goPathAt(name, n)
+		if p == "" {
+			return false, nil
+		}
+		vs, found, err := c.list(p)
+		if err != nil || !found || len(vs) == 0 {
+			return false, err
+		}
+		seen[n] = vs
+		return true, nil
+	}
+	hit, miss := top, 0
+	for step := 1; ; step *= 2 {
+		n := top + step
+		if n > top+goMajorMax {
+			miss = n
+			break
+		}
+		ok, err := at(n)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			miss = n
+			break
+		}
+		hit = n
+	}
+	for miss-hit > 1 {
+		mid := hit + (miss-hit)/2
+		ok, err := at(mid)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			hit = mid
+		} else {
+			miss = mid
+		}
+	}
+	var res []goMajor
+	for _, n := range []int{top + 1, hit} {
+		if vs, ok := seen[n]; ok && n > top && !slices.ContainsFunc(res, func(m goMajor) bool { return m.path == goPathAt(name, n) }) {
+			res = append(res, goMajor{goPathAt(name, n), vs})
+		}
+	}
+	return res, nil
 }
 
 // releases lists one module path's versions with its retractions applied,
@@ -598,8 +697,21 @@ func goKeep(root string, m core.Manifest, snap fileSnap, skip ...string) error {
 		}
 	}
 	lines = slices.DeleteFunc(lines, func(l string) bool { return l == "" })
-	slices.Sort(lines)
+	slices.SortFunc(lines, goSumCompare)
 	return writeKeepMode(p, []byte(strings.Join(lines, "\n")+"\n"))
+}
+
+func goSumCompare(a, b string) int {
+	fa, fb := strings.Fields(a), strings.Fields(b)
+	if len(fa) != 3 || len(fb) != 3 {
+		return strings.Compare(a, b)
+	}
+	if c := strings.Compare(fa[0], fb[0]); c != 0 {
+		return c
+	}
+	va, sa, _ := strings.Cut(fa[1], "/")
+	vb, sb, _ := strings.Cut(fb[1], "/")
+	return cmp.Or(semver.Compare(va, vb), strings.Compare(va, vb), strings.Compare(sa, sb), strings.Compare(fa[2], fb[2]))
 }
 
 // goEnv forces module mode for go get and tidy, and keeps a go.work above the
@@ -729,10 +841,36 @@ func goMajorSuffix(rest string) bool {
 
 func (gomod) Commands(root string, m core.Manifest) core.Commands {
 	dir := path.Dir(m.Path)
-	return core.Commands{
-		Build: []string{inDir(dir, "go build ./...")},
-		Test:  []string{inDir(dir, "go vet ./... && go test ./...")},
+	c := core.Commands{Build: []string{inDir(dir, "go build ./...")}}
+	if goHasPackages(filepath.Join(root, filepath.FromSlash(dir))) {
+		c.Test = []string{inDir(dir, "go vet ./... && go test ./...")}
 	}
+	return c
+}
+
+// goHasPackages says whether a file of the module at dir builds under the
+// default build context, leaving out the modules nested in it.
+func goHasPackages(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || found {
+			return filepath.SkipDir
+		}
+		n := d.Name()
+		if d.IsDir() {
+			if p != dir && (n == "testdata" || n == "vendor" || strings.HasPrefix(n, ".") || strings.HasPrefix(n, "_") || onDisk(p, "go.mod")) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(n, ".go") {
+			if ok, err := build.Default.MatchFile(filepath.Dir(p), n); err == nil && ok {
+				found = true
+			}
+		}
+		return nil
+	})
+	return found
 }
 
 // Imports is the module path; scan matches the module's packages by prefix.

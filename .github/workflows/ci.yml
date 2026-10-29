@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
+          check-latest: true
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15
@@ -23,3 +24,69 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test -race ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  # Self-update and the installer differ per OS; the rest of the suite assumes
+  # unix tools, so only this package runs here.
+  selfupdate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+      - run: go test ./internal/selfupdate/...
+
+  # Runs the composite action the way users do. checkout keeps its credentials
+  # here so the scrub has something to remove.
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            version: 1.0.0
+          - os: macos-latest
+            version: 1.0.0
+          - os: windows-latest
+            version: 1.0.0
+          - os: ubuntu-latest
+            version: ""
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+        with:
+          command: check
+          version: ${{ matrix.version }}
+      - name: credentials are gone and tend is installed
+        shell: bash
+        run: |
+          if git config --local --get-all http.https://github.com/.extraheader; then
+            echo "the checkout token is still in the config" >&2
+            exit 1
+          fi
+          if git config --local --get-regexp '^includeif\..*\.path$' | grep git-credentials-; then
+            echo "an include still points at checkout's credentials" >&2
+            exit 1
+          fi
+          temp=$RUNNER_TEMP
+          command -v cygpath >/dev/null && temp=$(cygpath -u "$RUNNER_TEMP")
+          if ls "$temp"/git-credentials-*.config 2>/dev/null; then
+            echo "checkout's credentials file is still in RUNNER_TEMP" >&2
+            exit 1
+          fi
+          ls "$temp"/tend/bin/tend*
+          tend version

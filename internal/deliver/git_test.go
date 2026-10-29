@@ -391,3 +391,23 @@ func TestRemoteAuth(t *testing.T) {
 		t.Errorf("without a token: %+v", r.push)
 	}
 }
+
+// A closed PR's branch goes while it holds what tend pushed, and stays once
+// someone else moved it.
+func TestDeleteBranch(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	head := commit(t, wt.Dir, "package.json", `{"v":2}`, "bump")
+	if err := Push(bg, wt, r.push, "tend/a", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteBranch(bg, r.push, "tend/a", "0000000000000000000000000000000000000000"); err == nil || r.tip(t, "tend/a") != head {
+		t.Errorf("deleted a branch that moved: %v", err)
+	}
+	if err := DeleteBranch(bg, r.push, "tend/a", head); err != nil || r.tip(t, "tend/a") != "" {
+		t.Errorf("delete = %v, tip %q", err, r.tip(t, "tend/a"))
+	}
+	if err := DeleteBranch(bg, r.push, "tend/a", ""); err == nil {
+		t.Error("deleted with no known commit")
+	}
+}

@@ -361,7 +361,7 @@ func pickVersion(req string, vs []string) string {
 			top = v
 		}
 		pv, ok := ver.Parse(v)
-		if ok && admits(req, pv, true) && (best == "" || ver.Less(best, v)) {
+		if ok && admits(req, pv, cargoDialect) && (best == "" || ver.Less(best, v)) {
 			best = v
 		}
 	}
@@ -413,7 +413,7 @@ func (cargo) Bump(ctx context.Context, root string, d core.Dep, to, toName strin
 	if toName != "" {
 		return cargoSwap(ctx, root, d, e, to, toName)
 	}
-	next, err := fixReq(d.Req, to, true)
+	next, err := fixReq(d.Req, to, cargoDialect)
 	if err != nil {
 		return nil, fmt.Errorf("cargo: %s: %w", d.Name, err)
 	}

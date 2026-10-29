@@ -8,28 +8,26 @@ import (
 
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/gitx"
+	"github.com/mohsensc/tend-cli/internal/scan"
 )
 
 // scope: does the diff touch only files this change explains? Those are the
 // manifests and lockfiles of the deps, files with affected call sites, files
-// the patch's own steps name, and files the model was given to edit.
+// the patch's own steps name, the code files the model was given to edit,
+// and the tests the model edited that reach a site file. Any other test the
+// model edited is left to the tests check, which flags it: reverting it would
+// break the proof that ran with it.
 func scope(ctx context.Context, p *pass) ([]core.Finding, string) {
-	ok := p.depFiles()
-	for _, s := range p.in.Change.Sites {
-		ok[s.File] = true
-	}
-	for _, f := range mentioned(p.in.Patch.Applied) {
-		ok[f] = true
-	}
-	for f := range p.model {
-		ok[f] = true
-	}
+	ok := p.explained()
 	var res []core.Finding
 	kept := 0
 	for _, f := range p.files {
 		file := f.Path()
-		if ok[file] {
+		if ok[file] || p.model[file] && scan.IsTest(file) && p.reachesSite(file) {
 			kept++
+			continue
+		}
+		if p.model[file] && scan.IsTest(file) {
 			continue
 		}
 		if err := revert(ctx, p, f); err != nil {

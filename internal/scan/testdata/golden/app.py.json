@@ -252,28 +252,32 @@
       "Line": 14,
       "Method": "",
       "URL": "https://api.example.com",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "API = \"https://api.example.com\""
     },
     {
       "File": "app.py",
       "Line": 20,
       "Method": "",
       "URL": "/hooks",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "@app.route(\"/hooks\")"
     },
     {
       "File": "app.py",
       "Line": 29,
       "Method": "POST",
       "URL": "/v1/orders",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "r = requests.post(f\"{API}/v1/orders\", json={\"total_cents\": 5})"
     },
     {
       "File": "app.py",
       "Line": 33,
       "Method": "PUT",
       "URL": "/v1/refunds",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "urllib.request.Request(\"/v1/refunds\", method=\"PUT\")"
     }
   ]
 }

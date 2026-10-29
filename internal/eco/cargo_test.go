@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -134,6 +135,20 @@ func hideTools(t *testing.T) {
 	t.Cleanup(func() { have = old })
 }
 
+// stubTools puts lock tools on PATH that change nothing, so a bump with a
+// lockfile shows what it edits by hand.
+func stubTools(t *testing.T, names ...string) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	have = func(n string) bool { return slices.Contains(names, n) }
+}
+
 type canned struct {
 	url    string
 	status int
@@ -238,6 +253,9 @@ type bumpCase struct {
 func bumpGolden(t *testing.T, e core.Ecosystem, fixture string, tests []bumpCase) {
 	t.Helper()
 	hideTools(t)
+	if e.Name() == core.Npm {
+		stubTools(t, "npm", "yarn", "pnpm")
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := copyTestdata(t, fixture)
@@ -618,10 +636,16 @@ func TestRequirements(t *testing.T) {
 		{"gem", "1.2.3", "1.2.4", "1.2.4"},
 		{"gem", "!= 1.2.3", "1.2.3", "!= 1.2.3"},
 		{"gem", "~> 2.0.0.rc1", "2.0.0.rc2", "~> 2.0.0.rc1"},
+		{"helm", "~1.2", "1.5.0", "~1.5"},
+		{"helm", "~>1.2", "1.5.0", "~>1.5"},
+		{"helm", "~1.2", "1.2.9", "~1.2"},
+		{"helm", "~1", "1.5.0", "~1"},
+		{"helm", "~1.2.3", "1.3.0", "~1.3.0"},
+		{"composer", "~1.2", "1.5.0", "~1.2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.dialect+" "+tt.req+" to "+tt.to, func(t *testing.T) {
-			got, err := fixReq(tt.req, tt.to, tt.dialect == "cargo")
+			got, err := fixReq(tt.req, tt.to, map[string]dialect{"cargo": cargoDialect, "helm": helmDialect}[tt.dialect])
 			if tt.want == "" {
 				if err == nil {
 					t.Fatalf("got %q, want an error", got)
@@ -638,29 +662,34 @@ func TestRequirements(t *testing.T) {
 func TestRequirementsAdmit(t *testing.T) {
 	tests := []struct {
 		req, v string
-		cargo  bool
+		d      dialect
 		want   bool
 	}{
-		{"1.2", "1.9.0", true, true},
-		{"1.2", "2.0.0", true, false},
-		{"0.2.3", "0.2.9", true, true},
-		{"0.2.3", "0.3.0", true, false},
-		{"~1.2", "1.2.9", true, true},
-		{"~1.2", "1.3.0", true, false},
-		{"~1.2", "1.3.0", false, true},
-		{"=1.2", "1.2.7", true, true},
-		{"1.2", "1.2.7", false, false},
-		{"1.2.0", "1.2", false, true},
-		{"^1.2", "2.0.0-rc.1", true, false},
-		{"^2.0.0-rc.1", "2.0.0-rc.2", true, true},
-		{"*", "0.0.1", true, true},
-		{">=1, <3 || ^5", "5.1.0", false, true},
-		{"garbage", "1.0.0", true, false},
+		{"1.2", "1.9.0", cargoDialect, true},
+		{"1.2", "2.0.0", cargoDialect, false},
+		{"0.2.3", "0.2.9", cargoDialect, true},
+		{"0.2.3", "0.3.0", cargoDialect, false},
+		{"~1.2", "1.2.9", cargoDialect, true},
+		{"~1.2", "1.3.0", cargoDialect, false},
+		{"~1.2", "1.3.0", anyDialect, true},
+		{"~1.2", "1.5.0", helmDialect, false},
+		{"~>1.2", "1.5.0", helmDialect, false},
+		{"~1.2", "1.2.9", helmDialect, true},
+		{"~1", "1.5.0", helmDialect, true},
+		{"~1", "2.0.0", helmDialect, false},
+		{"=1.2", "1.2.7", cargoDialect, true},
+		{"1.2", "1.2.7", anyDialect, false},
+		{"1.2.0", "1.2", anyDialect, true},
+		{"^1.2", "2.0.0-rc.1", cargoDialect, false},
+		{"^2.0.0-rc.1", "2.0.0-rc.2", cargoDialect, true},
+		{"*", "0.0.1", cargoDialect, true},
+		{">=1, <3 || ^5", "5.1.0", anyDialect, true},
+		{"garbage", "1.0.0", cargoDialect, false},
 	}
 	for _, tt := range tests {
 		v, _ := ver.Parse(tt.v)
-		if got := admits(tt.req, v, tt.cargo); got != tt.want {
-			t.Errorf("admits(%q, %s, cargo=%v) = %v, want %v", tt.req, tt.v, tt.cargo, got, tt.want)
+		if got := admits(tt.req, v, tt.d); got != tt.want {
+			t.Errorf("admits(%q, %s, dialect %d) = %v, want %v", tt.req, tt.v, tt.d, got, tt.want)
 		}
 	}
 }

@@ -72,6 +72,8 @@ type session struct {
 	results []string // pass or fail of each run, in order
 	log     *os.File
 	bench   string // the one test file a characterization may write, "" for a migration
+
+	generatedPaths []string
 }
 
 // work hands the remaining sites to a model that calls tools. It ends when the
@@ -148,12 +150,12 @@ func (o Options) turns() int {
 // brief is the first message: the change, what was already done, where the
 // code uses it, and the failure that brought tend here, if any.
 func (s *session) brief() (string, error) {
-	_, user, err := prompt(s.t, s.in, s.o, "", "")
+	_, user, err := prompt(s.t, s.in, s.o, "", "", false)
 	if err != nil {
 		return "", err
 	}
-	// edit also takes test files, which the diff prompt does not offer.
-	user = strings.Replace(user, "Files you may edit:", "Files you may edit, along with test files:", 1)
+	// edit also takes the tests of those files, which the diff prompt does not offer.
+	user = strings.Replace(user, "Files you may edit:", "Files you may edit, along with the tests that reach them, but never the tests tend wrote:", 1)
 	return user, nil
 }
 
@@ -294,14 +296,22 @@ func (s *session) grep(pattern, glob string) string {
 	return strings.Join(lines, "\n")
 }
 
-// edit changes a site file, a manifest the change explains, or a test.
+// edit changes a site file, a manifest the change explains, or a test of
+// one of them. A migration never edits the tests tend wrote itself: a model
+// that weakens what proves its work would prove nothing.
 func (s *session) edit(p, old, now string) string {
 	rel, err := s.inside(p)
 	if err != nil {
 		return "error: " + err.Error()
 	}
-	if !slices.Contains(s.in.allowed, rel) && (s.bench != "" || !scan.IsTest(rel)) {
-		return "error: " + rel + " is not one of the files this change explains; edit the files listed at the start, or tests"
+	switch {
+	case s.bench == "" && s.generated(rel):
+		return "error: " + rel + " holds tests tend wrote to prove changes, and a migration never edits them; change the code so they pass"
+	case slices.Contains(s.in.allowed, rel):
+	case s.bench != "" || !scan.IsTest(rel):
+		return "error: " + rel + " is not one of the files this change explains; edit the files listed at the start, or their tests"
+	case !s.covers(rel):
+		return "error: " + rel + " tests none of the files this change explains; edit only the files listed at the start and the tests that reach them"
 	}
 	b := s.t.read(rel)
 	if b == nil {
@@ -323,6 +333,53 @@ func (s *session) edit(p, old, now string) string {
 		slices.Sort(s.edited)
 	}
 	return "edited " + rel
+}
+
+// generated reports whether rel is a test tend wrote: the characterization
+// tests of a Go package, the smoke and characterization tests of a suite
+// next to a manifest the change moves, or a test the worktree has that the
+// base does not, which only a baseline tend put there can be.
+func (s *session) generated(rel string) bool {
+	if path.Base(rel) == "tend_characterization_test.go" || slices.Contains(s.suites(), rel) {
+		return true
+	}
+	if !scan.IsTest(rel) {
+		return false
+	}
+	_, err := gitx.Raw(s.ctx, s.t.wt, "cat-file", "-e", head+":"+rel)
+	return err != nil
+}
+
+// suites are the paths of the tests tend generates next to each manifest
+// the change moves.
+func (s *session) suites() []string {
+	if s.generatedPaths != nil {
+		return s.generatedPaths
+	}
+	s.generatedPaths = []string{}
+	if s.in.ch == nil {
+		return s.generatedPaths
+	}
+	for _, d := range s.in.ch.Deps {
+		b, ok := s.o.Ecos[d.Ecosystem].(core.Baseliner)
+		if !ok || d.Manifest.Path == "" {
+			continue
+		}
+		if su := b.Suite(s.t.wt, d.Manifest); su != nil {
+			for _, f := range []string{su.Smoke, su.Tests} {
+				if f != "" && !slices.Contains(s.generatedPaths, f) {
+					s.generatedPaths = append(s.generatedPaths, f)
+				}
+			}
+		}
+	}
+	return s.generatedPaths
+}
+
+// covers reports whether a test reaches one of the files the change
+// explains.
+func (s *session) covers(test string) bool {
+	return s.o.Index != nil && slices.ContainsFunc(s.in.allowed, func(f string) bool { return core.Reaches(s.o.Index, test, f) })
 }
 
 // write creates the test file a characterization writes, or replaces it.

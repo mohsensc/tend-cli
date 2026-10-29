@@ -212,3 +212,22 @@ func TestBumpLanded(t *testing.T) {
 		})
 	}
 }
+
+type bareEco struct{ fakeEco }
+
+func (e *bareEco) Bump(context.Context, string, core.Dep, string, string) (*core.Bump, error) {
+	return nil, core.ToolMissing{Tool: "yarn"}
+}
+
+func TestBumpMissingToolChangingNothing(t *testing.T) {
+	dir := repo(t, map[string]string{"package.json": manifest})
+	o := Options{Ecos: map[string]core.Ecosystem{core.Npm: &bareEco{fakeEco{name: core.Npm}}}}
+	p := &core.Patch{}
+	_, err := bump(context.Background(), dir, []core.Dep{npmDep("joi", "17.0.0")}, "17.13.0", "", o, p)
+	if err == nil || err.Error() != "patch: joi: yarn not found in PATH" {
+		t.Errorf("err = %v", err)
+	}
+	if len(p.Applied) != 0 {
+		t.Errorf("applied = %q", p.Applied)
+	}
+}

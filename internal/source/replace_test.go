@@ -52,18 +52,26 @@ func TestReplacement(t *testing.T) {
 	tests := []struct {
 		name, eco, pkg string
 		one            string
+		safe           bool
 		many           []string
 		found          bool
 	}{
-		{"single", core.Npm, "node-sass", "sass", nil, true},
-		{"single go", core.Go, "github.com/dgrijalva/jwt-go", "github.com/golang-jwt/jwt/v5", nil, true},
-		{"several", core.Npm, "moment", "", []string{"dayjs", "luxon", "date-fns"}, true},
-		{"several request", core.Npm, "request", "", []string{"undici", "node-fetch", "axios"}, true},
-		{"other ecosystem same name", core.Pip, "request", "", nil, false},
-		{"unknown", core.Npm, "left-pad", "", nil, false},
-		{"glob row is never matched", core.Npm, "@types/*", "", nil, false},
-		{"glob query", core.Npm, "@types/node", "", nil, false},
-		{"note only", core.Nuget, "microsoft.aspnet.webapi.client", "", nil, false},
+		{"single", core.Npm, "node-sass", "sass", false, nil, true},
+		{"single go", core.Go, "github.com/dgrijalva/jwt-go", "github.com/golang-jwt/jwt/v5", false, nil, true},
+		{"drop-in", core.Pip, "pycrypto", "pycryptodome", true, nil, true},
+		{"pip name as written", core.Pip, "PyCrypto", "pycryptodome", true, nil, true},
+		{"pip name in capitals", core.Pip, "SKLearn", "scikit-learn", true, nil, true},
+		{"composer case", core.Composer, "Fzaninotto/Faker", "fakerphp/faker", true, nil, true},
+		{"new api", core.Pip, "nose", "pytest", false, nil, true},
+		{"npm is case sensitive", core.Npm, "Node-Sass", "", false, nil, false},
+		{"several", core.Npm, "moment", "", false, []string{"dayjs", "luxon", "date-fns"}, true},
+		{"several request", core.Npm, "request", "", false, []string{"undici", "node-fetch", "axios"}, true},
+		{"other ecosystem same name", core.Pip, "request", "", false, nil, false},
+		{"unknown", core.Npm, "left-pad", "", false, nil, false},
+		{"glob row is never matched", core.Npm, "@types/*", "", false, nil, false},
+		{"glob query", core.Npm, "@types/node", "", false, nil, false},
+		{"note only", core.Nuget, "microsoft.aspnet.webapi.client", "", false, nil, false},
+		{"note only as nuget writes it", core.Nuget, "Microsoft.AspNet.WebApi.Client", "", false, nil, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,8 +81,8 @@ func TestReplacement(t *testing.T) {
 			}
 			switch {
 			case tc.one != "":
-				if one == nil || many != nil || one.ToName != tc.one || !one.Safe {
-					t.Fatalf("one = %+v, many = %+v; want a safe swap to %s", one, many, tc.one)
+				if one == nil || many != nil || one.ToName != tc.one || one.Safe != tc.safe {
+					t.Fatalf("one = %+v, many = %+v; want a swap to %s, safe %v", one, many, tc.one, tc.safe)
 				}
 			case tc.many != nil:
 				var got []string
@@ -93,6 +101,28 @@ func TestReplacement(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSafeReplacementsKeepTheirImport(t *testing.T) {
+	sameImport := map[string]string{
+		"pip/pycrypto":               "Crypto",
+		"pip/sklearn":                "sklearn",
+		"composer/fzaninotto/faker":  `Faker\`,
+		"actions/actions/setup-ruby": "ruby-version input",
+	}
+	var rows []replacement
+	if err := yaml.Unmarshal(replacements, &rows); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		key := r.Eco + "/" + r.Name
+		if r.Safe && r.To == "" {
+			t.Errorf("%s is safe with nothing to switch to", key)
+		}
+		if _, ok := sameImport[key]; r.Safe != ok {
+			t.Errorf("%s: safe = %v; a swap is safe only when code keeps working unchanged", key, r.Safe)
+		}
 	}
 }
 
@@ -115,5 +145,21 @@ func TestReplacementDetail(t *testing.T) {
 	gone, _, _ := Replacement(core.Go, "github.com/pkg/errors")
 	if gone == nil || !strings.HasPrefix(gone.Detail, "stdlib errors since Go 1.13; archived https://") {
 		t.Errorf("option = %+v", gone)
+	}
+}
+
+// A way off that is no package is an option tend never takes itself.
+func TestReplacementInstead(t *testing.T) {
+	for _, c := range []struct{ eco, name, title string }{
+		{core.Actions, "actions-rs/toolchain", "Switch to dtolnay/rust-toolchain"},
+		{core.Cargo, "atty", "Use std::io::IsTerminal"},
+	} {
+		one, opts, ok := Replacement(c.eco, c.name)
+		if !ok || one != nil || len(opts) != 1 || opts[0].Title != c.title || opts[0].ToName != "" || opts[0].Safe {
+			t.Errorf("Replacement(%s) = %+v, %+v, %v", c.name, one, opts, ok)
+		}
+	}
+	if one, _, ok := Replacement(core.Cargo, "term_size"); !ok || one == nil || one.ToName != "terminal_size" {
+		t.Errorf("term_size = %+v", one)
 	}
 }

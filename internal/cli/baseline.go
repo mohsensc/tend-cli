@@ -35,6 +35,7 @@ func (r *runner) groundwork(ctx context.Context, ch *core.Change, t *trial) (*pa
 	if why == "" || len(ch.Batch.Changes)+len(ch.Batch.Next) == 0 {
 		return nil, nil
 	}
+	t.thin = why
 	su := r.suite()
 	if su == nil {
 		s.logf("the tests are thin (%s), and tend has no way to add a baseline for this project", why)
@@ -124,7 +125,7 @@ func (r *runner) groundwork(ctx context.Context, ch *core.Change, t *trial) (*pa
 	if err != nil {
 		return nil, err
 	}
-	t.cmds, t.proof.Base, t.proof.Nothing = cmds, run, false
+	t.cmds, t.proof.Base, t.proof.Nothing, t.thin = cmds, run, false, ""
 	if line != "" {
 		r.tests = []string{line}
 	}

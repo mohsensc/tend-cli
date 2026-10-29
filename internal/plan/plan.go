@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -57,6 +58,36 @@ type Input struct {
 	Base    string // the base commit, for verdicts that hold only on it
 }
 
+// fixtureDirs hold what a project's tests read, not manifests of its own.
+var fixtureDirs = map[string]bool{"tests": true, "test": true, "__tests__": true, "fixtures": true, "__fixtures__": true, "spec": true}
+
+// fixture says whether m is a test fixture: under a test directory, with
+// no lockfile, and named by no other manifest, as a workspace member or a
+// path dependency is.
+func fixture(root string, m core.Manifest, all []core.Manifest) bool {
+	dir := path.Dir(m.Path)
+	if m.Lock != "" || !slices.ContainsFunc(strings.Split(dir, "/"), func(p string) bool { return fixtureDirs[p] }) {
+		return false
+	}
+	for _, f := range append([]string{"go.work"}, manifestPaths(all)...) {
+		if f == m.Path {
+			continue
+		}
+		if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); err == nil && strings.Contains(string(b), dir) {
+			return false
+		}
+	}
+	return true
+}
+
+func manifestPaths(ms []core.Manifest) []string {
+	var res []string
+	for _, m := range ms {
+		res = append(res, m.Path)
+	}
+	return res
+}
+
 // Inventory reads every manifest of the enabled ecosystems under root and scans
 // the code. A manifest that cannot be read is untracked, not a failure.
 func Inventory(root string, cfg *config.Config) (*core.Inventory, []Untracked, error) {
@@ -67,13 +98,24 @@ func Inventory(root string, cfg *config.Config) (*core.Inventory, []Untracked, e
 	}
 	defer done()
 	var notes []Untracked
-	for _, e := range eco.For(cfg) {
+	ecos := eco.For(cfg)
+	found := make([][]core.Manifest, len(ecos))
+	var all []core.Manifest
+	for i, e := range ecos {
 		ms, err := e.Detect(root)
 		if err != nil {
 			notes = append(notes, Untracked{What: e.Name() + " manifests", Why: err.Error()})
 			continue
 		}
-		for _, m := range ms {
+		found[i] = ms
+		all = append(all, ms...)
+	}
+	for i, e := range ecos {
+		for _, m := range found[i] {
+			if fixture(root, m, all) {
+				notes = append(notes, Untracked{What: m.Path, Why: "a test fixture: it sits among the tests with no lockfile of its own, and no other manifest names it"})
+				continue
+			}
 			deps, err := e.Deps(root, m)
 			if err != nil {
 				notes = append(notes, Untracked{What: m.Path, Why: "cannot be read: " + err.Error()})
@@ -89,6 +131,16 @@ func Inventory(root string, cfg *config.Config) (*core.Inventory, []Untracked, e
 	files, err := eco.Files(root)
 	if err != nil {
 		return nil, nil, err
+	}
+	for _, f := range files {
+		if path.Base(f) != "setup.py" || slices.ContainsFunc(inv.Manifests, func(m core.Manifest) bool {
+			return path.Dir(m.Path) == path.Dir(f) && m.Ecosystem == core.Pip && (path.Base(m.Path) == "setup.cfg" || path.Base(m.Path) == "pyproject.toml")
+		}) {
+			continue
+		}
+		if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); err == nil && strings.Contains(string(b), "install_requires") {
+			notes = append(notes, Untracked{What: f + " install_requires", Why: "tend does not run setup.py to read them; move the pins to setup.cfg or pyproject.toml"})
+		}
 	}
 	idx, err := scan.Build(scan.Options{Root: root, Files: files})
 	if err != nil {
@@ -208,7 +260,12 @@ func Build(ctx context.Context, in Input) (*Plan, error) {
 	b.metas(ctx, b.direct())
 	found := b.sources(ctx)
 	all := append(b.registryPass(ctx, found), found...)
-	all = b.fixes(merge(all))
+	// A source cut short by a cancel is no source that is down: the plan
+	// stops rather than going on without it.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	all = b.tagged(after(b.fixes(merge(all))))
 	all = b.companions(b.group(all))
 	for i := range all {
 		all[i].ID = core.ChangeID(&all[i])
@@ -245,6 +302,9 @@ func Build(ctx context.Context, in Input) (*Plan, error) {
 	for i := range min(5, len(p.Queue)) {
 		b.attachNotes(ctx, &p.Queue[i])
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	b.record(p)
 	slices.Sort(b.notes)
 	p.Notes = slices.Compact(b.notes)
@@ -279,7 +339,9 @@ func (b *builder) sources(ctx context.Context) []core.Change {
 	for _, s := range b.in.Sources {
 		chs, err := s.Changes(ctx, b.in.Inv)
 		if err != nil {
-			b.note("%s: unavailable, planned without it: %v", s.Name(), err)
+			if ctx.Err() == nil {
+				b.note("%s: unavailable, planned without it: %v", s.Name(), err)
+			}
 			continue
 		}
 		res = append(res, chs...)
@@ -331,6 +393,14 @@ func (b *builder) registryPass(ctx context.Context, found []core.Change) []core.
 			res = append(res, *b.swap(ctx, d, m, ev))
 			continue
 		}
+		if st, ok := b.ecos[d.Ecosystem].(core.Settler); ok {
+			settled, err := st.Settle(d, m)
+			if err != nil {
+				b.note("%s: %s: %v", d.Ecosystem, d.Name, err)
+				continue
+			}
+			d = settled
+		}
 		if ch := b.registry(ctx, d, m); ch != nil {
 			res = append(res, *ch)
 		}
@@ -348,7 +418,7 @@ func (b *builder) archived(ctx context.Context) map[string]core.Evidence {
 		}
 	}
 	res, err := source.Archived(ctx, b.in.Fetch, repos)
-	if err != nil {
+	if err != nil && ctx.Err() == nil {
 		b.note("archived: unavailable, planned without it: %v", err)
 	}
 	return res
@@ -363,12 +433,67 @@ func (b *builder) fixes(chs []core.Change) []core.Change {
 			continue
 		}
 		d := ch.Deps[0]
-		if rel, ok := fixFor(b.meta[pkg{d.Ecosystem, d.Name}], ch.To); ok {
+		if rel, ok := fixFor(d, b.meta[pkg{d.Ecosystem, d.Name}], ch.To); ok {
 			ch.To = rel.Version
 		}
-		ch.Level = ver.Step(Lowest(ch.Deps), ch.To)
+		ch.Level = ver.StepIn(d.Ecosystem, Lowest(ch.Deps), ch.To)
 	}
 	return merge(chs)
+}
+
+// tagged moves an image change off a tag the registry does not have: an
+// end-of-life move keeps the old tag's suffix, and mongo:4.2.1-bionic has no
+// 9.0-bionic among the -bionic tags the registry lists, so it goes to the
+// plain 9.0.
+func (b *builder) tagged(chs []core.Change) []core.Change {
+	for i := range chs {
+		ch := &chs[i]
+		if len(ch.Deps) == 0 || ch.Deps[0].Ecosystem != core.Docker || ch.To == "" || ch.ToName != "" {
+			continue
+		}
+		m := b.meta[pkg{core.Docker, ch.Deps[0].Name}]
+		if m == nil || len(m.Releases) == 0 {
+			continue
+		}
+		if _, ok := release(m, ch.To); ok {
+			continue
+		}
+		if head, _, cut := strings.Cut(ch.To, "-"); cut {
+			ch.To = head
+			ch.ID = core.ChangeID(ch)
+		}
+	}
+	return chs
+}
+
+// after measures a bump of a package from the release its security fix
+// moves it to, the step left once that fix lands: pytest 6.2.4 to 9.1.1
+// after a fix to 9.0.3 is a minor upgrade, not a second major one.
+func after(chs []core.Change) []core.Change {
+	fix := map[string]string{}
+	for _, ch := range chs {
+		if ch.Kind == core.Security && ch.API == nil && ch.To != "" {
+			k := depSet(&ch) + " ->" + ch.ToName
+			if to, ok := fix[k]; !ok || ver.Less(to, ch.To) {
+				fix[k] = ch.To
+			}
+		}
+	}
+	for i := range chs {
+		ch := &chs[i]
+		if ch.API != nil || ch.ToName != "" || ch.Kind != core.Breaking && ch.Kind != core.Update || len(ch.Deps) == 0 {
+			continue
+		}
+		to, ok := fix[depSet(ch)+" ->"]
+		if !ok || !ver.Less(to, ch.To) {
+			continue
+		}
+		ch.Level = ver.StepIn(ch.Deps[0].Ecosystem, to, ch.To)
+		if ch.Level != "major" {
+			ch.Kind = core.Update
+		}
+	}
+	return chs
 }
 
 // Lowest is the version the least advanced of deps is at, as Current reads it.

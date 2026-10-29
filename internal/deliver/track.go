@@ -2,6 +2,9 @@ package deliver
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -87,25 +90,36 @@ type issue struct {
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	State  string `json:"state"`
-	Pull   *struct {
+	Role   string `json:"author_association"`
+	User   struct {
+		Type string `json:"type"`
+	} `json:"user"`
+	Pull *struct {
 		URL string `json:"url"`
 	} `json:"pull_request"`
+}
+
+// trusted reports whether i was opened by an app, as tend in Actions is,
+// or by someone with write access, whose token tend may run with. Anyone
+// else can open an issue with tend's marker in it.
+func (i issue) trusted() bool {
+	return strings.EqualFold(i.User.Type, "Bot") || i.Role == "OWNER" || i.Role == "MEMBER" || i.Role == "COLLABORATOR"
 }
 
 func (i issue) issue() *core.Issue {
 	return &core.Issue{Number: i.Number, Title: i.Title, Body: i.Body, Open: i.State == "open"}
 }
 
-// FindIssue looks through the issues tend's account opened for the one
-// whose body holds marker, newest first. Pull requests, which the issues
-// API lists too, never count.
+// FindIssue looks for the issue whose body holds marker, newest first,
+// among those an app or someone with write access opened. Pull requests,
+// which the issues API lists too, never count.
 func (g *GitHub) FindIssue(ctx context.Context, marker string) (*core.Issue, error) {
 	all, err := getAll[issue](ctx, g, g.repoPath("/issues?state=all&sort=created&direction=desc"))
 	if err != nil {
 		return nil, err
 	}
 	for _, i := range all {
-		if i.Pull == nil && strings.Contains(i.Body, marker) {
+		if i.Pull == nil && i.trusted() && strings.Contains(i.Body, marker) {
 			return i.issue(), nil
 		}
 	}
@@ -134,5 +148,12 @@ func (g *GitHub) EditIssue(ctx context.Context, number int, body string, open bo
 	if open {
 		state = "open"
 	}
-	return g.do(ctx, "PATCH", g.repoPath("/issues/"+strconv.Itoa(number)), map[string]any{"body": body, "state": state}, nil)
+	err := g.do(ctx, "PATCH", g.repoPath("/issues/"+strconv.Itoa(number)), map[string]any{"body": body, "state": state}, nil)
+	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusGone) || isStatus(err, http.StatusMovedPermanently) {
+		return fmt.Errorf("%w: %w", ErrGone, err)
+	}
+	return err
 }
+
+// ErrGone is an issue that was deleted, or moved to another repo.
+var ErrGone = errors.New("the issue is gone")

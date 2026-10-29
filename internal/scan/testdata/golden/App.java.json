@@ -181,7 +181,8 @@
       "Line": 25,
       "Method": "",
       "URL": "https://api.stripe.com/v1/charges",
-      "Host": "api.stripe.com"
+      "Host": "api.stripe.com",
+      "Text": ".uri(URI.create(\"https://api.stripe.com/v1/charges\"))"
     }
   ]
 }

@@ -5,6 +5,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/mohsensc/tend-cli/internal/gitx"
 )
@@ -58,8 +60,91 @@ func Checkout(ctx context.Context, repo, dir, base string) (*Worktree, error) {
 	if err != nil {
 		return nil, err
 	}
-	gitx.Pin(dir, gitDir)
+	exclude, err := excludes(ctx, dir, gitDir)
+	if err != nil {
+		return nil, err
+	}
+	gitx.Pin(dir, gitDir, exclude)
 	return &Worktree{Dir: dir, Repo: repo, Base: sha, GitDir: gitDir}, nil
+}
+
+// installed are the directories installs fill that no project commits.
+var installed = []string{"node_modules", ".venv", "venv", "__pycache__", ".gradle"}
+
+// excludes writes the excludes file git reads in the worktree at dir: the
+// user's own, plus the install directories the project does not track. Its
+// .gitignore may not list them, and a clean between commands must not take
+// an install away, nor an add -A put one in the patch. It lives in the
+// worktree's own git dir, so the user's repository is never written.
+func excludes(ctx context.Context, dir, gitDir string) (string, error) {
+	var b strings.Builder
+	if own := userExcludes(ctx, dir); own != "" {
+		if data, err := os.ReadFile(own); err == nil {
+			b.Write(data)
+			b.WriteString("\n")
+		}
+	}
+	var specs []string
+	for _, d := range installed {
+		specs = append(specs, ":(glob)**/"+d+"/**")
+	}
+	tracked, err := gitx.Raw(ctx, dir, append([]string{"ls-files", "-z", "--"}, specs...)...)
+	if err != nil {
+		return "", err
+	}
+	for _, d := range installed {
+		if !slices.ContainsFunc(strings.Split(tracked, "\x00"), func(f string) bool {
+			return slices.Contains(strings.Split(f, "/"), d)
+		}) {
+			b.WriteString(d + "/\n")
+		}
+	}
+	p := filepath.Join(gitDir, "tend-exclude")
+	return p, os.WriteFile(p, []byte(b.String()), 0o644)
+}
+
+// userExcludes is the excludes file git would read in dir by itself.
+func userExcludes(ctx context.Context, dir string) string {
+	if p, err := gitx.Run(ctx, dir, "config", "--path", "--get", "core.excludesFile"); err == nil && p != "" {
+		return p
+	}
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		return filepath.Join(x, "git", "ignore")
+	}
+	if h, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(h, ".config", "git", "ignore")
+	}
+	return ""
+}
+
+// Sweep removes the worktrees under parent, all but keep: those a dry
+// run, --keep or a killed run left in the repo.
+func Sweep(ctx context.Context, repo, parent, keep string) error {
+	ents, err := os.ReadDir(parent)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	swept := false
+	for _, e := range ents {
+		dir := filepath.Join(parent, e.Name())
+		if !e.IsDir() || filepath.Clean(dir) == filepath.Clean(keep) {
+			continue
+		}
+		gitx.Unpin(dir)
+		_, _ = gitx.Run(ctx, repo, "worktree", "remove", "--force", dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+		swept = true
+	}
+	if !swept {
+		return nil
+	}
+	_, err = gitx.Run(ctx, repo, "worktree", "prune")
+	return err
 }
 
 func (w *Worktree) Remove(ctx context.Context) error {

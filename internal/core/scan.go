@@ -1,5 +1,10 @@
 package core
 
+import (
+	"os"
+	"path/filepath"
+)
+
 type Site struct {
 	File  string
 	Line  int
@@ -23,6 +28,7 @@ type URLUse struct {
 	Method string // GET|POST|... when inferable, "" otherwise
 	URL    string // literal as written: full URL or path such as "/v1/orders"
 	Host   string // from the literal, else a host literal elsewhere in the file; "" if unknown
+	Text   string `json:",omitempty"` // the source line, trimmed
 }
 
 // ScanIndex is what internal/scan.Index implements.
@@ -40,4 +46,26 @@ type ScanIndex interface {
 	URLs() []URLUse
 	Imports(pkg string) []Import
 	Files() []string
+}
+
+// TestReacher is a ScanIndex that can say which files a test covers, as
+// internal/scan.Index does.
+type TestReacher interface {
+	// Reaches reports whether the test file test reaches the file p.
+	Reaches(test, p string) bool
+}
+
+// Reaches reports whether x knows the test file test to reach p, false
+// when x cannot tell.
+func Reaches(x ScanIndex, test, p string) bool {
+	r, ok := x.(TestReacher)
+	return ok && r.Reaches(test, p)
+}
+
+// NestedRepo reports whether dir is a git repository of its own, a clone, a
+// submodule or a worktree, whose files are another project's, as git
+// ls-files sees them.
+func NestedRepo(dir string) bool {
+	_, err := os.Lstat(filepath.Join(dir, ".git"))
+	return err == nil
 }

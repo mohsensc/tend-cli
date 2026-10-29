@@ -16,7 +16,7 @@
 | `npm test` | failed (exit 1) · 2s | failed (exit 1) · 1m15s |
 | `npm run build` | not run | skipped (after failure) |
 
-Tests already fail on `main@abc1234`, so this PR is a draft.
+`npm test` already fails on `main@abc1234`, so this PR is a draft.
 
 <details><summary>npm test (patched), end of its output</summary>
 

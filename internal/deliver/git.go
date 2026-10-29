@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mohsensc/tend-cli/internal/gitx"
 	"github.com/mohsensc/tend-cli/internal/verify"
@@ -68,7 +69,7 @@ func (r *Remote) git(ctx context.Context, args ...string) (string, error) {
 	if now != r.config {
 		return "", errors.New("git: the repository's git settings changed while the project's commands ran, so tend will not reach the remote with them")
 	}
-	out, err := (gitx.Cmd{Dir: r.repo, Env: r.auth()}).Run(ctx, args...)
+	out, err := (gitx.Cmd{Dir: r.repo, Env: r.auth(), Terminal: r.token == ""}).Run(ctx, args...)
 	return strings.TrimSpace(out), err
 }
 
@@ -97,6 +98,28 @@ func (r *Remote) auth() []string {
 func (r *Remote) Fetch(ctx context.Context, branch string) error {
 	_, err := r.git(ctx, "fetch", "--quiet", "--no-tags", r.URL, "+refs/heads/"+branch+":"+r.tracking(branch))
 	return err
+}
+
+// Deepen makes sure a shallow clone, such as the one actions/checkout makes
+// by default, has sha and the commit before it on branch's history. It first
+// fetches what landed from a while before since, and when that is not
+// enough, the whole history. A clone that is not shallow is left alone.
+func (r *Remote) Deepen(ctx context.Context, branch, sha string, since time.Time) error {
+	if out, err := gitx.Run(ctx, r.repo, "rev-parse", "--is-shallow-repository"); err != nil || out != "true" {
+		return err
+	}
+	spec := "+refs/heads/" + branch + ":" + r.tracking(branch)
+	after := since.Add(-48 * time.Hour).UTC().Format("2006-01-02 15:04:05 +0000")
+	if _, err := r.git(ctx, "fetch", "--quiet", "--no-tags", "--shallow-since="+after, r.URL, spec); err == nil && r.has(ctx, sha+"^") {
+		return nil
+	}
+	_, err := r.git(ctx, "fetch", "--quiet", "--no-tags", "--unshallow", r.URL, spec)
+	return err
+}
+
+func (r *Remote) has(ctx context.Context, rev string) bool {
+	_, err := gitx.Run(ctx, r.repo, "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	return err == nil
 }
 
 func (r *Remote) tracking(branch string) string { return "refs/remotes/" + r.Name + "/" + branch }
@@ -159,6 +182,21 @@ func (r *Remote) expected(ctx context.Context, branch, last string) (string, err
 		return tip, r.Fetch(ctx, branch)
 	}
 	return have, nil
+}
+
+// DeleteBranch removes branch from the remote while it still points at
+// last, the commit tend pushed there: a branch someone pushed to since, or
+// one tend does not know the tip of, stays.
+func DeleteBranch(ctx context.Context, r *Remote, branch, last string) error {
+	if last == "" {
+		return errors.New("tend does not know the commit it last pushed there")
+	}
+	ref := "refs/heads/" + branch
+	if _, err := r.git(ctx, "push", "--force-with-lease="+ref+":"+last, r.URL, ":"+ref); err != nil {
+		return err
+	}
+	_, err := gitx.Run(ctx, r.repo, "update-ref", "-d", r.tracking(branch))
+	return err
 }
 
 // BranchExists reports whether the remote has the branch.

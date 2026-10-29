@@ -13,15 +13,27 @@ binary. Any mismatch aborts and changes nothing. `tend update --check` only
 says whether a newer release exists. `run` and `watch` look once a day and
 print one line on stderr when there is one; they never update by themselves.
 A binary built by `go install` reports the module version it was built from.
+Prereleases (`v1.3.0-rc.1`) update too, to the next full release. If tend
+lives in a directory you cannot write, `tend update` says so before it
+downloads anything; rerun it with `sudo` or reinstall tend where you own it.
 
 The Action does the same check with `openssl` before it puts the binary on
-the path. `@v1` is a moving tag that points at the newest `v1.x.y`; while that
-release's files are still being uploaded, the Action installs the one before
-it. Pin `@v1.2.3` to stay put.
+the path. `@v1` installs the newest `v1.x.y` release, or the one before it if
+the newest has no signed checksums; `@v1.2` stays inside `v1.2.x`. Pin
+`@v1.2.3`, or the commit that release is tagged at, to stay put: a commit pin
+installs the release tagged at that commit and fails if there is none.
+
+The release workflow builds with the newest Go toolchain, so the binaries
+carry its security fixes, and refuses to publish when `govulncheck` reports a
+reachable vulnerability or when the signature does not verify against
+`action/pubkey.pem`.
 
 ## Installing by hand
 
-On Linux or macOS:
+On Linux or macOS. The `openssl` that ships with macOS is LibreSSL, which
+cannot read ed25519 keys; install OpenSSL 3 with `brew install openssl@3` and
+set `openssl=$(brew --prefix openssl@3)/bin/openssl`. On Linux,
+`openssl=openssl`.
 
 ```sh
 os=$(uname -s | tr A-Z a-z)
@@ -31,9 +43,9 @@ file=tend_${tag#v}_${os}_${arch}.tar.gz
 base=https://github.com/mohsensc/tend-cli/releases/download/$tag
 curl -fsSLO $base/$file -O $base/checksums.txt -O $base/checksums.txt.sig
 base64 -d < checksums.txt.sig > sig.bin
-openssl pkeyutl -verify -pubin -inkey pubkey.pem -rawin -in checksums.txt -sigfile sig.bin
+"$openssl" pkeyutl -verify -pubin -inkey pubkey.pem -rawin -in checksums.txt -sigfile sig.bin
 grep " $file\$" checksums.txt | sha256sum -c -     # macOS: shasum -a 256 -c -
-tar -xzf $file tend && install -m 0755 tend ~/.local/bin/tend
+mkdir -p ~/.local/bin && tar -xzf $file tend && install -m 0755 tend ~/.local/bin/tend
 ```
 
 `pubkey.pem` is [action/pubkey.pem](../action/pubkey.pem) from this
@@ -46,4 +58,7 @@ the same way.
 ## Running on its own repository
 
 tend maintains itself: [.github/workflows/tend.yml](../.github/workflows/tend.yml)
-runs it weekly on this repository, with `updates: {minor: true}`.
+runs the action from this checkout twice a week on this repository, with
+`updates: {minor: true}`. Its PRs start CI only when the `TEND_TOKEN` secret
+holds a GitHub App or fine-grained token; with the default token, "Allow
+GitHub Actions to create and approve pull requests" has to be on.

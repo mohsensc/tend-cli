@@ -10,6 +10,16 @@ import (
 	"github.com/mohsensc/tend-cli/internal/core"
 )
 
+// redAt is a run of a build and a test step that fails at step i.
+func redAt(i int) *core.Run {
+	steps := []core.Step{{Cmd: "go vet ./...", Phase: core.PhaseBuild}, {Cmd: "go test ./...", Phase: core.PhaseTest}}
+	steps[i].Exit = 1
+	for j := i + 1; j < len(steps); j++ {
+		steps[j].Skipped = "previous step failed"
+	}
+	return &core.Run{Steps: steps}
+}
+
 func TestVerdict(t *testing.T) {
 	pass := &core.Run{Pass: true}
 	fail := &core.Run{Pass: false}
@@ -23,7 +33,7 @@ func TestVerdict(t *testing.T) {
 		{"clean", nil, &core.Proof{Base: pass, Patched: pass}, "pass"},
 		{"no proof at all", nil, nil, "pass"},
 		{"fixed and dropped do not count", []core.Finding{f("lockfile", "fixed"), f("scope", "dropped"), f("debug", "dropped")}, &core.Proof{Patched: pass}, "pass"},
-		{"flags outside 1-4 do not count", []core.Finding{f("dead", "flagged"), f("question", "flagged"), f("debug", "flagged")}, &core.Proof{Patched: pass}, "pass"},
+		{"dead, question and debug flags are advisory", []core.Finding{f("dead", "flagged"), f("question", "flagged"), f("debug", "flagged")}, &core.Proof{Patched: pass}, "pass"},
 		{"symbol flag drafts", []core.Finding{f("symbols", "flagged")}, &core.Proof{Patched: pass}, "draft"},
 		{"leftover flag drafts", []core.Finding{f("leftovers", "flagged")}, &core.Proof{Patched: fail}, "draft"},
 		{"lockfile flag drafts", []core.Finding{f("lockfile", "flagged")}, &core.Proof{Patched: pass}, "draft"},
@@ -31,8 +41,11 @@ func TestVerdict(t *testing.T) {
 		{"symbol flag and failing proof rejects", []core.Finding{f("symbols", "flagged")}, &core.Proof{Base: pass, Patched: fail}, "reject"},
 		{"field flag and failing proof rejects", []core.Finding{f("fields", "flagged")}, &core.Proof{Patched: fail}, "reject"},
 		{"scope revert failure and failing proof rejects", []core.Finding{f("scope", "flagged")}, &core.Proof{Patched: fail}, "reject"},
-		{"scope revert failure alone passes", []core.Finding{f("scope", "flagged")}, &core.Proof{Patched: pass}, "pass"},
+		{"scope revert failure alone drafts", []core.Finding{f("scope", "flagged")}, &core.Proof{Patched: pass}, "draft"},
+		{"weakened test drafts", []core.Finding{f("tests", "flagged")}, &core.Proof{Patched: pass}, "draft"},
 		{"failing proof alone is not vetting's call", nil, &core.Proof{Patched: fail}, "pass"},
+		{"symbol flag where the base fails the same way drafts", []core.Finding{f("symbols", "flagged")}, &core.Proof{Base: redAt(1), Patched: redAt(1)}, "draft"},
+		{"symbol flag where the patch fails earlier rejects", []core.Finding{f("symbols", "flagged")}, &core.Proof{Base: redAt(1), Patched: redAt(0)}, "reject"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -140,5 +153,16 @@ func TestShift(t *testing.T) {
 func TestCheckNeedsChange(t *testing.T) {
 	if _, err := Check(context.Background(), Input{}); err == nil {
 		t.Error("Check without a change succeeded")
+	}
+}
+
+func TestLockfileMoves(t *testing.T) {
+	ch := &core.Change{Deps: []core.Dep{{Name: "axios"}, {Name: "nodejs"}, {Name: "actions/checkout"}}}
+	if got := moves(ch, []string{"axios", "follow-redirects"}); got != "only axios and 1 of its dependencies changed" {
+		t.Errorf("moves = %q", got)
+	}
+	two := &core.Change{Deps: []core.Dep{{Name: "a"}, {Name: "b"}}}
+	if got := moves(two, []string{"a", "b", "c", "d"}); got != "only a, b and 2 of their dependencies changed" {
+		t.Errorf("moves = %q", got)
 	}
 }

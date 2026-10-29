@@ -8,7 +8,7 @@ import (
 func TestFilter(t *testing.T) {
 	with := func(gofl string, kv ...string) []string {
 		res := slices.Clone(kv)
-		res = append(res, "CI=1", "GOFLAGS="+gofl, "TEND=1", "npm_config_audit=false", "npm_config_fund=false")
+		res = append(res, "CI=1", "GOFLAGS="+gofl, "HUSKY=0", "TEND=1", "npm_config_audit=false", "npm_config_fund=false")
 		return res
 	}
 	tests := []struct {

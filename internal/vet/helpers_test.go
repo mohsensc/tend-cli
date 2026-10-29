@@ -104,7 +104,10 @@ type index struct {
 	dir       string
 	imports   []core.Import
 	endpoints []core.URLUse
+	reach     map[string][]string // the files each test reaches
 }
+
+func (x *index) Reaches(test, p string) bool { return slices.Contains(x.reach[test], p) }
 
 var chainRe = regexp.MustCompile(`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`)
 

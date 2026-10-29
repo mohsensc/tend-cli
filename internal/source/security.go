@@ -23,13 +23,15 @@ var severityRank = map[string]int{"": 0, "low": 1, "moderate": 2, "high": 3, "cr
 
 // securityChanges folds the advisories that hit dep d into one change per fixed version.
 func securityChanges(d core.Dep, advs []advisory) []core.Change {
+	advs = slices.Clone(advs)
+	slices.SortStableFunc(advs, func(x, y advisory) int { return severityRank[y.severity] - severityRank[x.severity] })
 	byTo := map[string]*core.Change{}
 	var tos []string
 	for _, a := range advs {
 		to := asWritten(d.Version, a.fixed)
 		c := byTo[to]
 		if c == nil {
-			c = &core.Change{Kind: core.Security, Deps: []core.Dep{d}, To: to, Level: ver.Step(d.Version, to)}
+			c = &core.Change{Kind: core.Security, Deps: []core.Dep{d}, To: to, Level: ver.StepIn(d.Ecosystem, d.Version, to)}
 			byTo[to] = c
 			tos = append(tos, to)
 		}

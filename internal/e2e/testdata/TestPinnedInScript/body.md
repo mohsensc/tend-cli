@@ -1,7 +1,7 @@
 ## protoc 25.1 → 36.2
 
 **Why**: breaking · major release · released 2026-09-17
-**Level**: major (25 → 36); release notes below mention breaking changes in 3 of 8 releases
+**Level**: major (25 → 36); release notes below mention breaking changes in 4 of 12 releases
 
 ### What changed upstream
 
@@ -84,6 +84,44 @@
     * [Objective-C] Remove `generate_minimal_imports` generation option warning (https://github.com/protocolbuffers/protobuf/commit/45b1297fdaad5a9436d0e207422168c38dc45ac4)
     * [Python] Raise errors in OSS when assign bool to int/enum field in Python Proto. (https://github.com/protocolbuffers/protobuf/commit/5b116fe2f14f49dd0cc3b76089983717f211025c)
   …
+  ```
+- **v28.0 Protocol Buffers v28.0** · [full notes](https://github.com/protocolbuffers/protobuf/releases/tag/v28.0)
+  ```
+  # Announcements
+  * [Protobuf News](https://protobuf.dev/news/) may include additional announcements or pre-announcements for upcoming changes.
+  # Compiler
+  * UPB text encoder without using reflection for Rust (used for a message's Debug trait) that will print out field number to value entries instead of field name to value entries of a message like how it's expected for the usual text format using reflection. (https://github.com/protocolbuffers/protobuf/commit/f9dd9ce66e05d034378b4b37b82307f41fc3395c)
+  * Enable MessageLite::DebugString to use Message::DebugString where possible. (https://github.com/protocolbuffers/protobuf/commit/f810cc5b668d78cb982f44b34f188160d55c27d6)
+  * Always report plugin support errors from protoc. (https://github.com/protocolbuffers/protobuf/commit/986ef8d80bb9432ec7c3a83f0988e2cc589d5cee)
+  …
+  ```
+- **v27.0 Protocol Buffers v27.0** · [full notes](https://github.com/protocolbuffers/protobuf/releases/tag/v27.0)
+  ```
+  # Announcements
+  * [Protobuf News](https://protobuf.dev/news/) may include additional announcements or pre-announcements for upcoming changes.
+  # Compiler
+  * Future-proof edition 2023 against feature value support windows. (https://github.com/protocolbuffers/protobuf/commit/fea6847e408d58e40a2f10ab124ae795afd703d4)
+  * Mark deleted fields in `descriptor.proto` reserved (https://github.com/protocolbuffers/protobuf/commit/d2da4636c06ccad04371434dabbf24ca1c6ee83e)
+  * Add extension declarations for known features. (https://github.com/protocolbuffers/protobuf/commit/f8d0a5b1dd6f5655be3c0d1a8aa1fec88e80c13a)
+  …
+  ```
+- **v26.0 Protocol Buffers v26.0** · [full notes](https://github.com/protocolbuffers/protobuf/releases/tag/v26.0)
+  ```
+  # Announcements
+  * **This version includes breaking changes to: Java, PHP, C++, Ruby, Python.**
+    * [Java] Remove the deprecated always_print_primitive_fields option from Java, Python and C++ JSON parsers. (https://github.com/protocolbuffers/protobuf/commit/06e7caba58ede0220b110b89d08f329e5f8a7537)
+    * [Java] Remove unused helper methods for creating new mutable arraylists. (https://github.com/protocolbuffers/protobuf/commit/787447430fc9a69c071393e85a380b664d261ab4)
+    * [Java] Use Editions features in Java full runtimes. (https://github.com/protocolbuffers/protobuf/commit/65c65c2d04b293225db150029d005056a9f078b8)
+    * [Java] Stop generating the "newInstance" method. This is not used anymore. (https://github.com/protocolbuffers/protobuf/commit/c0d08bdcade9d44698015b85c9c23343ca1319b7)
+  …
+  ```
+- **v25.2 Protocol Buffers v25.2** · [full notes](https://github.com/protocolbuffers/protobuf/releases/tag/v25.2)
+  ```
+  # Announcements
+  * [Protobuf News](https://protobuf.dev/news/) may include additional announcements or pre-announcements for upcoming changes.
+  # C++
+  * Only substitute prefixes during installation setup. (https://github.com/protocolbuffers/protobuf/commit/05ad6525c3aae2ae5b6e1987227445a420caada7)
+  * Register a shutdown delete for C++ feature defaults (https://github.com/protocolbuffers/protobuf/commit/3d5c709ebe01f1f9f3d3345cd4239e239081f8fd)
   ```
 
 ### Touched in this repo

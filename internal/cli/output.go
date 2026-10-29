@@ -12,26 +12,41 @@ import (
 	"unicode"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/deliver"
 	"github.com/mohsensc/tend-cli/internal/plan"
 )
 
+// nothing is what a repo with nothing tend follows gets told, and what
+// tend.yml left out of the search.
+func (s *session) nothing() string {
+	msg := "nothing to watch: no manifests or API calls found in " + s.root
+	if s.cfg != nil && len(s.cfg.Ecosystems) > 0 {
+		msg += "; tend.yml's ecosystems lists only " + strings.Join(s.cfg.Ecosystems, ", ")
+	}
+	return msg
+}
+
 func writeCheck(w io.Writer, s *session, p *plan.Plan, empty bool) error {
 	if empty {
-		_, err := fmt.Fprintf(w, "tend: nothing to watch: no manifests or API calls found in %s\n", s.root)
+		_, err := fmt.Fprintf(w, "tend: %s\n", s.nothing())
 		return err
 	}
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "tend: %d queued, %d skipped, %s\n", len(p.Queue), len(p.Dropped), openSummary(p.Open, s.forge != nil))
+	fmt.Fprintf(&b, "tend: %d queued, %d skipped, %s\n", len(p.Queue), len(p.Dropped), openSummary(p.Open, s.openWhy))
 	if s.o.quiet {
 		_, err := w.Write(b.Bytes())
 		return err
 	}
 	openID := plan.OpenID(p.Open, s.st)
+	var now time.Time
+	if s.e.Now != nil {
+		now = s.e.Now()
+	}
 	if len(p.Queue) > 0 {
 		b.WriteString("\n")
 		tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 		for i, ch := range p.Queue {
-			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\t%s\n", i+1, ch.Kind, subject(&ch), target(&ch), detail(&ch, openID, p.Open))
+			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\t%s\n", i+1, ch.Kind, subject(&ch), target(&ch), detail(&ch, openID, p.Open, now))
 		}
 		tw.Flush()
 	}
@@ -132,11 +147,13 @@ func trimLines(b []byte) []byte {
 // maxNotes keeps a long list of notes from burying the queue.
 const maxNotes = 10
 
-func openSummary(pr *core.PR, known bool) string {
-	if !known {
-		return "open PRs unknown"
-	}
-	if pr == nil {
+// openSummary is the header's word on open PRs: unknown, and why, when
+// unknown says why they could not be listed.
+func openSummary(pr *core.PR, unknown string) string {
+	switch {
+	case unknown != "":
+		return "open PRs unknown (" + unknown + ")"
+	case pr == nil:
 		return "no open PR"
 	}
 	return fmt.Sprintf("1 open PR (#%d)", pr.Number)
@@ -170,8 +187,11 @@ func subject(ch *core.Change) string {
 	if ch.Kind == core.First && ch.ID != core.FirstID {
 		return plan.StageName(ch.Batch.Stage)
 	}
+	if ch.Kind == core.First && ch.Batch != nil && len(deliver.Tally(ch.Batch)) == 0 {
+		return "set up tend"
+	}
 	if ch.Kind == core.First {
-		return "first PR"
+		return "catch-up"
 	}
 	if ch.API != nil {
 		return ch.API.Provider + " API"
@@ -186,7 +206,13 @@ func subject(ch *core.Change) string {
 	}
 	d := ch.Deps[0]
 	if d.Ecosystem == core.Docker || d.Min {
-		return strings.TrimPrefix(d.Name, "library/") + " (" + d.Manifest.Path + ")"
+		var files []string
+		for _, x := range ch.Deps {
+			if !slices.Contains(files, x.Manifest.Path) {
+				files = append(files, x.Manifest.Path)
+			}
+		}
+		return d.Display() + " (" + strings.Join(files, ", ") + ")"
 	}
 	return d.Name
 }
@@ -210,7 +236,7 @@ func target(ch *core.Change) string {
 	return from + " → " + ch.To
 }
 
-func detail(ch *core.Change, openID string, open *core.PR) string {
+func detail(ch *core.Change, openID string, open *core.PR, now time.Time) string {
 	var parts []string
 	if b := ch.Batch; b != nil {
 		parts = append(parts, carries(b))
@@ -220,24 +246,26 @@ func detail(ch *core.Change, openID string, open *core.PR) string {
 		return strings.Join(parts, " · ")
 	}
 	if ch.Kind == core.Security {
-		parts = append(parts, strings.TrimSpace(advisory(ch)+" "+ch.Severity))
+		parts = append(parts, advisory(ch))
 	}
 	if a := ch.API; a != nil {
 		parts = append(parts, apiWhat(a))
 	}
 	if !ch.Sunset.IsZero() {
+		eol := slices.ContainsFunc(ch.Evidence, func(ev core.Evidence) bool { return ev.Source == "eol" })
 		label := "sunset"
-		if slices.ContainsFunc(ch.Evidence, func(ev core.Evidence) bool { return ev.Source == "eol" }) {
+		switch {
+		case eol && ch.Sunset.Before(now):
+			label = "EOL since"
+		case eol:
 			label = "EOL"
+		case ch.Sunset.Before(now):
+			label = "sunset passed"
 		}
 		parts = append(parts, label+" "+ch.Sunset.UTC().Format(time.DateOnly))
 	}
 	if ch.To == "" && ch.API == nil {
-		if n := len(ch.Options); n > 0 {
-			parts = append(parts, fmt.Sprintf("%d options", n))
-		} else {
-			parts = append(parts, "no known replacement")
-		}
+		parts = append(parts, ways(ch))
 	}
 	parts = append(parts, sites(ch))
 	if open != nil && ch.ID == openID {
@@ -246,36 +274,16 @@ func detail(ch *core.Change, openID string, open *core.PR) string {
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " · ")
 }
 
-// carries sums up a catch-up PR: "fix 2 security · 1 API · move off 1
-// deprecated · remove 3 unused · 4 in later stages · 2 to look at", or that
-// it only sets tend up.
+// carries sums up a catch-up PR the way its title does, "2 end-of-life
+// runtimes · 1 deprecated Action · 3 unused dependencies", then what waits
+// for later PRs and what it keeps, or that it only sets tend up.
 func carries(b *core.Batch) string {
-	var sec, api, dep int
-	for _, ch := range b.Changes {
-		switch {
-		case ch.API != nil:
-			api++
-		case ch.Kind == core.Security:
-			sec++
-		default:
-			dep++
-		}
+	parts := deliver.Tally(b)
+	if n := len(b.Next); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d more in later PRs", n))
 	}
-	var parts []string
-	for _, x := range []struct {
-		n    int
-		text string
-	}{
-		{sec, "fix %d security"},
-		{api, "%d API"},
-		{dep, "move off %d deprecated"},
-		{len(b.Unused), "remove %d unused"},
-		{len(b.Next), "%d in later stages"},
-		{len(b.Kept), "%d to look at"},
-	} {
-		if x.n > 0 {
-			parts = append(parts, fmt.Sprintf(x.text, x.n))
-		}
+	if n := len(b.Kept); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d possibly unused, kept", n))
 	}
 	if len(parts) == 0 {
 		return "nothing to catch up on; adds tend.yml"
@@ -283,30 +291,62 @@ func carries(b *core.Batch) string {
 	return strings.Join(parts, " · ")
 }
 
-// advisory is the first advisory id the evidence cites.
-func advisory(ch *core.Change) string {
-	for _, ev := range ch.Evidence {
-		if ev.Source != "osv" {
-			continue
-		}
-		if f := strings.Fields(ev.Title); len(f) > 0 {
-			return f[0]
+// ways says what a deprecation without a target can move to: the options
+// that move it, not the one that stays.
+func ways(ch *core.Change) string {
+	var moves []core.Option
+	for _, o := range ch.Options {
+		if !o.Stay {
+			moves = append(moves, o)
 		}
 	}
-	return ""
+	switch len(moves) {
+	case 0:
+		for _, ev := range ch.Evidence {
+			if ev.Source == "registry" && strings.TrimSpace(ev.Text) != "" {
+				return "deprecated: " + core.Clip(strings.Join(strings.Fields(ev.Text), " "), 80)
+			}
+		}
+		return "no known replacement"
+	case 1:
+		if to := strings.TrimSpace(moves[0].ToName + " " + moves[0].To); to != "" {
+			return "1 option: → " + to
+		}
+		return "1 option: " + moves[0].Title
+	}
+	return fmt.Sprintf("%d options", len(moves))
 }
 
-// apiWhat turns "response field removed" and a field into "field total_cents removed".
+// advisory is the first advisory the evidence cites and its severity, and
+// how many more there are, as the PR's title counts them.
+func advisory(ch *core.Change) string {
+	ids := deliver.Advisories(ch)
+	if len(ids) == 0 {
+		return ch.Severity
+	}
+	res := strings.TrimSpace(ids[0] + " " + ch.Severity)
+	if n := len(ids) - 1; n > 0 {
+		res += fmt.Sprintf(" +%d more", n)
+	}
+	return res
+}
+
+// apiWhat turns "response field removed" and a field into "field
+// total_cents removed", and a type change into "field total_cents changed
+// type".
 func apiWhat(a *core.APIChange) string {
 	words := strings.Fields(a.What)
 	if a.Field == "" || len(words) < 2 {
 		return a.What
 	}
+	if strings.HasSuffix(a.What, "type changed") {
+		return "field " + a.Field + " changed type"
+	}
 	return words[len(words)-2] + " " + a.Field + " " + words[len(words)-1]
 }
 
 func sites(ch *core.Change) string {
-	n := len(ch.Sites)
+	n := core.Lines(ch.Sites)
 	switch {
 	case n == 1 && ch.Sites[0].Chain == nil && len(ch.Deps) > 0:
 		return fmt.Sprintf("%s:%d", ch.Sites[0].File, ch.Sites[0].Line)

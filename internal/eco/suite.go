@@ -126,7 +126,7 @@ func (python) Suite(root string, m core.Manifest) *core.Suite {
 		},
 		Code: smokePy,
 		Run: func(files []string) string {
-			return inDir(dir, py+" -m unittest discover -s tests/tend -t .")
+			return inDir(dir, py+" -m unittest discover -s tests/tend")
 		},
 	}
 }

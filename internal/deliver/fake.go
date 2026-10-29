@@ -23,13 +23,15 @@ type FakeForge struct {
 	CreateErr error              // returned by the next CreatePR, once
 	Peak      int                // the most PRs open at once
 	CI        map[string]core.CI // what CI made of a commit, by sha; none when missing
+	Login     string             // the account tend writes as, tend[bot] when empty
 
 	mu       sync.Mutex
 	prs      []*core.PR
 	comments map[int][]core.Comment
-	closer   map[int]string
+	closer   map[int]closing
 	nextID   int64
 	issues   []*core.Issue
+	made     int
 }
 
 var (
@@ -50,8 +52,27 @@ func NewFake(owner, name, base string) *FakeForge {
 		Merges:    map[int]string{},
 		CI:        map[string]core.CI{},
 		comments:  map[int][]core.Comment{},
-		closer:    map[int]string{},
+		closer:    map[int]closing{},
 	}
+}
+
+type closing struct {
+	login string
+	at    time.Time
+}
+
+func (f *FakeForge) login() string {
+	if f.Login != "" {
+		return f.Login
+	}
+	return tendLogin
+}
+
+func (f *FakeForge) now() time.Time {
+	if f.Now != nil {
+		return f.Now()
+	}
+	return time.Time{}
 }
 
 func (f *FakeForge) Repo(ctx context.Context) (core.RepoInfo, error) {
@@ -147,6 +168,9 @@ func (f *FakeForge) CreatePR(ctx context.Context, in core.PRInput) (*core.PR, er
 func (f *FakeForge) UpdatePR(ctx context.Context, number int, in core.PRInput) error {
 	return f.edit(number, func(pr *core.PR) error {
 		pr.Title, pr.Body, pr.Draft = in.Title, in.Body, in.Draft
+		if in.Base != "" {
+			pr.Base = in.Base
+		}
 		return nil
 	})
 }
@@ -154,18 +178,18 @@ func (f *FakeForge) UpdatePR(ctx context.Context, number int, in core.PRInput) e
 func (f *FakeForge) ClosePR(ctx context.Context, number int) error {
 	return f.edit(number, func(pr *core.PR) error {
 		pr.State = "closed"
-		f.closer[number] = tendLogin
+		f.closer[number] = closing{f.login(), f.now()}
 		return nil
 	})
 }
 
-func (f *FakeForge) ClosedBy(ctx context.Context, number int) (string, error) {
-	var res string
+func (f *FakeForge) ClosedBy(ctx context.Context, number int) (string, time.Time, error) {
+	var res closing
 	err := f.edit(number, func(*core.PR) error {
 		res = f.closer[number]
 		return nil
 	})
-	return res, err
+	return res.login, res.at, err
 }
 
 func (f *FakeForge) Comments(ctx context.Context, number int) ([]core.Comment, error) {
@@ -181,7 +205,7 @@ func (f *FakeForge) Comments(ctx context.Context, number int) ([]core.Comment, e
 }
 
 func (f *FakeForge) Comment(ctx context.Context, number int, body string) error {
-	return f.Say(number, tendLogin, "NONE", body)
+	return f.Say(number, f.login(), "NONE", body)
 }
 
 func (f *FakeForge) AutoMerge(ctx context.Context, pr *core.PR, method string) error {
@@ -235,7 +259,7 @@ func (f *FakeForge) CloseAs(n int, login string) error {
 			return fmt.Errorf("fake forge: #%d is %s", n, pr.State)
 		}
 		pr.State = "closed"
-		f.closer[n] = login
+		f.closer[n] = closing{login, f.now()}
 		return nil
 	})
 }
@@ -263,10 +287,7 @@ func (f *FakeForge) Say(n int, author, role, body string) error {
 		return fmt.Errorf("fake forge: no PR #%d", n)
 	}
 	f.nextID++
-	var at time.Time
-	if f.Now != nil {
-		at = f.Now()
-	}
+	at := f.now()
 	f.comments[n] = append(f.comments[n], core.Comment{ID: f.nextID, Author: author, Role: role, Body: body, At: at})
 	return nil
 }
@@ -324,7 +345,8 @@ func (f *FakeForge) CreateIssue(ctx context.Context, title, body string, labels 
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	is := &core.Issue{Number: 1000 + len(f.issues), Title: title, Body: body, Open: true}
+	is := &core.Issue{Number: 1000 + f.made, Title: title, Body: body, Open: true}
+	f.made++
 	f.issues = append(f.issues, is)
 	res := *is
 	return &res, nil
@@ -342,7 +364,14 @@ func (f *FakeForge) EditIssue(ctx context.Context, number int, body string, open
 			return nil
 		}
 	}
-	return fmt.Errorf("fake forge: no issue #%d", number)
+	return fmt.Errorf("%w: fake forge: no issue #%d", ErrGone, number)
+}
+
+// DeleteIssue removes issue n, as a maintainer who deletes or moves it would.
+func (f *FakeForge) DeleteIssue(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.issues = slices.DeleteFunc(f.issues, func(is *core.Issue) bool { return is.Number == n })
 }
 
 // Issues returns copies of every issue in creation order. Their numbers

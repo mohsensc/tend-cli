@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/mohsensc/tend-cli/internal/api"
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/ver"
 	"github.com/mohsensc/tend-cli/internal/vet"
@@ -73,9 +75,12 @@ func Body(in BodyInput) string {
 		p.Due = "due"
 	}
 	if ch.Kind == core.First && ch.Batch != nil {
-		p.Welcome, p.Batch = welcome(ch.Batch), batched(in)
+		c := *ch
+		c.Batch = reached(ch.Batch, in.Patch)
+		in.Change = &c
+		p.Welcome, p.Batch = welcome(c.Batch), batched(in)
 		if ch.ID != core.FirstID {
-			p.Welcome = intro(ch.Batch)
+			p.Welcome = intro(c.Batch)
 		}
 		if k := ch.Batch.Stage; k > 0 {
 			p.Stage = strconv.Itoa(k)
@@ -128,26 +133,56 @@ func render(p page) string {
 	return b.String()
 }
 
+var fenceRe = regexp.MustCompile("(?m)^( *)```")
+
 // cut shortens a section to at most n bytes at a line break, closing what
 // the cut leaves open, and says where the rest is.
 func cut(s string, n int) string {
 	const more = "\n\n_Cut to fit GitHub's limit on a PR body._"
-	n -= len(more) + len("\n```\n</details>")
+	pad := 0
+	for _, m := range fenceRe.FindAllStringSubmatch(s, -1) {
+		pad = max(pad, len(m[1]))
+	}
+	n -= len(more) + len("\n</details>") + 1 + pad + len(ticks(s, 3))
 	if n <= 0 {
 		return strings.TrimPrefix(more, "\n\n")
 	}
 	if i := strings.LastIndexByte(s[:min(n, len(s))], '\n'); i > 0 {
 		s = s[:i]
 	} else {
-		s = s[:min(n, len(s))]
+		s = core.Clip(s, n)
+		if i := strings.LastIndexByte(s, '&'); i >= 0 && !strings.Contains(s[i:], ";") {
+			s = s[:i]
+		}
 	}
-	if strings.Count(s, "```")%2 == 1 {
-		s += "\n```"
+	if fence := unclosed(s); fence != "" {
+		s += "\n" + fence
 	}
 	if strings.Count(s, "<details>") > strings.Count(s, "</details>") {
 		s += "\n</details>"
 	}
 	return s + more
+}
+
+// unclosed is the line that closes the code fence s ends inside, indented
+// as the fence that opened it so it closes in the same list item, "" when s
+// ends outside any fence.
+func unclosed(s string) string {
+	open, pad := "", ""
+	for _, l := range strings.Split(s, "\n") {
+		t := strings.TrimLeft(l, " ")
+		run := t[:len(t)-len(strings.TrimLeft(t, "`"))]
+		switch {
+		case open == "" && len(run) >= 3:
+			open, pad = run, l[:len(l)-len(t)]
+		case open != "" && len(run) >= len(open) && strings.TrimSpace(t) == run:
+			open = ""
+		}
+	}
+	if open == "" {
+		return ""
+	}
+	return pad + open
 }
 
 // tail keeps the end of a step's output, where the failure is.
@@ -202,7 +237,7 @@ func ParseMarker(body string) (id, base string, rev int, ok bool) {
 
 func heading(ch *core.Change) string {
 	if a := ch.API; a != nil {
-		return strings.TrimSpace(a.Provider + " " + strings.TrimSpace(strings.ToUpper(a.Method)+" "+a.Path))
+		return strings.TrimSpace(api.Title(a.Provider) + " " + strings.TrimSpace(strings.ToUpper(a.Method)+" "+a.Path))
 	}
 	if len(ch.Deps) == 0 {
 		return ch.ID
@@ -287,30 +322,122 @@ func reason(in BodyInput) string {
 	if a := ch.API; a != nil {
 		s := a.What
 		if a.Field != "" {
-			s += " (" + a.Field + ")"
+			s += " (" + prose(oneLine(a.Field, 120)) + ")"
 		}
 		return s
 	}
 	if m := in.Meta; m != nil && len(ch.Deps) > 0 {
 		if m.Deprecated != "" {
-			return oneLine(m.Deprecated, 120)
+			return prose(oneLine(m.Deprecated, 120))
 		}
 		for _, r := range m.Releases {
 			if r.Version == ch.Deps[0].Version && r.Deprecated != "" {
-				return oneLine(r.Deprecated, 120)
+				return prose(oneLine(r.Deprecated, 120))
 			}
 		}
 	}
 	if len(ch.Evidence) > 0 && ch.Evidence[0].Title != "" {
-		return oneLine(ch.Evidence[0].Title, 120)
+		return prose(oneLine(ch.Evidence[0].Title, 120))
 	}
 	return "deprecated"
+}
+
+var (
+	closingRe   = regexp.MustCompile(`(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b|\bgh-\d`)
+	proseEscape = map[rune]string{
+		'<': "&lt;", '>': "&gt;", '&': "&amp;", '"': "&#34;", '\'': "&#39;",
+		'\\': `\\`, '`': "\\`", '*': `\*`, '_': `\_`, '[': `\[`, ']': `\]`,
+		'~': `\~`, '|': `\|`,
+	}
+)
+
+const zeroWidth = "&#8203;"
+
+// prose makes text from upstream safe to show as Markdown outside a fence:
+// it renders as written, but cannot open a tag, an image or a link, mention
+// anyone, point at an issue, or close one when the PR merges. A code span
+// stays one, since nothing in it does any of that.
+func prose(s string) string {
+	s = strings.ReplaceAll(s, "\x00", "")
+	var b strings.Builder
+	for s != "" {
+		i := strings.IndexByte(s, '`')
+		if i < 0 {
+			b.WriteString(plain(s))
+			break
+		}
+		b.WriteString(plain(s[:i]))
+		s = s[i:]
+		run := s[:len(s)-len(strings.TrimLeft(s, "`"))]
+		if end := closer(s[len(run):], run); end >= 0 {
+			n := len(run) + end + len(run)
+			b.WriteString(s[:n])
+			s = s[n:]
+			continue
+		}
+		b.WriteString(strings.Repeat("\\`", len(run)))
+		s = s[len(run):]
+	}
+	return b.String()
+}
+
+// closer is where the backtick run that closes a code span opened by run
+// starts in s, -1 when nothing closes it.
+func closer(s, run string) int {
+	for at := 0; at < len(s); {
+		i := strings.IndexByte(s[at:], '`')
+		if i < 0 {
+			return -1
+		}
+		i += at
+		n := len(s[i:]) - len(strings.TrimLeft(s[i:], "`"))
+		if n == len(run) {
+			return i
+		}
+		at = i + n
+	}
+	return -1
+}
+
+func plain(s string) string {
+	s = closingRe.ReplaceAllStringFunc(s, func(m string) string {
+		return m[:1] + "\x00" + m[1:]
+	})
+	var b strings.Builder
+	for i, c := range s {
+		switch {
+		case c == 0:
+			b.WriteString(zeroWidth)
+		case proseEscape[c] != "":
+			b.WriteString(proseEscape[c])
+		case c == '@':
+			b.WriteString("@" + zeroWidth)
+		case c == '#' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9':
+			b.WriteString("#" + zeroWidth)
+		default:
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
+}
+
+// link is u as the target of a Markdown link, "" for anything but a web URL.
+func link(u string) string {
+	p, err := url.Parse(strings.TrimSpace(u))
+	if err != nil || p.Scheme != "http" && p.Scheme != "https" || p.Host == "" {
+		return ""
+	}
+	return strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E").Replace(p.String())
 }
 
 func oneLine(s string, n int) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if len(s) > n {
-		s = strings.TrimSpace(core.Clip(s, n)) + "…"
+		c := core.Clip(s, n)
+		if i := strings.LastIndexByte(c, ' '); i > 0 && len(c)-i <= 20 {
+			c = c[:i]
+		}
+		s = strings.TrimSpace(c) + "…"
 	}
 	return s
 }
@@ -325,7 +452,7 @@ func level(in BodyInput) string {
 	to, ok2 := ver.Parse(ch.To)
 	if ok1 && ok2 {
 		if ch.Level == "major" {
-			res = fmt.Sprintf("major (%d → %d)", from.Major(), to.Major())
+			res = fmt.Sprintf("major (%s → %s)", from.Line(), to.Line())
 		} else {
 			res = fmt.Sprintf("%s (%s → %s)", ch.Level, ch.Deps[0].Version, ch.To)
 		}
@@ -391,13 +518,13 @@ func evidence(e core.Evidence) string {
 	if name == "" {
 		name = e.Source
 	}
-	b.WriteString("- **" + name + "**")
-	if e.URL != "" {
+	b.WriteString("- **" + prose(oneLine(name, 200)) + "**")
+	if u := link(e.URL); u != "" {
 		label := "source"
 		if isNotes(e) {
 			label = "full notes"
 		}
-		b.WriteString(" · [" + label + "](" + e.URL + ")")
+		b.WriteString(" · [" + label + "](" + u + ")")
 	}
 	lines := textLines(e.Text)
 	if len(lines) == 0 {
@@ -433,7 +560,8 @@ func ticks(s string, n int) string {
 }
 
 // fenced wraps s in a code fence longer than any backtick run inside it, so
-// upstream text cannot close the block, link, or mention anyone.
+// upstream text cannot close the block, link, or mention anyone. Text from
+// upstream outside a fence goes through prose.
 func fenced(s string) string {
 	fence := ticks(s, 3)
 	return fence + "\n" + s + "\n" + fence
@@ -570,25 +698,41 @@ func goMoved(ch *core.Change, diff string) string {
 	if len(ch.Deps) == 0 || ch.Deps[0].Ecosystem != core.Go {
 		return ""
 	}
-	var file, old, now string
-	for _, l := range strings.Split(diff, "\n") {
-		if rest, ok := strings.CutPrefix(l, "diff --git a/"); ok {
-			file, _, _ = strings.Cut(rest, " b/")
-			continue
-		}
-		if file != "go.mod" && !strings.HasSuffix(file, "/go.mod") {
-			continue
-		}
-		if m := goDirective.FindStringSubmatch(l); m != nil && m[1] == "-" {
-			old = m[2]
-		} else if m != nil {
-			now = m[2]
-		}
-	}
-	if old == "" || now == "" || old == now {
+	file, old, now := goLineMoved(diff)
+	if file == "" {
 		return ""
 	}
 	return fmt.Sprintf("The go line in %s moved from %s to %s, as %s %s requires, so building this module now takes Go %s or later.", code(file), old, now, ch.Deps[0].Name, ch.To, now)
+}
+
+// goLineMoved finds a go.mod whose go line the diff moves, and from what to
+// what; file is "" when none does.
+func goLineMoved(diff string) (file, old, now string) {
+	at := ""
+	for _, l := range strings.Split(diff, "\n") {
+		if rest, ok := strings.CutPrefix(l, "diff --git a/"); ok {
+			if old != "" && now != "" && old != now {
+				return file, old, now
+			}
+			at, _, _ = strings.Cut(rest, " b/")
+			continue
+		}
+		if at != "go.mod" && !strings.HasSuffix(at, "/go.mod") {
+			continue
+		}
+		if m := goDirective.FindStringSubmatch(l); m != nil {
+			file = at
+			if m[1] == "-" {
+				old = m[2]
+			} else {
+				now = m[2]
+			}
+		}
+	}
+	if old == "" || now == "" || old == now {
+		return "", "", ""
+	}
+	return file, old, now
 }
 
 func siteLine(s core.Site, after []string) string {
@@ -710,11 +854,30 @@ func proof(in BodyInput) string {
 	if s := verdictLine(in); s != "" {
 		b.WriteString("\n\n" + s)
 	}
+	if s := stale(in.Patch); s != "" {
+		b.WriteString("\n\n" + s)
+	}
+	if in.Change != nil && in.Change.Batch != nil && in.Change.Batch.Thin != "" && in.Change.Batch.Baseline == nil {
+		bt := in.Change.Batch
+		b.WriteString("\n\nThe project's tests are thin (" + Clause(bt.Thin) + "), and tend could not add a baseline, so this proof shows that the change builds and the existing tests pass, not that the changed code behaves the same.")
+	}
 	if s := pr.Container; s != "" {
 		b.WriteString("\n\nRan in container " + code(s) + ".")
 	}
-	if st := tailStep(pr.Patched); st != nil {
-		fmt.Fprintf(&b, "\n\n<details><summary>%s (patched), end of its output</summary>\n\n%s\n</details>", html.EscapeString(st.Cmd), fenced(tail(clean(st.Tail), tailMax)))
+	if len(pr.Runtimes) > 0 {
+		b.WriteString("\n\nRan on " + and(pr.Runtimes) + ".")
+		if s := offPin(in.Change, pr.Runtimes); s != "" {
+			b.WriteString(" " + s)
+		}
+	}
+	st, which := tailStep(pr.Patched), "patched"
+	if pr.Patched != nil && pr.Patched.Pass && pr.Base != nil && !pr.Base.Pass {
+		if f := failedStep(pr.Base); f != nil && strings.TrimSpace(f.Tail) != "" {
+			st, which = f, "base"
+		}
+	}
+	if st != nil {
+		fmt.Fprintf(&b, "\n\n<details><summary>%s (%s), end of its output</summary>\n\n%s\n</details>", html.EscapeString(st.Cmd), which, fenced(tail(clean(st.Tail), tailMax)))
 	}
 	return b.String()
 }
@@ -787,7 +950,14 @@ func verdictLine(in BodyInput) string {
 	decision := in.Patch != nil && in.Patch.Decision
 	switch {
 	case pr.Base != nil && !pr.Base.Pass:
-		return "Tests already fail on " + at + ", so this PR is a draft."
+		what := "Tests already fail"
+		if f := failedStep(pr.Base); f != nil {
+			what = code(f.Cmd) + " already fails"
+			if pr.Patched != nil && pr.Patched.Pass {
+				return code(f.Cmd) + " fails on " + at + " and passes with this change, so this PR is a draft until a person confirms it."
+			}
+		}
+		return what + " on " + at + ", so this PR is a draft."
 	case decision && pr.Patched != nil && !pr.Patched.Pass:
 		return "The patched column is what tend tried before deciding to ask; its failing output is below."
 	case pr.Patched != nil && !pr.Patched.Pass:
@@ -796,6 +966,63 @@ func verdictLine(in BodyInput) string {
 		return "The baseline could not be run, so there is nothing to compare the patched column with."
 	}
 	return ""
+}
+
+// runtimeNames are the runtimes a proof reports, by the toolchain dep that
+// pins them.
+var runtimeNames = map[string]string{"nodejs": "node", "node": "node", "python": "python", "go": "go"}
+
+// offPin warns when a change moves a runtime pin to a major the proof did
+// not run on: .nvmrc moves to 26, and the runner has node 22.
+func offPin(ch *core.Change, ran []string) string {
+	if ch == nil || len(ch.Deps) == 0 || ch.Deps[0].Ecosystem != core.Toolchain || ch.To == "" {
+		return ""
+	}
+	name := runtimeNames[ch.Deps[0].Name]
+	want, ok := ver.Parse(ch.To)
+	if name == "" || !ok {
+		return ""
+	}
+	for _, r := range ran {
+		v, found := strings.CutPrefix(r, name+" ")
+		got, ok := ver.Parse(strings.TrimPrefix(v, "v"))
+		if !found || !ok || got.Major() == want.Major() && (got.Major() > 0 || got.Line() == want.Line()) {
+			continue
+		}
+		return fmt.Sprintf("The pin moves to %s, but the proof ran on %s; set `verify.container`, or a setup step in CI, to prove it on %s.", ch.To, r, ch.To)
+	}
+	return ""
+}
+
+// stale says which lockfiles the patch could not regenerate, from the notes
+// its bumps left: the manifest moved, its lockfile did not.
+func stale(p *core.Patch) string {
+	if p == nil {
+		return ""
+	}
+	var notes []string
+	for _, l := range p.Applied {
+		if n, ok := strings.CutPrefix(l, "lockfile not regenerated, "); ok && n != "no lockfile" {
+			notes = append(notes, n)
+		}
+	}
+	if len(notes) == 0 {
+		return ""
+	}
+	return "The lockfile was not regenerated (" + strings.Join(notes, "; ") + "), so it may not match the manifest; an install that insists on the lockfile can fail until it is."
+}
+
+// failedStep is the step r failed at, nil when none did.
+func failedStep(r *core.Run) *core.Step {
+	if r == nil {
+		return nil
+	}
+	for i := range r.Steps {
+		if s := &r.Steps[i]; s.Skipped == "" && s.Exit != 0 {
+			return s
+		}
+	}
+	return nil
 }
 
 func tailStep(r *core.Run) *core.Step {

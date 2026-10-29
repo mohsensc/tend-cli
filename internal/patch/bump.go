@@ -13,8 +13,9 @@ import (
 )
 
 // bump moves every dep to `to` (or swaps it for toName) with its ecosystem's native
-// tooling and returns the files that changed. A missing tool is not fatal: the
-// manifest still moves and the proof shows what the lockfile could not.
+// tooling and returns the files that changed. A missing tool is fatal when it
+// leaves nothing changed; otherwise the manifest still moves and the proof
+// shows what the lockfile could not.
 func bump(ctx context.Context, wt string, deps []core.Dep, to, toName string, o Options, p *core.Patch) ([]string, error) {
 	var res []string
 	done := map[int]bool{}
@@ -43,7 +44,7 @@ func bump(ctx context.Context, wt string, deps []core.Dep, to, toName string, o 
 		files := uniq(b.Files)
 		res = append(res, files...)
 		names := core.Names(&core.Change{Deps: group})
-		o.logf("bumped %s in %s", strings.Join(names, ", "), strings.Join(files, ", "))
+		o.logf("bumped %s%s", strings.Join(names, ", "), in(files))
 		p.Applied = append(p.Applied, fmt.Sprintf("bumped %s %s -> %s together (%s)", strings.Join(names, ", "), from(d), to, strings.Join(files, ", ")))
 		if note := "lockfile not regenerated, " + b.Note; !b.Locked && b.Note != "" && !slices.Contains(p.Applied, note) {
 			p.Applied = append(p.Applied, note)
@@ -64,11 +65,8 @@ func bump(ctx context.Context, wt string, deps []core.Dep, to, toName string, o 
 		switch {
 		case errors.Is(err, core.ErrNotSupported):
 			return nil, err
-		case err != nil && !errors.As(err, &tm):
+		case err != nil && (!errors.As(err, &tm) || b == nil || len(b.Files) == 0):
 			return nil, fmt.Errorf("patch: %s: %w", d.Name, err)
-		}
-		if b == nil {
-			b = &core.Bump{}
 		}
 		if err != nil && b.Note == "" {
 			b.Note = err.Error()
@@ -79,19 +77,22 @@ func bump(ctx context.Context, wt string, deps []core.Dep, to, toName string, o 
 			}
 		}
 		files := uniq(b.Files)
+		if len(files) == 0 && !b.Locked {
+			continue
+		}
 		res = append(res, files...)
-		o.logf("bumped %s in %s", d.Name, strings.Join(files, ", "))
+		o.logf("bumped %s%s", d.Display(), in(files))
 
-		line := fmt.Sprintf("bumped %s %s -> %s", d.Name, from(d), to)
+		line := fmt.Sprintf("bumped %s %s -> %s", d.Display(), from(d), to)
 		switch {
 		case toName != "":
-			line = fmt.Sprintf("swapped %s for %s", d.Name, toName)
+			line = fmt.Sprintf("swapped %s for %s", d.Display(), strings.TrimPrefix(toName, "library/"))
 		case b.Landed != "":
 			if p.Landed == nil {
 				p.Landed = map[string]string{}
 			}
 			p.Landed[d.Ecosystem+"/"+d.Name] = b.Landed
-			line = fmt.Sprintf("bumped %s %s -> %s, the newest release from %s its ranges allow", d.Name, from(d), b.Landed, to)
+			line = fmt.Sprintf("bumped %s %s -> %s, the newest release from %s its ranges allow", d.Display(), from(d), b.Landed, to)
 		}
 		if len(files) > 0 {
 			line += " (" + strings.Join(files, ", ") + ")"
@@ -135,6 +136,14 @@ func together(deps []core.Dep, to, toName string, o Options) [][]int {
 		}
 	}
 	return res
+}
+
+// in names the files a bump changed, for a log line.
+func in(files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	return " in " + strings.Join(files, ", ")
 }
 
 func from(d core.Dep) string {

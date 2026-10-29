@@ -399,6 +399,7 @@ func TestNpmBumpRefused(t *testing.T) {
 		{"file dependency", core.Dep{Name: "local-lib", Manifest: m, Direct: true}, "1.0.0", core.ErrNotSupported},
 		{"inside range needs the tool", depIn(t, npm{}, root, "package.json", "debug", true), "4.9.0", core.ToolMissing{Tool: "npm"}},
 		{"transitive needs the tool", depIn(t, npm{}, root, "package.json", "ms", false), "2.1.4", core.ToolMissing{Tool: "npm"}},
+		{"a new range needs the tool", depIn(t, npm{}, root, "package.json", "is-number", true), "8.0.0", core.ToolMissing{Tool: "npm"}},
 	}
 	ms := depIn(t, npm{}, root, "package.json", "ms", false)
 	if _, err := (npm{}).Bump(ctx, root, ms, "1.0.0", "tiny-ms"); !errors.Is(err, core.ErrNotSupported) {
@@ -499,13 +500,53 @@ func TestNpmBumpCommands(t *testing.T) {
 		})
 	}
 	t.Run("yarn v1 transitive", func(t *testing.T) {
-		fakeTool(t, "yarn")
+		logged := toolScript(t, "yarn", `grep -q '^ms@' yarn.lock || printf '\nms@^2.1.3:\n  version "2.1.4"\n' >> yarn.lock`+"\n")
 		root := copyTestdata(t, "npm/yarn-v1")
 		d := depIn(t, npm{}, root, "package.json", "ms", false)
-		if _, err := (npm{}).Bump(ctx, root, d, "2.1.4", ""); !errors.Is(err, core.ErrNotSupported) {
-			t.Errorf("err = %v", err)
+		res, err := (npm{}).Bump(ctx, root, d, "2.1.4", "")
+		if err != nil || !res.Locked {
+			t.Fatalf("bump = %+v, %v", res, err)
+		}
+		if got, want := logged(root), []string{". install --ignore-scripts --non-interactive"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("ran %q, want %q", got, want)
+		}
+		lock, _ := os.ReadFile(filepath.Join(root, "yarn.lock"))
+		if strings.Contains(string(lock), `version "2.1.3"`) || !strings.Contains(string(lock), "debug@^4.3.4:") {
+			t.Errorf("yarn.lock:\n%s", lock)
 		}
 	})
+}
+
+func TestYarnLockEdits(t *testing.T) {
+	root := t.TempDir()
+	src := "# yarn lockfile v1\n\n\n\"@s/a@^1.0.0\":\n  version \"1.0.0\"\n\nms@2.1.2, ms@^2.1.3:\n  version \"2.1.3\"\n\nms@^1.0.0:\n  version \"1.0.0\"\n\npad@npm:left-pad@^1.3.0:\n  version \"1.3.0\"\n"
+	write(t, root, map[string]string{"yarn.lock": src})
+	if err := yarnDrop(root, "yarn.lock", "ms"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(root, "yarn.lock"))
+	if want := "# yarn lockfile v1\n\n\n\"@s/a@^1.0.0\":\n  version \"1.0.0\"\n\npad@npm:left-pad@^1.3.0:\n  version \"1.3.0\"\n"; string(got) != want {
+		t.Errorf("after drop:\n%s", got)
+	}
+	if err := yarnDrop(root, "yarn.lock", "left-pad"); err != nil {
+		t.Errorf("an alias of left-pad is not its entry: %v", err)
+	}
+	if err := yarnDrop(root, "yarn.lock", "nope"); err == nil {
+		t.Error("dropping what is not there succeeded")
+	}
+	write(t, root, map[string]string{"yarn.lock": src})
+	if ok, err := yarnAlias(root, "yarn.lock", "@s/a@^1.0.0", "@s/a@1.0.0"); !ok || err != nil {
+		t.Fatalf("alias = %v, %v", ok, err)
+	}
+	if ok, err := yarnAlias(root, "yarn.lock", "ms@2.1.2", "ms@^2.0.0"); !ok || err != nil {
+		t.Fatalf("alias = %v, %v", ok, err)
+	}
+	got, _ = os.ReadFile(filepath.Join(root, "yarn.lock"))
+	for _, want := range []string{"\"@s/a@^1.0.0\", \"@s/a@1.0.0\":\n", "ms@2.1.2, ms@^2.1.3, ms@^2.0.0:\n"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("yarn.lock lacks %q:\n%s", want, got)
+		}
+	}
 }
 
 // lockTool is fakeTool that also rewrites from to to in whichever lockfile
@@ -970,5 +1011,206 @@ func TestNpmLockAt(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(root, "package.json"))
 	if string(after) != string(before) || slices.Contains(res.Files, "package.json") {
 		t.Errorf("a range that admits the target was rewritten:\n%s", after)
+	}
+}
+
+func depLines(ds []core.Dep) []string {
+	var res []string
+	for _, d := range ds {
+		res = append(res, fmt.Sprintf("%s %q direct=%v", d.Name, d.Version, d.Direct))
+	}
+	slices.Sort(res)
+	return res
+}
+
+// A yarn workspace sibling required by a plain range is no registry package,
+// and the root does not repeat what the members require directly.
+func TestYarnWorkspaces(t *testing.T) {
+	tests := []struct {
+		name, lock string
+	}{
+		{"classic", "# yarn lockfile v1\n\n\nleft-pad@^1.3.0:\n  version \"1.3.0\"\n  resolved \"https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz\"\n\nms@^2.1.3:\n  version \"2.1.3\"\n"},
+		{"berry", "__metadata:\n  version: 8\n\n\"app@workspace:packages/app\":\n  version: 0.0.0-use.local\n  resolution: \"app@workspace:packages/app\"\n  dependencies:\n    left-pad: \"npm:^1.3.0\"\n    shared: \"npm:^1.0.0\"\n\n\"left-pad@npm:^1.3.0\":\n  version: 1.3.0\n  resolution: \"left-pad@npm:1.3.0\"\n\n\"ms@npm:^2.1.3\":\n  version: 2.1.3\n  resolution: \"ms@npm:2.1.3\"\n\n\"root@workspace:.\":\n  version: 0.0.0-use.local\n  resolution: \"root@workspace:.\"\n\n\"shared@npm:^1.0.0, shared@workspace:packages/shared\":\n  version: 1.0.0\n  resolution: \"shared@workspace:packages/shared\"\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, root, map[string]string{
+				"package.json":                 `{"name": "root", "private": true, "workspaces": ["packages/*"], "dependencies": {"ms": "^2.1.3"}}`,
+				"yarn.lock":                    tt.lock,
+				"packages/app/package.json":    `{"name": "app", "dependencies": {"shared": "^1.0.0", "left-pad": "^1.3.0"}}`,
+				"packages/shared/package.json": `{"name": "shared", "version": "1.0.0"}`,
+			})
+			if got, want := depLines(depsIn(t, npm{}, root, "packages/app/package.json")), []string{`left-pad "1.3.0" direct=true`}; !reflect.DeepEqual(got, want) {
+				t.Errorf("app deps = %q, want %q", got, want)
+			}
+			if got, want := depLines(depsIn(t, npm{}, root, "package.json")), []string{`ms "2.1.3" direct=true`}; !reflect.DeepEqual(got, want) {
+				t.Errorf("root deps = %q, want %q", got, want)
+			}
+			if got := depLines(depsIn(t, npm{}, root, "packages/shared/package.json")); len(got) != 0 {
+				t.Errorf("shared deps = %q", got)
+			}
+		})
+	}
+	lk := yarnLock([]byte("\"shared@npm:^1.0.0, shared@workspace:packages/shared\":\n  version: 1.0.0\n"))
+	if len(lk.all) != 0 || !lk.links["shared"] {
+		t.Errorf("berry workspace block: all = %+v, links = %v", lk.all, lk.links)
+	}
+}
+
+// Git, file and other tarball installs have a version in package-lock.json
+// but no registry release; registry tarballs, custom registries included,
+// and entries with no resolved URL stay.
+func TestPackageLockSources(t *testing.T) {
+	lock := `{"lockfileVersion": 3, "packages": {
+		"": {"dependencies": {"mylib": "github:acme/mylib#v1", "tar": "https://example.com/t/tarlib-2.0.0.tgz", "vendored": "file:vendor/vendored-1.0.0.tgz", "@corp/ui": "^1.0.0", "left-pad": "^1.3.0", "is-number": "^7.0.0"}},
+		"node_modules/mylib": {"version": "1.0.0", "resolved": "git+ssh://git@github.com/acme/mylib.git#0123456789abcdef"},
+		"node_modules/tar": {"version": "2.0.0", "resolved": "https://example.com/t/tarlib-2.0.0.tgz"},
+		"node_modules/vendored": {"version": "1.0.0", "resolved": "file:vendor/vendored-1.0.0.tgz"},
+		"node_modules/@corp/ui": {"version": "1.2.0", "resolved": "https://artifactory.corp.example/api/npm/npm/@corp/ui/-/ui-1.2.0.tgz"},
+		"node_modules/left-pad": {"version": "1.3.0", "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"},
+		"node_modules/is-number": {"version": "7.0.0"},
+		"node_modules/mylib/node_modules/ms": {"version": "2.1.3", "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz"}
+	}}`
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"package.json":      `{"dependencies": {"mylib": "github:acme/mylib#v1", "tar": "https://example.com/t/tarlib-2.0.0.tgz", "vendored": "file:vendor/vendored-1.0.0.tgz", "@corp/ui": "^1.0.0", "left-pad": "^1.3.0", "is-number": "^7.0.0"}}`,
+		"package-lock.json": lock,
+	})
+	want := []string{`@corp/ui "1.2.0" direct=true`, `is-number "7.0.0" direct=true`, `left-pad "1.3.0" direct=true`, `ms "2.1.3" direct=false`}
+	if got := depLines(depsIn(t, npm{}, root, "package.json")); !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %q\nwant %q", got, want)
+	}
+	ls, err := ReadLock("package-lock.json", []byte(lock))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, l := range ls {
+		names = append(names, l.Name)
+	}
+	if want := []string{"@corp/ui", "is-number", "left-pad", "ms"}; !reflect.DeepEqual(names, want) {
+		t.Errorf("ReadLock = %q, want %q", names, want)
+	}
+}
+
+// An aliased pnpm dependency resolves to the version of the package it
+// installs, in every lockfile format, and is reported once.
+func TestPnpmAlias(t *testing.T) {
+	tests := []struct {
+		name, req, lock string
+	}{
+		{"v5", "npm:bar@^1.0.0", "lockfileVersion: 5.4\n\nspecifiers:\n  foo: npm:bar@^1.0.0\n\ndependencies:\n  foo: /bar/1.2.3\n\npackages:\n\n  /bar/1.2.3:\n    resolution: {integrity: sha512-x}\n    dev: false\n"},
+		{"v6", "npm:bar@^1.0.0", "lockfileVersion: '6.0'\n\ndependencies:\n  foo:\n    specifier: npm:bar@^1.0.0\n    version: /bar@1.2.3\n\npackages:\n\n  /bar@1.2.3:\n    resolution: {integrity: sha512-x}\n    dev: false\n"},
+		{"v9", "npm:bar@^1.0.0", "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      foo:\n        specifier: npm:bar@^1.0.0\n        version: bar@1.2.3\n\npackages:\n\n  bar@1.2.3:\n    resolution: {integrity: sha512-x}\n\nsnapshots:\n\n  bar@1.2.3: {}\n"},
+		{"v9 scoped", "npm:@s/bar@^1.0.0", "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      foo:\n        specifier: npm:@s/bar@^1.0.0\n        version: '@s/bar@1.2.3(react@18.2.0)'\n\npackages:\n\n  '@s/bar@1.2.3':\n    resolution: {integrity: sha512-x}\n\nsnapshots:\n\n  '@s/bar@1.2.3(react@18.2.0)': {}\n"},
+		{"v5 scoped", "npm:@s/bar@^1.0.0", "lockfileVersion: 5.4\n\nspecifiers:\n  foo: npm:@s/bar@^1.0.0\n\ndependencies:\n  foo: /@s/bar/1.2.3_react@18.2.0\n\npackages:\n\n  /@s/bar/1.2.3_react@18.2.0:\n    resolution: {integrity: sha512-x}\n    dev: false\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lk, err := pnpmLock([]byte(tt.lock), "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := lk.resolve("foo", tt.req); got != "1.2.3" {
+				t.Errorf("resolve = %q", got)
+			}
+			root := t.TempDir()
+			write(t, root, map[string]string{
+				"package.json":   `{"dependencies": {"foo": "` + tt.req + `"}}`,
+				"pnpm-lock.yaml": tt.lock,
+			})
+			name, _ := npmRegistryName("foo", tt.req)
+			if got, want := depLines(depsIn(t, npm{}, root, "package.json")), []string{name + ` "1.2.3" direct=true`}; !reflect.DeepEqual(got, want) {
+				t.Errorf("deps = %q, want %q", got, want)
+			}
+		})
+	}
+	for _, ref := range []pnpmRef{"link:../x", "file:../x", "1.2.3_react@18.2.0", "1.2.3(react@18.2.0)"} {
+		want := ""
+		if strings.HasPrefix(string(ref), "1.2.3") {
+			want = "1.2.3"
+		}
+		if got := ref.version(); got != want {
+			t.Errorf("version(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}
+
+// A package.json saved with a byte order mark reads like any other, and a
+// bump keeps the mark.
+func TestNpmBOM(t *testing.T) {
+	hideTools(t)
+	root := t.TempDir()
+	src := "\xef\xbb\xbf{\"packageManager\": \"pnpm@9.0.0\", \"dependencies\": {\"left-pad\": \"^1.2.0\"}}"
+	write(t, root, map[string]string{"package.json": src})
+	if ms := manifestsIn(t, npm{}, root); len(ms) != 1 || ms[0].Tool != "pnpm" {
+		t.Errorf("Detect = %+v", ms)
+	}
+	d := depIn(t, npm{}, root, "package.json", "left-pad", true)
+	if _, err := (npm{}).Bump(context.Background(), root, d, "2.0.0", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(root, "package.json"))
+	if want := strings.Replace(src, "^1.2.0", "^2.0.0", 1); string(got) != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	lock := "\xef\xbb\xbf{\"lockfileVersion\": 3, \"packages\": {\"node_modules/ms\": {\"version\": \"2.1.3\"}}}"
+	if ls, err := ReadLock("package-lock.json", []byte(lock)); err != nil || len(ls) != 1 {
+		t.Errorf("ReadLock = %+v, %v", ls, err)
+	}
+}
+
+// tend cannot read or relock bun's lockfiles, so it changes nothing a bun
+// lockfile locks and runs bun, not npm, to check a project.
+func TestBunLockRefused(t *testing.T) {
+	for _, lock := range []string{"bun.lock", "bun.lockb"} {
+		t.Run(lock, func(t *testing.T) {
+			fakeTool(t, "bun")
+			root := t.TempDir()
+			write(t, root, map[string]string{
+				"package.json": `{"packageManager": "bun@1.2.0", "scripts": {"test": "bun test"}, "dependencies": {"left-pad": "^1.2.0"}}`,
+				lock:           "{}",
+			})
+			ms := manifestsIn(t, npm{}, root)
+			if len(ms) != 1 || ms[0].Lock != lock || ms[0].Tool != "bun" {
+				t.Fatalf("Detect = %+v", ms)
+			}
+			c := (npm{}).Commands(root, ms[0])
+			if !reflect.DeepEqual(c.Install, []string{"bun install --frozen-lockfile"}) || !reflect.DeepEqual(c.Test, []string{"bun run test"}) {
+				t.Errorf("commands = %+v", c)
+			}
+			d := depIn(t, npm{}, root, "package.json", "left-pad", true)
+			before := treeSnapshot(t, root)
+			if _, err := (npm{}).Bump(context.Background(), root, d, "2.0.0", ""); !errors.Is(err, core.ErrNotSupported) {
+				t.Errorf("bump err = %v", err)
+			}
+			if _, err := (npm{}).BumpGroup(context.Background(), root, []core.Dep{d}, "2.0.0"); !errors.Is(err, core.ErrNotSupported) {
+				t.Errorf("group err = %v", err)
+			}
+			if _, err := (npm{}).Remove(context.Background(), root, []core.Dep{d}); !errors.Is(err, core.ErrNotSupported) {
+				t.Errorf("remove err = %v", err)
+			}
+			if !reflect.DeepEqual(before, treeSnapshot(t, root)) {
+				t.Error("a refused change wrote files")
+			}
+		})
+	}
+}
+
+// An npm that writes its own lockfile format is run again with the old one.
+func TestNpmKeepsLockFormat(t *testing.T) {
+	logged := toolScript(t, "npm", `case "$*" in *--lockfile-version=1*) sed 's/"lockfileVersion": 3/"lockfileVersion": 1/' package-lock.json > x ;; *) sed 's/"lockfileVersion": 1/"lockfileVersion": 3/' package-lock.json > x ;; esac; mv x package-lock.json`+"\n")
+	root := copyTestdata(t, "npm/lock-v1")
+	d := depIn(t, npm{}, root, "package.json", "debug", true)
+	if _, err := (npm{}).Bump(context.Background(), root, d, "4.9.0", ""); err != nil {
+		t.Fatal(err)
+	}
+	m := d.Manifest
+	if v := npmLockVersion(root, m); v != 1 {
+		t.Errorf("lockfileVersion = %d, want 1", v)
+	}
+	if got := logged(root); len(got) == 0 || !strings.HasSuffix(got[len(got)-1], "--lockfile-version=1") {
+		t.Errorf("ran %q", got)
 	}
 }

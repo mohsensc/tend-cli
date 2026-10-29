@@ -5,7 +5,7 @@ branding:
   color: green
 inputs:
   token:
-    description: Token with contents:write and pull-requests:write. The default token cannot start other workflows or push workflow changes; pass a fine-grained or GitHub App token for those
+    description: Token with contents:write and pull-requests:write. PRs the default token opens start no other workflows; pass a fine-grained or GitHub App token, with the Workflows permission for Action bumps, to lift that
     default: ${{ github.token }}
   command:
     description: run | check
@@ -17,11 +17,14 @@ inputs:
     description: Path to tend.yml
     default: ""
   version:
-    description: tend version to install; default is the latest release of this action's major
+    description: tend version to install; default is the release this action is pinned to (a tag, or the release tagged at a pinned commit), or the newest release of its major or minor
     default: ""
   model-key:
     description: API key for the model provider named in tend.yml
     default: ""
+  fail-on-unproven:
+    description: Fail the job when tend cannot prove a change it lists in its tracking issue; by default that is a warning, and the change is tried again when the base moves
+    default: "false"
 runs:
   using: composite
   steps:
@@ -31,17 +34,20 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
       run: '"$GITHUB_ACTION_PATH/action/install.sh" "$TEND_VERSION"'
     # tend pushes with the token it is given. A token that actions/checkout
-    # left in the repository's config would be readable by the project's own
-    # install and test commands, so it goes, whatever the checkout step says.
+    # left behind, in the repository's config or in the credentials file under
+    # RUNNER_TEMP, would be readable by the project's own install and test
+    # commands, so both go, whatever the checkout step says. A process running
+    # as the runner's user can still find tokens elsewhere, through sudo on
+    # hosted runners for one; verify.container is the real boundary.
     - shell: bash
-      run: |
-        git config --local --unset-all http.https://github.com/.extraheader || true
-        git config --local --get-regexp '^includeif\..*\.path$' 2>/dev/null | while read -r key val; do
-          case "$val" in *git-credentials*) git config --local --unset-all "$key" ;; esac
-        done || true
+      run: '"$GITHUB_ACTION_PATH/action/scrub.sh"'
     - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/tend/repos
+        path: |
+          ${{ runner.temp }}/tend/repos
+          !${{ runner.temp }}/tend/repos/*/wt
+          !${{ runner.temp }}/tend/repos/*/baseline
+          !${{ runner.temp }}/tend/repos/*/lock
         key: tend-${{ github.repository }}-${{ github.run_id }}
         restore-keys: tend-${{ github.repository }}-
     # The user cache dir differs per OS, so state goes where the cache steps look.
@@ -54,9 +60,16 @@ runs:
         TEND_CONFIG: ${{ inputs.config }}
         TEND_COMMAND: ${{ inputs.command }}
         TEND_ARGS: ${{ inputs.args }}
-      run: tend "$TEND_COMMAND" $TEND_ARGS
+        TEND_FAIL_ON_UNPROVEN: ${{ inputs.fail-on-unproven }}
+      # exec, so no shell holding these variables stays behind as tend's
+      # parent for the project's commands to read through /proc.
+      run: set -f; exec tend "$TEND_COMMAND" $TEND_ARGS
     - if: always()
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/tend/repos
+        path: |
+          ${{ runner.temp }}/tend/repos
+          !${{ runner.temp }}/tend/repos/*/wt
+          !${{ runner.temp }}/tend/repos/*/baseline
+          !${{ runner.temp }}/tend/repos/*/lock
         key: tend-${{ github.repository }}-${{ github.run_id }}

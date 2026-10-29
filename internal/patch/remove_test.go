@@ -42,6 +42,17 @@ func (e *pruneEco) Remove(ctx context.Context, root string, deps []core.Dep) (*c
 	return &core.Bump{Files: []string{deps[0].Manifest.Path, deps[0].Manifest.Lock}, Locked: true}, nil
 }
 
+// idleEco removes nothing and says so with what it returns.
+type idleEco struct {
+	fakeEco
+	b   *core.Bump
+	err error
+}
+
+func (e *idleEco) Remove(context.Context, string, []core.Dep) (*core.Bump, error) {
+	return e.b, e.err
+}
+
 func TestRemove(t *testing.T) {
 	dir := repo(t, map[string]string{
 		"package.json":     "{\n  \"a\": \"1\",\n  \"b\": \"1\"\n}\n",
@@ -71,6 +82,18 @@ func TestRemove(t *testing.T) {
 	}
 	if !slices.Contains(p.Applied, "lockfile not regenerated, npm not found") {
 		t.Errorf("applied %q", p.Applied)
+	}
+
+	for _, e := range []*idleEco{
+		{err: core.ToolMissing{Tool: "go"}},
+		{},
+		{b: &core.Bump{Note: "nothing to do"}},
+	} {
+		o.Ecos[core.Npm] = e
+		p := &core.Patch{}
+		if err := Remove(context.Background(), dir, []core.Dep{in("package.json", "a")}, o, p); err == nil || len(p.Applied) > 0 {
+			t.Errorf("a removal that changed nothing (%v, %v): err %v, applied %q", e.b, e.err, err, p.Applied)
+		}
 	}
 
 	o.Ecos[core.Npm] = &fakeEco{name: core.Npm}

@@ -41,14 +41,14 @@ func StageName(k int) string {
 }
 
 // Tier is the catch-up stage a queued change belongs to. The first rule that
-// matches wins: a migration past Spread call sites, or a choice between
+// matches wins: a migration past Spread call sites to move, or a choice between
 // replacements, waits for the last stage; an API change and a security fix
 // come first; what pins the project's runtime or build comes next, then the
 // releases that are only new; any other move off something deprecated is a
 // fix.
 func Tier(ch *core.Change) int {
 	switch {
-	case len(core.Calls(ch)) > Spread:
+	case MovesCode(ch) && core.Lines(core.Calls(ch)) > Spread:
 		return Migrations
 	case ch.API == nil && ch.To == "" && ch.ToName == "":
 		return Migrations
@@ -60,6 +60,15 @@ func Tier(ch *core.Change) int {
 		return Majors
 	}
 	return Fixes
+}
+
+// MovesCode reports whether a change has call sites to move: an API change,
+// a breaking release, a move off something deprecated, a major, or an option
+// that is not a plain bump. A patch or minor release moves none of the sites
+// that use the package.
+func MovesCode(ch *core.Change) bool {
+	return ch.API != nil || ch.Kind == core.Breaking || ch.Kind == core.Deprecation || ch.Level == "major" ||
+		slices.ContainsFunc(ch.Options, func(o core.Option) bool { return !o.Safe })
 }
 
 // tooling reports whether every dep a change moves is something the project
@@ -130,7 +139,7 @@ func stage(p *Plan, after int, gone []core.Dep) *core.Batch {
 		switch {
 		case t > b.Stage:
 			b.Next = append(b.Next, core.Later{Change: ch, Stage: t})
-		case slices.ContainsFunc(ch.Deps, func(d core.Dep) bool { return slices.ContainsFunc(held, same(d)) }):
+		case slices.ContainsFunc(ch.Deps, func(d core.Dep) bool { return slices.ContainsFunc(held, sameCopy(d)) }):
 			b.Next = append(b.Next, core.Later{Change: ch, Why: "another change here moves the same package, so this one comes after it"})
 		default:
 			held = append(held, ch.Deps...)
@@ -175,6 +184,14 @@ func removed(ch *core.Change, gone []core.Dep) bool {
 	return len(ch.Deps) > 0 && !slices.ContainsFunc(ch.Deps, func(d core.Dep) bool {
 		return !slices.ContainsFunc(gone, same(d))
 	})
+}
+
+// sameCopy matches what same does, except that two copies of a package only
+// the lockfile names are apart when they sit at different versions.
+func sameCopy(d core.Dep) func(core.Dep) bool {
+	return func(x core.Dep) bool {
+		return same(d)(x) && (x.Direct || d.Direct || x.Version == d.Version)
+	}
 }
 
 // same matches a dependency declared in the same manifest as d.

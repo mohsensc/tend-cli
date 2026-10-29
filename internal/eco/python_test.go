@@ -27,6 +27,9 @@ func TestPythonDetect(t *testing.T) {
 		{Ecosystem: "pip", Path: "reqs/requirements.txt", Tool: "pip"},
 		{Ecosystem: "pip", Path: "reqs/requirements/base.txt", Tool: "pip"},
 		{Ecosystem: "pip", Path: "uv/pyproject.toml", Lock: "uv/uv.lock", Tool: "uv"},
+		{Ecosystem: "pip", Path: "workspace/packages/a/pyproject.toml", Lock: "workspace/uv.lock", Tool: "uv"},
+		{Ecosystem: "pip", Path: "workspace/packages/skip/pyproject.toml", Tool: "pip"},
+		{Ecosystem: "pip", Path: "workspace/pyproject.toml", Lock: "workspace/uv.lock", Tool: "uv"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Detect = %+v\nwant %+v", got, want)
@@ -125,6 +128,7 @@ func TestPythonMetaRecord(t *testing.T) {
 
 func TestPythonBump(t *testing.T) {
 	hideTools(t)
+	stubTools(t, "uv", "poetry", "pip-compile")
 	tests := []struct {
 		name, manifest, dep, to, toName string
 	}{
@@ -293,7 +297,15 @@ func TestPyNewSpec(t *testing.T) {
 		{">= 1.2 < 2.0", "2.1.0", ">=2.1 <3.0", false},
 		{"<=1.4", "1.5", "<=1.5", false},
 		{"~=1.4", "2.0.0", "~=2.0", false},
-		{"~=1.4", "2.0.1", "~=2.0.1", false},
+		{"~=1.4", "2.0.1", "~=2.0,>=2.0.1", false},
+		{"~=1.4", "2.1.3", "~=2.1,>=2.1.3", false},
+		{"~=1.4,!=1.5", "2.1.3", "~=2.1,>=2.1.3,!=1.5", false},
+		{"~=1.4", "2.1.3.post1", "~=2.1,>=2.1.3.post1", false},
+		{"~=1.4", "2.1rc1", "~=2.1rc1", false},
+		{"~=1.4.0", "2.1.3", "~=2.1.3", false},
+		{"2.*", "2.32.0", "2.*", false},
+		{"2.*", "3.0.0", "3.*", false},
+		{"2.1.*", "2.2.0", "2.2.*", false},
 		{"~=1.4.2", "1.5.0", "~=1.5.0", false},
 		{"==1.4.*", "1.5.2", "==1.5.*", false},
 		{"==1.*", "2.3.0", "==2.*", false},
@@ -341,6 +353,13 @@ func TestPySatisfies(t *testing.T) {
 		{"~=1.4.2", "1.5.0", false},
 		{"~=1.4", "1.9", true},
 		{"~=1.4", "2.0", false},
+		{"2.*", "2.31.0", true},
+		{"2.*", "3.0.0", false},
+		{"2.1.*", "2.1.5", true},
+		{"2.1.*", "2.2.0", false},
+		{"~=2.1,>=2.1.3", "2.5.0", true},
+		{"~=2.1,>=2.1.3", "2.1.0", false},
+		{"~=2.1,>=2.1.3", "3.0", false},
 		{"<2.0", "2.0rc1", true},
 		{">=2.0", "2.0rc1", false},
 		{">=1.0", "1.0.post1", true},
@@ -469,9 +488,37 @@ func TestPythonCommands(t *testing.T) {
 	m := manifestsIn(t, python{}, plain)[0]
 	want := core.Commands{
 		Install: []string{"python3 -m venv .venv && .venv/bin/pip install -e '.[dev,test]'"},
-		Test:    []string{".venv/bin/python -m unittest discover -s tests -t ."},
+		Test:    []string{".venv/bin/python -m unittest discover -s tests"},
 	}
 	if got := (python{}).Commands(plain, m); !reflect.DeepEqual(got, want) {
+		t.Errorf("Commands = %+v\nwant %+v", got, want)
+	}
+	write(t, plain, map[string]string{"tests/__init__.py": ""})
+	want.Test = []string{".venv/bin/python -m unittest discover -s tests -t ."}
+	if got := (python{}).Commands(plain, m); !reflect.DeepEqual(got, want) {
+		t.Errorf("with a tests package, Commands = %+v\nwant %+v", got, want)
+	}
+}
+
+// The pallets layout keeps pinned requirements in requirements/, the
+// package in src/ and the tests in tests/: the proof runs from the root and
+// installs the package too.
+func TestPythonCommandsRequirementsDir(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"setup.py":               "from setuptools import setup\nsetup()\n",
+		"setup.cfg":              "[metadata]\nname = x\n\n[tool:pytest]\ntestpaths = tests\n",
+		"src/x/__init__.py":      "",
+		"tests/test_a.py":        "def test_a():\n    pass\n",
+		"requirements/tests.in":  "pytest\n",
+		"requirements/tests.txt": "pytest==8.3.3\n",
+	})
+	m := core.Manifest{Ecosystem: core.Pip, Path: "requirements/tests.in", Lock: "requirements/tests.txt", Tool: "pip"}
+	want := core.Commands{
+		Install: []string{"python3 -m venv .venv && .venv/bin/pip install -r requirements/tests.txt -e ."},
+		Test:    []string{".venv/bin/python -m pytest"},
+	}
+	if got := (python{}).Commands(root, m); !reflect.DeepEqual(got, want) {
 		t.Errorf("Commands = %+v\nwant %+v", got, want)
 	}
 }
@@ -544,5 +591,236 @@ func TestPythonBumpReal(t *testing.T) {
 	}
 	if !strings.Contains(got["uv.lock"], "name = \"fixture-dep\"\nversion = \"2.0.0\"") {
 		t.Errorf("uv.lock:\n%s", got["uv.lock"])
+	}
+}
+
+// A uv workspace member locks with the workspace's uv.lock: its versions
+// come from there, a bump relocks it, and the root reports what only the
+// lock names, less what members require directly.
+func TestPythonUVWorkspace(t *testing.T) {
+	root := copyTestdata(t, "python/projects")
+	if got, want := depLines(depsIn(t, python{}, root, "workspace/packages/a/pyproject.toml")), []string{`requests "2.31.0" direct=true`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("member deps = %q, want %q", got, want)
+	}
+	if got, want := depLines(depsIn(t, python{}, root, "workspace/pyproject.toml")), []string{`certifi "2024.8.30" direct=false`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("root deps = %q, want %q", got, want)
+	}
+	logged := toolScript(t, "uv", "sed 's/2.31.0/2.32.0/' ../../uv.lock > ../../uv.lock.tmp && mv ../../uv.lock.tmp ../../uv.lock\n")
+	d := depIn(t, python{}, root, "workspace/packages/a/pyproject.toml", "requests", true)
+	res, err := python{}.Bump(context.Background(), root, d, "2.32.0", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"workspace/packages/a/pyproject.toml", "workspace/uv.lock"}; !res.Locked || !reflect.DeepEqual(res.Files, want) {
+		t.Errorf("bump = %+v, want files %q", res, want)
+	}
+	if got, want := logged(root), []string{"./workspace/packages/a lock --upgrade-package requests==2.32.0"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("uv ran %q, want %q", got, want)
+	}
+	m := manifestsIn(t, python{}, root)
+	for _, x := range m {
+		if x.Path == "workspace/packages/a/pyproject.toml" {
+			if c := (python{}).Commands(root, x); !reflect.DeepEqual(c.Install, []string{"cd workspace/packages/a && uv sync --frozen"}) {
+				t.Errorf("install = %q", c.Install)
+			}
+		}
+	}
+	t.Run("sibling member by source", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, map[string]string{
+			"pyproject.toml":          "[project]\nname = \"app\"\nversion = \"0.1.0\"\ndependencies = [\"lib\", \"requests\"]\n\n[tool.uv.sources]\nlib = { workspace = true }\n\n[tool.uv.workspace]\nmembers = [\"lib\"]\n",
+			"lib/pyproject.toml":      "[project]\nname = \"lib\"\nversion = \"0.1.0\"\n",
+			"uv.lock":                 "version = 1\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\nsource = { virtual = \".\" }\ndependencies = [{ name = \"lib\" }, { name = \"requests\" }]\n\n[[package]]\nname = \"lib\"\nversion = \"0.1.0\"\nsource = { editable = \"lib\" }\n\n[[package]]\nname = \"requests\"\nversion = \"2.31.0\"\nsource = { registry = \"https://pypi.org/simple\" }\n",
+			"lib/src/lib/__init__.py": "",
+		})
+		if got, want := depLines(depsIn(t, python{}, root, "pyproject.toml")), []string{`requests "2.31.0" direct=true`}; !reflect.DeepEqual(got, want) {
+			t.Errorf("deps = %q, want %q", got, want)
+		}
+		if ms := manifestsIn(t, python{}, root); len(ms) != 2 || ms[0].Lock != "uv.lock" || ms[1].Lock != "uv.lock" {
+			t.Errorf("Detect = %+v", ms)
+		}
+	})
+}
+
+// Packages from git, a path or a URL have no PyPI releases, whatever their
+// lockfile calls them; those from a configured index, a mirror perhaps, stay.
+func TestPythonLockSources(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"poetry/pyproject.toml": "[tool.poetry]\nname = \"app\"\n\n[tool.poetry.dependencies]\npython = \"^3.12\"\nmylib = { git = \"https://github.com/acme/mylib.git\" }\nlocalpkg = { path = \"../localpkg\" }\nprivpkg = \"^1.0\"\n",
+		"poetry/poetry.lock": "[[package]]\nname = \"mylib\"\nversion = \"0.1.0\"\n\n[package.source]\ntype = \"git\"\nurl = \"https://github.com/acme/mylib.git\"\nreference = \"HEAD\"\nresolved_reference = \"abc\"\n\n" +
+			"[[package]]\nname = \"localpkg\"\nversion = \"0.0.1\"\n\n[package.source]\ntype = \"directory\"\nurl = \"../localpkg\"\n\n" +
+			"[[package]]\nname = \"wheelpkg\"\nversion = \"0.2.0\"\n\n[package.source]\ntype = \"file\"\nurl = \"dist/wheelpkg-0.2.0.whl\"\n\n" +
+			"[[package]]\nname = \"privpkg\"\nversion = \"1.0.0\"\n\n[package.source]\ntype = \"legacy\"\nurl = \"https://pypi.corp.example/simple\"\nreference = \"corp\"\n\n" +
+			"[[package]]\nname = \"idna\"\nversion = \"3.10\"\n",
+		"pipenv/Pipfile":      "[packages]\nrequests = \"*\"\n",
+		"pipenv/Pipfile.lock": `{"default": {"requests": {"version": "==2.32.3"}, "mylib": {"git": "https://github.com/acme/mylib.git", "ref": "abc"}, "localpkg": {"path": "../localpkg", "editable": true}}, "develop": {"devlib": {"file": "https://example.com/devlib.zip"}, "pytest": {"version": "==8.3.3"}}}`,
+	})
+	if got, want := depLines(depsIn(t, python{}, root, "poetry/pyproject.toml")), []string{`idna "3.10" direct=false`, `privpkg "1.0.0" direct=true`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("poetry deps = %q, want %q", got, want)
+	}
+	if got, want := depLines(depsIn(t, python{}, root, "pipenv/Pipfile")), []string{`pytest "8.3.3" direct=false`, `requests "2.32.3" direct=true`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("pipfile deps = %q, want %q", got, want)
+	}
+}
+
+// A wildcard written bare, as Poetry allows, is a prefix match, and a bump
+// keeps it a wildcard.
+func TestPoetryBareWildcard(t *testing.T) {
+	hideTools(t)
+	root := t.TempDir()
+	write(t, root, map[string]string{"pyproject.toml": "[tool.poetry]\nname = \"app\"\n\n[tool.poetry.dependencies]\nrequests = \"2.*\"\n"})
+	d := depIn(t, python{}, root, "pyproject.toml", "requests", true)
+	for _, tt := range []struct{ to, want string }{{"2.32.0", `requests = "2.*"`}, {"3.0.0", `requests = "3.*"`}} {
+		if _, err := (python{}).Bump(context.Background(), root, d, tt.to, ""); err != nil {
+			t.Fatal(err)
+		}
+		if b, _ := os.ReadFile(filepath.Join(root, "pyproject.toml")); !strings.Contains(string(b), tt.want+"\n") {
+			t.Errorf("to %s: pyproject.toml = %q", tt.to, b)
+		}
+	}
+}
+
+// A file pip-compile or uv wrote from a pyproject.toml, with no .in beside
+// it, is that project's lock; one whose source tend cannot edit is pins only.
+func TestPythonCompiledWithoutIn(t *testing.T) {
+	compiled := "#\n# This file is autogenerated by pip-compile with Python 3.12\n# by the following command:\n#\n#    pip-compile --extra=dev --output-file=requirements.txt pyproject.toml\n#\n" +
+		"numpy==2.1.0\n    # via pandas\npandas==2.2.3\n    # via app (pyproject.toml)\npython-dateutil==2.8.2\n    # via pandas\npyyaml==6.0.2\n    # via app (pyproject.toml)\nsix==1.16.0\n    # via python-dateutil\n"
+	files := map[string]string{
+		"pyproject.toml":   "[project]\nname = \"app\"\ndependencies = [\"pandas\", \"pyyaml\"]\n",
+		"requirements.txt": compiled,
+		"app/main.py":      "import pandas\n",
+	}
+	root := t.TempDir()
+	write(t, root, files)
+	want := []core.Manifest{{Ecosystem: "pip", Path: "pyproject.toml", Lock: "requirements.txt", Tool: "pip"}}
+	if got := manifestsIn(t, python{}, root); !reflect.DeepEqual(got, want) {
+		t.Errorf("Detect = %+v\nwant %+v", got, want)
+	}
+	wantDeps := []string{`numpy "2.1.0" direct=false`, `pandas "2.2.3" direct=true`, `python-dateutil "2.8.2" direct=false`, `pyyaml "6.0.2" direct=true`, `six "1.16.0" direct=false`}
+	if got := depLines(depsIn(t, python{}, root, "pyproject.toml")); !reflect.DeepEqual(got, wantDeps) {
+		t.Errorf("deps = %q\nwant %q", got, wantDeps)
+	}
+	if gone, _ := unusedIn(t, files); !reflect.DeepEqual(gone, []string{"pyyaml"}) {
+		t.Errorf("unused = %q, want only pyyaml", gone)
+	}
+	calls := fakeTool(t, "pip-compile")
+	d := depIn(t, python{}, root, "pyproject.toml", "python-dateutil", false)
+	if _, err := (python{}).Bump(context.Background(), root, d, "2.9.0", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := calls(root), []string{". --quiet --upgrade-package python-dateutil==2.9.0 pyproject.toml -o requirements.txt"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("pip-compile ran %q, want %q", got, want)
+	}
+
+	t.Run("in file of another name", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, map[string]string{
+			"deps/base.in":           "flask\n",
+			"deps/requirements.txt":  "# This file was autogenerated by uv via the following command:\n#    uv pip compile base.in -o requirements.txt\nflask==3.0.0\nwerkzeug==3.0.4\n    # via flask\n",
+			"other/requirements.txt": "# This file was autogenerated by uv via the following command:\n#    uv pip compile ../deps/base.in -o requirements.txt\nflask==3.0.0\n",
+		})
+		want := []core.Manifest{
+			{Ecosystem: "pip", Path: "deps/base.in", Lock: "deps/requirements.txt", Tool: "pip"},
+			{Ecosystem: "pip", Path: "other/requirements.txt", Tool: "pip"},
+		}
+		if got := manifestsIn(t, python{}, root); !reflect.DeepEqual(got, want) {
+			t.Errorf("Detect = %+v\nwant %+v", got, want)
+		}
+		if got, want := depLines(depsIn(t, python{}, root, "other/requirements.txt")), []string{`flask "3.0.0" direct=false`}; !reflect.DeepEqual(got, want) {
+			t.Errorf("pins-only deps = %q, want %q", got, want)
+		}
+	})
+	t.Run("source with a lock of its own", func(t *testing.T) {
+		root := t.TempDir()
+		write(t, root, map[string]string{
+			"pyproject.toml":   "[project]\nname = \"app\"\ndependencies = [\"pandas\"]\n",
+			"uv.lock":          "version = 1\n",
+			"requirements.txt": "# This file was autogenerated by uv via the following command:\n#    uv pip compile pyproject.toml -o requirements.txt\npandas==2.2.3\nnumpy==2.1.0\n",
+		})
+		want := []core.Manifest{
+			{Ecosystem: "pip", Path: "pyproject.toml", Lock: "uv.lock", Tool: "uv"},
+			{Ecosystem: "pip", Path: "requirements.txt", Tool: "pip"},
+		}
+		if got := manifestsIn(t, python{}, root); !reflect.DeepEqual(got, want) {
+			t.Errorf("Detect = %+v\nwant %+v", got, want)
+		}
+		d := depIn(t, python{}, root, "requirements.txt", "numpy", false)
+		if _, err := (python{}).Bump(context.Background(), root, d, "2.2.0", ""); !errors.Is(err, core.ErrNotSupported) {
+			t.Errorf("bump of a pin in a compiled file: err = %v", err)
+		}
+	})
+}
+
+// tend cannot read or relock pdm.lock, so it changes nothing PDM locks.
+func TestPdmLockRefused(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"pyproject.toml":       "[project]\nname = \"app\"\ndependencies = [\"requests>=2.31\"]\n\n[tool.pdm]\ndistribution = false\n",
+		"pdm.lock":             "[metadata]\ngroups = [\"default\"]\n\n[[package]]\nname = \"requests\"\nversion = \"2.31.0\"\n",
+		"tools/pyproject.toml": "[project]\nname = \"tools\"\ndependencies = [\"black\"]\n\n[tool.pdm]\n",
+	})
+	ms := manifestsIn(t, python{}, root)
+	want := []core.Manifest{
+		{Ecosystem: "pip", Path: "pyproject.toml", Lock: "pdm.lock", Tool: "pdm"},
+		{Ecosystem: "pip", Path: "tools/pyproject.toml", Tool: "pdm"},
+	}
+	if !reflect.DeepEqual(ms, want) {
+		t.Fatalf("Detect = %+v\nwant %+v", ms, want)
+	}
+	if c := (python{}).Commands(root, ms[0]); !reflect.DeepEqual(c.Install, []string{"pdm sync"}) {
+		t.Errorf("install = %q", c.Install)
+	}
+	if c := (python{}).Commands(root, ms[1]); !reflect.DeepEqual(c.Install, []string{"cd tools && pdm install"}) {
+		t.Errorf("install = %q", c.Install)
+	}
+	d := depIn(t, python{}, root, "pyproject.toml", "requests", true)
+	before := treeSnapshot(t, root)
+	if _, err := (python{}).Bump(context.Background(), root, d, "3.0.0", ""); !errors.Is(err, core.ErrNotSupported) {
+		t.Errorf("bump err = %v", err)
+	}
+	if _, err := (python{}).Remove(context.Background(), root, []core.Dep{d}); !errors.Is(err, core.ErrNotSupported) {
+		t.Errorf("remove err = %v", err)
+	}
+	if !reflect.DeepEqual(before, treeSnapshot(t, root)) {
+		t.Error("a refused change wrote files")
+	}
+}
+
+// A setuptools project's runtime pins in setup.cfg are deps like any.
+func TestPythonSetupCfg(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"setup.cfg":       "[metadata]\nname = pkg\nversion = 0.1\n\n[options]\npackages = pkg\npython_requires = >=3.8\ninstall_requires =\n    requests==2.20.0\n    click>=7  # cli\n    file: more.txt\n\n[options.extras_require]\ntest =\n    pytest==6.0\nyaml = pyyaml>=5\n",
+		"setup.py":        "from setuptools import setup; setup()\n",
+		"pkg/__init__.py": "import requests\n",
+	})
+	ms := manifestsIn(t, python{}, root)
+	if len(ms) != 1 || ms[0].Path != "setup.cfg" {
+		t.Fatalf("manifests = %+v", ms)
+	}
+	deps, err := python{}.Deps(root, ms[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, d := range deps {
+		got = append(got, fmt.Sprintf("%s %s %s %d %v", d.Name, d.Version, d.Req, d.Line, d.Dev))
+	}
+	want := []string{"requests 2.20.0 ==2.20.0 9 false", "click  >=7 10 false", "pytest 6.0 ==6.0 15 true", "pyyaml  >=5 16 false"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("deps = %q\nwant %q", got, want)
+	}
+	hideTools(t)
+	d := deps[0]
+	if _, err := (python{}).Bump(context.Background(), root, d, "2.32.4", ""); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "setup.cfg"))
+	if !strings.Contains(string(b), "\n    requests==2.32.4\n    click>=7  # cli\n") {
+		t.Errorf("setup.cfg:\n%s", b)
+	}
+	if c := (python{}).Commands(root, ms[0]); len(c.Install) != 1 || !strings.HasSuffix(c.Install[0], "pip install -e .") {
+		t.Errorf("commands = %+v", c)
 	}
 }

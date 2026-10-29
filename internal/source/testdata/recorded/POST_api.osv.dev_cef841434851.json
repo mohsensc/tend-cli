@@ -1,0 +1,10 @@
+{
+  "url": "https://api.osv.dev/v1/querybatch",
+  "status": 200,
+  "header": {
+    "Content-Type": [
+      "application/json"
+    ]
+  },
+  "body": "{\"results\":[{}]}"
+}

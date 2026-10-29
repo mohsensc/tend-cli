@@ -35,7 +35,7 @@ func (b *builder) metas(ctx context.Context, pkgs []pkg) {
 		switch err := errs[i]; {
 		case errors.Is(err, core.ErrNotSupported):
 		case err != nil:
-			b.note("%s: %s: %v", p.eco, p.name, err)
+			b.note("%s: %s: %s", p.eco, p.name, strings.TrimPrefix(err.Error(), p.eco+": "+p.name+": "))
 		case got[i] != nil:
 			b.meta[p] = got[i]
 		}
@@ -92,10 +92,35 @@ func traits(d core.Dep) core.Traits {
 // not yanked or deprecated, not past the registry's latest, and, when one
 // exists, older than the cooldown. When every newer release is still cooling
 // down the newest of those comes back so the caller can record it as such.
-// maxMajor caps the major version; -1 means no cap.
+// maxMajor caps the major version; -1 means no cap. Where versions carry a
+// qualifier, as guava's -jre and -android do, the release keeps d's; a d
+// with none takes a release with none, else a -jre one, else any.
 func candidate(d core.Dep, m *core.Meta, now time.Time, cooldown time.Duration, maxMajor int) (core.Release, bool) {
+	if !traits(d).KeepSuffix {
+		return pick(d, m, now, cooldown, maxMajor, nil)
+	}
+	q := qualifier(Current(d))
+	wants := []string{q}
+	if q == "" {
+		wants = append(wants, "-jre")
+	}
+	for _, want := range wants {
+		if r, ok := pick(d, m, now, cooldown, maxMajor, func(v string) bool { return qualifier(v) == want }); ok {
+			return r, true
+		}
+	}
+	if q != "" {
+		return core.Release{}, false
+	}
+	return pick(d, m, now, cooldown, maxMajor, func(string) bool { return true })
+}
+
+// pick is candidate over the releases match lets through, all of them when
+// it is nil. Two releases of one version, which differ only in qualifier,
+// go to the one that sorts last, so the choice does not hang on their order.
+func pick(d core.Dep, m *core.Meta, now time.Time, cooldown time.Duration, maxMajor int, match func(string) bool) (core.Release, bool) {
 	cur, ok := ver.Parse(Current(d))
-	if !ok {
+	if !ok || commit(Current(d)) {
 		return core.Release{}, false
 	}
 	n, suffix := shape(Current(d))
@@ -104,9 +129,16 @@ func candidate(d core.Dep, m *core.Meta, now time.Time, cooldown time.Duration, 
 	var best, young core.Release
 	var bestV, youngV ver.V
 	found, foundYoung := false, false
+	better := func(v, than ver.V, r, was core.Release) bool {
+		c := ver.Compare(v, than)
+		return c > 0 || c == 0 && match != nil && r.Version > was.Version
+	}
 	for _, r := range m.Releases {
 		v, ok := ver.Parse(r.Version)
 		if !ok || ver.Compare(v, cur) <= 0 || r.Yanked || r.Deprecated != "" {
+			continue
+		}
+		if match != nil && !match(r.Version) {
 			continue
 		}
 		pre := r.Pre || v.Pre != ""
@@ -125,12 +157,12 @@ func candidate(d core.Dep, m *core.Meta, now time.Time, cooldown time.Duration, 
 			}
 		}
 		if !r.Time.IsZero() && now.Sub(r.Time) < cooldown {
-			if !foundYoung || ver.Compare(v, youngV) > 0 {
+			if !foundYoung || better(v, youngV, r, young) {
 				young, youngV, foundYoung = r, v, true
 			}
 			continue
 		}
-		if !found || ver.Compare(v, bestV) > 0 {
+		if !found || better(v, bestV, r, best) {
 			best, bestV, found = r, v, true
 		}
 	}
@@ -140,10 +172,39 @@ func candidate(d core.Dep, m *core.Meta, now time.Time, cooldown time.Duration, 
 	return young, foundYoung
 }
 
+// commit reports whether v is a full git commit sha, which can start with
+// digits and read as a version: 11bd719... is no release 11.
+func commit(v string) bool {
+	return len(v) == 40 && strings.Trim(v, "0123456789abcdef") == ""
+}
+
+// qualifier is what follows a version's numbers, lowercased, with the
+// .Final, .RELEASE and .GA that mean a plain release dropped: "-jre" for
+// 33.0.0-jre, "" for 5.4.0.Final and 5.3.0 alike.
+func qualifier(v string) string {
+	_, s := shape(v)
+	s = strings.ToLower(s)
+	for _, q := range []string{"final", "release", "ga"} {
+		for _, sep := range []string{".", "-"} {
+			s = strings.TrimSuffix(s, sep+q)
+		}
+	}
+	return s
+}
+
 // fixFor is the smallest release at or above to that can be installed: not
-// yanked, deprecated or a pre-release. It is to itself when the registry knows
-// nothing better.
-func fixFor(m *core.Meta, to string) (core.Release, bool) {
+// yanked, deprecated or a pre-release, and with d's qualifier where its
+// ecosystem keeps one. It is to itself when the registry knows nothing
+// better, with d's qualifier in place of its own.
+func fixFor(d core.Dep, m *core.Meta, to string) (core.Release, bool) {
+	keep := traits(d).KeepSuffix
+	q := qualifier(Current(d))
+	if keep && qualifier(to) != q {
+		if _, s := shape(to); q != "" {
+			_, raw := shape(Current(d))
+			to = to[:len(to)-len(s)] + raw
+		}
+	}
 	want, ok := ver.Parse(to)
 	if !ok || m == nil {
 		return core.Release{Version: to}, false
@@ -151,6 +212,9 @@ func fixFor(m *core.Meta, to string) (core.Release, bool) {
 	for _, r := range m.Releases {
 		v, ok := ver.Parse(r.Version)
 		if !ok || ver.Compare(v, want) < 0 || r.Yanked || r.Pre || v.Pre != "" || r.Deprecated != "" {
+			continue
+		}
+		if keep && qualifier(r.Version) != q {
 			continue
 		}
 		return r, true
@@ -190,7 +254,7 @@ func (b *builder) registry(ctx context.Context, d core.Dep, m *core.Meta) *core.
 		// When the version was deprecated is not on record, so Published stays
 		// zero: the target's release date is not the deprecation's.
 		if ok {
-			ch.To, ch.Level = rel.Version, ver.Step(Current(d), rel.Version)
+			ch.To, ch.Level = rel.Version, ver.StepIn(d.Ecosystem, Current(d), rel.Version)
 		}
 		return ch
 	}
@@ -199,7 +263,7 @@ func (b *builder) registry(ctx context.Context, d core.Dep, m *core.Meta) *core.
 	}
 	ch := &core.Change{
 		Kind:      core.Update,
-		Level:     ver.Step(Current(d), rel.Version),
+		Level:     ver.StepIn(d.Ecosystem, Current(d), rel.Version),
 		Deps:      []core.Dep{d},
 		To:        rel.Version,
 		Published: rel.Time,

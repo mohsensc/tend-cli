@@ -101,7 +101,10 @@ type fakeIndex struct {
 	imports []core.Import
 	fields  []core.Site
 	files   []string
+	reach   map[string][]string // the files each test reaches
 }
+
+func (x *fakeIndex) Reaches(test, p string) bool { return slices.Contains(x.reach[test], p) }
 
 func (x *fakeIndex) Uses([]string) []core.Site        { return nil }
 func (x *fakeIndex) Endpoints([]string) []core.URLUse { return nil }

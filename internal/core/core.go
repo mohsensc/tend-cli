@@ -3,6 +3,7 @@ package core
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -48,6 +49,10 @@ type Dep struct {
 	Pin       string // actions: commit sha when sha-pinned; docker: digest when present
 	Min       bool   `json:",omitempty"` // toolchain: the oldest runtime the project supports, not one it runs
 }
+
+// Display is the name a person knows d by: node, not the registry's
+// library/node.
+func (d Dep) Display() string { return strings.TrimPrefix(d.Name, "library/") }
 
 type Release struct {
 	Version    string
@@ -121,11 +126,21 @@ type Remover interface {
 	Remove(ctx context.Context, root string, deps []Dep) (*Bump, error)
 }
 
+// Settler is an ecosystem some of whose deps are read in full only once
+// their registry metadata is in, such as an Action pinned to a bare commit,
+// whose version is the tag on that commit.
+type Settler interface {
+	// Settle is d with what m tells about it filled in, or an error saying
+	// why d cannot be followed.
+	Settle(d Dep, m *Meta) (Dep, error)
+}
+
 // Traits are what stages outside an adapter need to know about its ecosystem.
 type Traits struct {
 	OSV        string                   // the ecosystem's name in OSV, "" when OSV does not cover it
 	Page       func(name string) string // where a person reads about a package, nil for nowhere
 	KeepShape  bool                     // a tag keeps its shape across a bump: node:16-alpine moves to another -alpine tag
+	KeepSuffix bool                     // a version keeps its qualifier across a bump: guava's -jre moves to another -jre
 	Transitive bool                     // the native tool can move a locked transitive dep by itself
 	Tooling    bool                     // it pins what the project runs or builds on, not code it calls: runtimes, base images, CI
 }
@@ -168,6 +183,7 @@ type FetchOpts struct {
 	NoCache bool
 	// Idempotent lets a Post be retried on 429 and 5xx. A Get always may be.
 	Idempotent bool
+	Timeout    time.Duration // how long one request may take, its body read too; 0 means the client's own
 }
 
 type Response struct {

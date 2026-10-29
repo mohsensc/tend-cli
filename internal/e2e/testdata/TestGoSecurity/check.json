@@ -115,6 +115,6 @@
       "to": "v1.0.1"
     }
   ],
-  "repo": "acme/go-vuln",
+  "repo": "$TMP/work",
   "untracked": []
 }

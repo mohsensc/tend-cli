@@ -1,0 +1,5 @@
+{
+  "body": "{\n \"info\": {\n  \"title\": \"trimmed\",\n  \"version\": \"1.0.0\"\n },\n \"openapi\": \"3.1.0\",\n \"paths\": {}\n}\n",
+  "status": 200,
+  "url": "https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_api_keys_v3.json"
+}

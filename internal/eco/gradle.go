@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/ver"
 )
 
 type gradle struct{}
@@ -56,6 +57,7 @@ type gradleEntry struct {
 	at              int    // its line there
 	pre, suf        string // text around the version on that line
 	notation        bool   // written as "group:artifact:version" in the manifest
+	dynamic         bool   // a version Gradle resolves: 4.+, latest.release, [1.0,2.0)
 }
 
 func (e gradleEntry) name() string { return e.group + ":" + e.artifact }
@@ -65,6 +67,12 @@ func (gradle) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 	if err != nil {
 		return nil, err
 	}
+	var locked map[string]string
+	if slices.ContainsFunc(entries, func(e gradleEntry) bool { return e.dynamic }) {
+		if locked, err = gradleLocked(root, gradleRoot(root, m)); err != nil {
+			return nil, err
+		}
+	}
 	var res []core.Dep
 	seen := map[string]bool{}
 	for _, e := range entries {
@@ -72,11 +80,17 @@ func (gradle) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 			continue
 		}
 		seen[e.name()] = true
+		version, req := e.version, e.req
+		if e.dynamic {
+			if version, req = locked[e.name()], e.version; version == "" {
+				continue
+			}
+		}
 		res = append(res, core.Dep{
 			Ecosystem: core.Gradle,
 			Name:      e.name(),
-			Version:   e.version,
-			Req:       e.req,
+			Version:   version,
+			Req:       req,
 			Manifest:  m,
 			Line:      e.line,
 			Dev:       e.dev,
@@ -103,12 +117,14 @@ var (
 	gradleVarRef   = regexp.MustCompile(`^\$\{?([A-Za-z_][\w.]*)\}?$`)
 )
 
+var gradleNotDeps = map[string]bool{"module": true, "project": true, "println": true, "print": true, "uri": true, "file": true, "files": true}
+
 // buildEntries reads "g:a:v" strings and group/name/version maps given to a
-// configuration (implementation, api, testImplementation, ...). Catalog
-// references (libs.x) are reported by the catalog itself, plugins blocks are
-// not dependencies, and $var versions resolve through gradleVars.
+// configuration (implementation, api, testImplementation, ...) inside a
+// dependencies block. Catalog references (libs.x) are reported by the
+// catalog itself, and $var versions resolve through gradleVars.
 func buildEntries(root string, m core.Manifest, src []byte) []gradleEntry {
-	clean := gradleNoPlugins(gradleClean(src))
+	clean := gradleOnlyDeps(gradleClean(src))
 	vars := gradleVars(root, m)
 	var res []gradleEntry
 	for _, re := range []*regexp.Regexp{gradleNotation, gradleMapForm} {
@@ -121,12 +137,16 @@ func buildEntries(root string, m core.Manifest, src []byte) []gradleEntry {
 				}
 				return string(src[x[2*i]:x[2*i+1]])
 			}
+			if gradleNotDeps[g("conf")] {
+				continue
+			}
 			e := gradleEntry{group: g("group"), artifact: g("artifact"), req: g("version"), line: lineOf(src, at("version")), dev: gradleTestConf(g("conf"))}
 			e.version, e.file, e.at, e.pre, e.suf = e.req, m.Path, e.line, g("pre"), g("q")
 			if re == gradleNotation {
 				e.notation, e.pre, e.suf = true, e.group+":"+e.artifact+":", g("rest")+g("q")
 			}
 			if gradleUseVar(&e, vars, g("q")) {
+				e.dynamic = gradleDynamic(e.version)
 				res = append(res, e)
 			}
 		}
@@ -265,7 +285,98 @@ func gradleClean(src []byte) []byte {
 	return res
 }
 
-var gradlePlugins = regexp.MustCompile(`\bplugins\s*\{`)
+var (
+	gradlePlugins = regexp.MustCompile(`\bplugins\s*\{`)
+	gradleDepsRe  = regexp.MustCompile(`\bdependencies\s*\{`)
+)
+
+func gradleOnlyDeps(src []byte) []byte {
+	keep := make([]bool, len(src))
+	for _, x := range gradleDepsRe.FindAllIndex(src, -1) {
+		depth := 0
+		for i := x[1] - 1; i < len(src); i++ {
+			switch src[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+			keep[i] = true
+			if depth == 0 {
+				break
+			}
+		}
+	}
+	res := bytes.Clone(src)
+	for i, k := range keep {
+		if !k && res[i] != '\n' {
+			res[i] = ' '
+		}
+	}
+	return res
+}
+
+func gradleDynamic(v string) bool {
+	return strings.HasSuffix(v, "+") || strings.HasPrefix(v, "latest.") || strings.HasPrefix(v, "[") || strings.HasPrefix(v, "(") || strings.HasPrefix(v, "]")
+}
+
+func gradleAdmits(spec, v string) bool {
+	switch {
+	case strings.HasPrefix(spec, "latest."), spec == "+":
+		return true
+	case strings.HasSuffix(spec, "+"):
+		return strings.HasPrefix(v, strings.TrimSuffix(spec, "+"))
+	}
+	if len(spec) < 2 {
+		return false
+	}
+	lo, hi, ok := strings.Cut(spec[1:len(spec)-1], ",")
+	if !ok {
+		return spec[0] == '[' && strings.TrimSpace(lo) == v
+	}
+	lo, hi = strings.TrimSpace(lo), strings.TrimSpace(hi)
+	if lo != "" && (ver.Less(v, lo) || spec[0] != '[' && !ver.Less(lo, v)) {
+		return false
+	}
+	end := spec[len(spec)-1]
+	return hi == "" || ver.Less(v, hi) || end == ']' && !ver.Less(hi, v)
+}
+
+func gradleMove(spec, to string) (string, bool) {
+	if !strings.HasSuffix(spec, ".+") {
+		return "", false
+	}
+	n := strings.Count(strings.TrimSuffix(spec, ".+"), ".") + 1
+	next := shape(to, n) + ".+"
+	return next, gradleAdmits(next, to)
+}
+
+var gradleLockLine = regexp.MustCompile(`^([^:#=\s]+):([^:=\s]+):([^:=\s]+)=`)
+
+func gradleLocked(root, top string) (map[string]string, error) {
+	locks, err := gradleLocks(root, top)
+	if err != nil {
+		return nil, err
+	}
+	res := map[string]string{}
+	for _, l := range locks {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(l)))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			m := gradleLockLine.FindStringSubmatch(strings.TrimSpace(line))
+			if m == nil {
+				continue
+			}
+			name := m[1] + ":" + m[2]
+			if cur := res[name]; cur == "" || ver.Less(cur, m[3]) {
+				res[name] = m[3]
+			}
+		}
+	}
+	return res, nil
+}
 
 func gradleNoPlugins(src []byte) []byte {
 	for _, x := range gradlePlugins.FindAllIndex(src, -1) {
@@ -337,6 +448,7 @@ func catalogEntry(lines []tomlLine, i int, v any, versions map[string]any) (grad
 			e.notation = true
 			e.req, e.version = parts[2], parts[2]
 			e.pre = module + ":"
+			e.dynamic = gradleDynamic(e.version)
 			return catalogModule(e, module)
 		}
 	case map[string]any:
@@ -360,6 +472,7 @@ func catalogEntry(lines []tomlLine, i int, v any, versions map[string]any) (grad
 		e.version = catalogVersion(ver)
 		e.req = e.version
 	}
+	e.dynamic = gradleDynamic(e.version)
 	if e.version != "" {
 		q := `"`
 		if strings.Contains(lines[e.at-1].text, `'`+e.version+`'`) {
@@ -451,6 +564,9 @@ func (gradle) Bump(ctx context.Context, root string, d core.Dep, to, toName stri
 	if err != nil {
 		return nil, err
 	}
+	if e.dynamic {
+		return gradleBumpDynamic(ctx, root, top, locks, *e, d, to, toName)
+	}
 	snap := snapFiles(root, append([]string{e.file}, locks...)...)
 	p := filepath.Join(root, filepath.FromSlash(e.file))
 	switch {
@@ -478,6 +594,36 @@ func (gradle) Bump(ctx context.Context, root string, d core.Dep, to, toName stri
 		return &core.Bump{Files: files, Note: "gradle not found"}, nil
 	}
 	if err := runIn(ctx, root, top, nil, tool+" "+gradleLockTasks(top, locks)+" --write-locks"); err != nil {
+		return nil, err
+	}
+	return &core.Bump{Files: snap.changed(root), Locked: true}, nil
+}
+
+func gradleBumpDynamic(ctx context.Context, root, top string, locks []string, e gradleEntry, d core.Dep, to, toName string) (*core.Bump, error) {
+	m := d.Manifest
+	if toName != "" || len(locks) == 0 {
+		return nil, fmt.Errorf("%s: %s is at %s, which Gradle resolves: %w", m.Path, d.Name, e.version, core.ErrNotSupported)
+	}
+	next := e.version
+	if !gradleAdmits(next, to) {
+		moved, ok := gradleMove(next, to)
+		if !ok {
+			return nil, fmt.Errorf("%s: %s is at %s, which does not admit %s and cannot be moved: %w", m.Path, d.Name, e.version, to, core.ErrNotSupported)
+		}
+		next = moved
+	}
+	tool := gradleTool(root, top)
+	if tool == "gradle" && !have(tool) {
+		return nil, core.ToolMissing{Tool: tool}
+	}
+	snap := snapFiles(root, append([]string{e.file}, locks...)...)
+	if next != e.version {
+		if err := rewriteLine(filepath.Join(root, filepath.FromSlash(e.file)), e.at, e.pre+e.version+e.suf, e.pre+next+e.suf); err != nil {
+			return nil, err
+		}
+	}
+	if err := runIn(ctx, root, top, nil, tool+" "+gradleLockTasks(top, locks)+" --update-locks "+shArg(d.Name)); err != nil {
+		_ = snap.restore(root)
 		return nil, err
 	}
 	return &core.Bump{Files: snap.changed(root), Locked: true}, nil
@@ -550,7 +696,7 @@ func (gradle) Commands(root string, m core.Manifest) core.Commands {
 }
 
 func (gradle) Traits() core.Traits {
-	return core.Traits{OSV: "Maven", Page: centralPage}
+	return core.Traits{OSV: "Maven", Page: centralPage, KeepSuffix: true}
 }
 
 func (gradle) Imports(d core.Dep) []string { return mavenImports(d.Name) }

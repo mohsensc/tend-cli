@@ -26,8 +26,16 @@
 - name: sendgrid
   title: SendGrid
   hosts: [api.sendgrid.com]
-  spec: https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_mail_v3.json
-  sdks: [{eco: npm, name: "@sendgrid/mail"}, {eco: pip, name: sendgrid}]
+  spec:
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_mail_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_mc_contacts_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_mc_lists_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_templates_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_suppressions_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_api_keys_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_stats_v3.json
+    - https://raw.githubusercontent.com/twilio/sendgrid-oai/main/spec/json/tsg_webhooks_v3.json
+  sdks: [{eco: npm, name: "@sendgrid/mail"}, {eco: npm, name: "@sendgrid/client"}, {eco: pip, name: sendgrid}]
 - name: plaid
   title: Plaid
   hosts: [production.plaid.com, sandbox.plaid.com]
@@ -42,9 +50,12 @@
   title: Cloudflare
   hosts: [api.cloudflare.com]
   spec: https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.json
+  sunset: x-cfDeprecation.eol
   sdks: [{eco: npm, name: cloudflare}, {eco: go, name: github.com/cloudflare/cloudflare-go}, {eco: pip, name: cloudflare}]
 - name: datadog
   title: Datadog
   hosts: [api.datadoghq.com]
-  spec: https://raw.githubusercontent.com/DataDog/datadog-api-client-go/master/.generator/schemas/v1/openapi.yaml
+  spec:
+    - https://raw.githubusercontent.com/DataDog/datadog-api-client-go/master/.generator/schemas/v1/openapi.yaml
+    - https://raw.githubusercontent.com/DataDog/datadog-api-client-go/master/.generator/schemas/v2/openapi.yaml
   sdks: [{eco: go, name: github.com/DataDog/datadog-api-client-go}, {eco: pip, name: datadog-api-client}]

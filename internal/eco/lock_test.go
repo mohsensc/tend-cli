@@ -2,7 +2,11 @@ package eco
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mohsensc/tend-cli/internal/core"
@@ -152,6 +156,43 @@ func TestCanon(t *testing.T) {
 	for _, tt := range tests {
 		if got := Canon(tt.eco, tt.in); got != tt.want {
 			t.Errorf("Canon(%s, %q) = %q, want %q", tt.eco, tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestLockedToOtherLines(t *testing.T) {
+	lock := func(vs ...string) string {
+		var b strings.Builder
+		b.WriteString(`{"lockfileVersion": 3, "packages": {"": {"name": "app"}`)
+		for i, v := range vs {
+			fmt.Fprintf(&b, `, "node_modules/%sansi-regex": {"version": %q}`, strings.Repeat("x/node_modules/", i), v)
+		}
+		b.WriteString("}}")
+		return b.String()
+	}
+	tests := []struct {
+		to     string
+		after  []string
+		landed string
+		err    string
+	}{
+		{"5.0.1", []string{"4.1.1", "5.0.1"}, "", ""},
+		{"4.1.1", []string{"4.1.1", "5.0.1"}, "", ""},
+		{"5.0.1", []string{"3.0.0", "5.0.1"}, "", "locked ansi-regex at 3.0.0"},
+		{"5.0.1", []string{"4.1.0", "5.0.2"}, "5.0.2", ""},
+	}
+	for _, tt := range tests {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(lock(tt.after...)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		before := map[string]bool{"4.1.0": true, "5.0.0": true}
+		got, err := lockedTo(root, "package-lock.json", core.Npm, "ansi-regex", tt.to, before)
+		if tt.err == "" && (err != nil || got != tt.landed) {
+			t.Errorf("lockedTo(%s, %v) = %q, %v; want %q", tt.to, tt.after, got, err, tt.landed)
+		}
+		if tt.err != "" && (err == nil || !strings.Contains(err.Error(), tt.err)) {
+			t.Errorf("lockedTo(%s, %v) err = %v, want %q", tt.to, tt.after, err, tt.err)
 		}
 	}
 }

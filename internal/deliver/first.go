@@ -11,6 +11,7 @@ import (
 	"github.com/mohsensc/tend-cli/internal/api"
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/plan"
+	"github.com/mohsensc/tend-cli/internal/ver"
 )
 
 // FirstBranch is where tend's first PR on a repo lives, whatever it carries.
@@ -50,6 +51,10 @@ var sections = []string{"Security", "API", "Deprecated", "Runtimes and tooling",
 // tally counts the changes a batch makes by what they are, in the order the
 // body lists them, then the dependencies it removes and the baseline it
 // adds. short counts every deprecation as one kind.
+// Tally counts what a catch-up PR does as its title does: "2 end-of-life
+// runtimes", "1 deprecated Action", "3 unused dependencies".
+func Tally(b *core.Batch) []string { return tally(b, true) }
+
 func tally(b *core.Batch, short bool) []string {
 	var order []string
 	n := map[string]int{}
@@ -111,11 +116,18 @@ func noun(ch *core.Change) (string, string) {
 	case ch.Deps[0].Min:
 		return "runtime minimum", "runtime minimums"
 	}
-	switch ch.Deps[0].Ecosystem {
-	case core.Toolchain, core.Docker:
-		return "end-of-life runtime", "end-of-life runtimes"
-	case core.Actions:
+	bump := ch.Kind == core.Breaking || ch.Kind == core.Update
+	switch e := ch.Deps[0].Ecosystem; {
+	case e == core.Actions && bump && ch.Level == "major":
+		return "major Action upgrade", "major Action upgrades"
+	case e == core.Actions && bump:
+		return "Action upgrade", "Action upgrades"
+	case e == core.Actions:
 		return "deprecated Action", "deprecated Actions"
+	case (e == core.Toolchain || e == core.Docker) && bump:
+		return "runtime upgrade", "runtime upgrades"
+	case e == core.Toolchain || e == core.Docker:
+		return "end-of-life runtime", "end-of-life runtimes"
 	}
 	switch {
 	case group(ch) == "Runtimes and tooling":
@@ -164,6 +176,9 @@ func welcome(b *core.Batch) string {
 			"The rest comes in "+count(more, "more pull request", "more pull requests")+", one stage at a time, listed under Next stages and each proven the same way.")
 	case len(did) > 0:
 		s = append(s, "This first pull request catches up in one go: "+and(did)+".")
+	case more > 0 && len(tried(b)) > 0:
+		s = append(s, "Its first look found "+and(tried(b))+", but none could be made and proven yet; each is listed below with why, so this pull request only adds a `tend.yml` with every key commented out.",
+			"The catch-up comes in "+count(more, "more pull request", "more pull requests")+", one stage at a time, listed under Next stages.")
 	case more > 0:
 		s = append(s, "Its first look found nothing to fix right away, so this pull request only adds a `tend.yml` with every key commented out.",
 			"The catch-up comes in "+count(more, "more pull request", "more pull requests")+", one stage at a time, listed under Next stages.")
@@ -183,6 +198,30 @@ func welcome(b *core.Batch) string {
 		then+", only for changes that touch your code, and each one shows the build and test runs that prove it.",
 		"Steer it with `tend.yml`, or comment `tend skip`, `tend retry` or `tend apply N` on its pull requests.")
 	return strings.Join(s, " ")
+}
+
+// tried counts what this stage tried to make and left out, by what it is.
+func tried(b *core.Batch) []string {
+	var order []string
+	n := map[string]int{}
+	many := map[string]string{}
+	for i := range b.Next {
+		l := &b.Next[i]
+		if l.Why == "" || plan.Tier(&l.Change) > b.Stage {
+			continue
+		}
+		one, more := noun(&l.Change)
+		if n[one] == 0 {
+			order = append(order, one)
+		}
+		n[one]++
+		many[one] = more
+	}
+	var res []string
+	for _, one := range order {
+		res = append(res, count(n[one], one, many[one]))
+	}
+	return res
 }
 
 // intro opens a catch-up PR after the first: which stage it is, what it
@@ -261,6 +300,11 @@ func batched(in BodyInput) string {
 			parts = append(parts, "### "+s+"\n\n"+strings.Join(lines, "\n"))
 		}
 	}
+	if p != nil {
+		if file, old, now := goLineMoved(p.Diff); file != "" {
+			parts = append(parts, fmt.Sprintf("The go line in %s moved from %s to %s, as the Go bumps above require, so building this module now takes Go %s or later.", code(file), old, now, now))
+		}
+	}
 	if s := unused(b); s != "" {
 		parts = append(parts, "### Unused\n\n"+s)
 	}
@@ -271,6 +315,28 @@ func batched(in BodyInput) string {
 		parts = append(parts, "### Not done\n\n"+s)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// reached is b without the later changes its patch already made on the way:
+// a go line a bump raised past the go change a later stage would make.
+func reached(b *core.Batch, p *core.Patch) *core.Batch {
+	if p == nil {
+		return b
+	}
+	file, _, now := goLineMoved(p.Diff)
+	if file == "" {
+		return b
+	}
+	res := *b
+	res.Next = slices.DeleteFunc(slices.Clone(b.Next), func(l core.Later) bool {
+		ch := &l.Change
+		if len(ch.Deps) != 1 || ch.To == "" {
+			return false
+		}
+		d := ch.Deps[0]
+		return d.Ecosystem == core.Toolchain && d.Name == "go" && d.Manifest.Path == file && !ver.Less(now, ch.To)
+	})
+	return &res
 }
 
 // baseline says why the PR adds tests first and what they are.
@@ -381,7 +447,7 @@ func moved(ch *core.Change) string {
 	s := named(ch, ch.To)
 	switch ch.Deps[0].Ecosystem {
 	case core.Toolchain, core.Docker, core.Actions:
-		s += " in " + code(ch.Deps[0].Manifest.Path)
+		s += where(ch)
 	}
 	if len(ch.Via) > 0 {
 		s += ", by way of " + and(ch.Via) + ", each proven"
@@ -403,12 +469,12 @@ func moved(ch *core.Change) string {
 func because(ch *core.Change) string {
 	for _, ev := range ch.Evidence {
 		if (ev.Source == "registry" || ev.Source == "archived") && ev.Text != "" {
-			return ": " + oneLine(ev.Text, 160)
+			return ": " + prose(oneLine(ev.Text, 160))
 		}
 	}
 	for _, ev := range ch.Evidence {
 		if ev.Title != "" {
-			return ": " + oneLine(ev.Title, 160)
+			return ": " + prose(oneLine(ev.Title, 160))
 		}
 	}
 	return ""
@@ -479,13 +545,116 @@ func stages(b *core.Batch) string {
 	lines := []string{"Each comes as a pull request of its own once this one is merged, proven the same way.", ""}
 	for _, k := range ks {
 		lines = append(lines, strconv.Itoa(k)+". "+upper(plan.StageName(k)))
+		var carried, own []core.Later
 		for _, l := range b.Next {
-			if l.Stage == k {
-				lines = append(lines, "   - "+later(l))
+			switch {
+			case l.Stage != k:
+			case l.Why != "" && plan.Tier(&l.Change) < k:
+				carried = append(carried, l)
+			default:
+				own = append(own, l)
 			}
+		}
+		if len(carried) > 0 {
+			lines = append(lines, "   - Carried over from an earlier stage, where they could not be made or proven, and tried again here:")
+			for _, l := range laters(carried) {
+				lines = append(lines, "     - "+l)
+			}
+		}
+		for _, l := range laters(own) {
+			lines = append(lines, "   - "+l)
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// laterMax is how many packages one line of left-out changes names that
+// failed for the same reason.
+const laterMax = 8
+
+// laters lists left-out changes: those of one package together, and three
+// or more that failed for one reason, the package's name aside, as one line.
+func laters(ls []core.Later) []string {
+	ls = samePackage(ls)
+	type bunch struct {
+		why   string
+		items []core.Later
+	}
+	var bunches []*bunch
+	at := map[string]*bunch{}
+	for _, l := range ls {
+		k := reasonOf(l)
+		if k == "" {
+			bunches = append(bunches, &bunch{items: []core.Later{l}})
+			continue
+		}
+		if at[k] == nil {
+			at[k] = &bunch{why: k}
+			bunches = append(bunches, at[k])
+		}
+		at[k].items = append(at[k].items, l)
+	}
+	var res []string
+	for _, g := range bunches {
+		if len(g.items) < 3 {
+			for _, l := range g.items {
+				res = append(res, later(l))
+			}
+			continue
+		}
+		var names []string
+		for _, l := range g.items[:min(len(g.items), laterMax)] {
+			names = append(names, named(&l.Change, l.Change.To))
+		}
+		line := upper(strings.ReplaceAll(g.why, pkgMark, "each")) + fmt.Sprintf(" (%d packages): ", len(g.items)) + strings.Join(names, ", ")
+		if n := len(g.items) - laterMax; n > 0 {
+			line += fmt.Sprintf(" and %d more", n)
+		}
+		res = append(res, line+".")
+	}
+	return res
+}
+
+const pkgMark = "\x00"
+
+// reasonOf is why l was left out with its own package's name taken out, so
+// reasons that differ only by it match; "" when l has no reason.
+func reasonOf(l core.Later) string {
+	why := prose(oneLine(Clause(l.Why), 200))
+	if why == "" || len(l.Change.Deps) == 0 {
+		return ""
+	}
+	for _, n := range core.Names(&l.Change) {
+		why = strings.ReplaceAll(why, n, pkgMark)
+	}
+	return strings.TrimSuffix(why, ".")
+}
+
+// samePackage folds left-out changes that move one package of one manifest
+// to different releases into the first of them, which names both targets.
+func samePackage(ls []core.Later) []core.Later {
+	var res []core.Later
+	at := map[string]int{}
+	for _, l := range ls {
+		names := core.Names(&l.Change)
+		if l.Change.API != nil || len(names) != 1 || l.Change.To == "" {
+			res = append(res, l)
+			continue
+		}
+		d := l.Change.Deps[0]
+		k := fmt.Sprintf("%s/%s %s %v", d.Ecosystem, names[0], d.Manifest.Path, d.Min)
+		i, ok := at[k]
+		if !ok {
+			at[k] = len(res)
+			res = append(res, l)
+			continue
+		}
+		first := &res[i]
+		if ver.Less(first.Change.To, l.Change.To) {
+			first.Why = strings.TrimSuffix(cmp.Or(first.Why, what(&first.Change)), ".") + "; " + l.Change.To + " after it: " + strings.TrimSuffix(cmp.Or(l.Why, what(&l.Change)), ".")
+		}
+	}
+	return res
 }
 
 // undone lists what a batch left out with nowhere left to go: the catch-up
@@ -516,11 +685,15 @@ func later(l core.Later) string {
 		s = code(ch.ID)
 	default:
 		s = named(ch, ch.To)
-		if m := ch.Deps[0].Manifest.Path; m != "" && len(core.Names(ch)) == 1 {
-			s += " in " + code(m)
+		switch d := ch.Deps[0]; {
+		case len(core.Names(ch)) != 1:
+		case !d.Direct && d.Manifest.Lock != "":
+			s += " (transitive, in " + code(d.Manifest.Lock) + ")"
+		default:
+			s += where(ch)
 		}
 	}
-	why := oneLine(Clause(l.Why), 200)
+	why := prose(oneLine(Clause(l.Why), 200))
 	if why == "" {
 		why = strings.TrimSuffix(what(ch), ".")
 	}
@@ -538,6 +711,28 @@ func later(l core.Later) string {
 	return line
 }
 
+// where names the files a change moves its deps in: " in `a`", " in `a`
+// and `b`", or for many " in 5 files".
+func where(ch *core.Change) string {
+	var files []string
+	for _, d := range ch.Deps {
+		if p := d.Manifest.Path; p != "" && !slices.Contains(files, p) {
+			files = append(files, p)
+		}
+	}
+	switch {
+	case len(files) == 0:
+		return ""
+	case len(files) > 3:
+		return fmt.Sprintf(" in %d files", len(files))
+	}
+	var named []string
+	for _, f := range files {
+		named = append(named, code(f))
+	}
+	return " in " + and(named)
+}
+
 // what says what a change waiting for a later stage is.
 func what(ch *core.Change) string {
 	switch {
@@ -548,8 +743,8 @@ func what(ch *core.Change) string {
 			return "a new " + ch.Level + " release"
 		}
 		return "a new release"
-	case len(core.Calls(ch)) > plan.Spread:
-		return fmt.Sprintf("a migration of %d call sites", len(core.Calls(ch)))
+	case plan.MovesCode(ch) && core.Lines(core.Calls(ch)) > plan.Spread:
+		return fmt.Sprintf("a migration of %d call sites", core.Lines(core.Calls(ch)))
 	case len(ch.Deps) > 0 && ch.Deps[0].Min:
 		return "the oldest " + ch.Deps[0].Name + " the project supports, past its end of life"
 	case ch.To == "" && ch.ToName == "" && len(ch.Options) == 0:
@@ -604,9 +799,10 @@ func Clause(s string) string {
 
 // Displaced reports whether pr was closed by tend to make room, for a
 // security fix, for the first PR or to keep one PR open, rather than
-// declined: it comes back. It reads a close the way Declined does, so a word
-// someone leaves on the PR after tend closed it does not turn the close into
-// theirs.
+// declined: it comes back. It reads a close the way Declined does: by who
+// closed it and when, so a word someone leaves after tend closed it does
+// not turn the close into theirs, even when tend runs with a person's
+// token, while a maintainer who reopens and closes it again declines it.
 func Displaced(ctx context.Context, forge core.Forge, pr *core.PR) (bool, error) {
 	if pr == nil || pr.State != "closed" {
 		return false, nil

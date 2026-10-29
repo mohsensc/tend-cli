@@ -1,6 +1,6 @@
 files: [package.json]
-locked: false
-note: npm not found
+locked: true
+note: 
 --- package.json
 10: -    "send": "~0.17.1"
 10: +    "send": "~1.2.0"

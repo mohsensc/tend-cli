@@ -2,12 +2,15 @@ package eco
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/mohsensc/tend-cli/internal/core"
 )
 
 func TestGitDeps(t *testing.T) {
@@ -237,5 +240,86 @@ func TestGitMeta(t *testing.T) {
 	}
 	if m.Latest != "v4.44.3" || len(m.Releases) != 2 || m.Deprecated != "repository archived" {
 		t.Errorf("meta = %+v", m)
+	}
+}
+
+func TestGitBumpChecksums(t *testing.T) {
+	oldSum, newSum, otherSum := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	image := "sha256:" + strings.Repeat("d", 64)
+	release := func(tag, asset, digest string) canned {
+		body := `{"assets": [{"name": "` + asset + `", "digest": "` + digest + `", "browser_download_url": "https://github.com/krallin/tini/releases/download/` + tag + `/` + asset + `"}]}`
+		return canned{url: "https://api.github.com/repos/krallin/tini/releases/tags/" + tag, body: body}
+	}
+	withSums := replayCanned(t,
+		release("v0.19.0", "tini", "sha256:"+oldSum),
+		release("v0.19.1", "tini", "sha256:"+newSum),
+	)
+	sumsFile := replayCanned(t,
+		canned{url: "https://api.github.com/repos/krallin/tini/releases/tags/v0.19.0", body: `{"assets": [{"name": "tini"}]}`},
+		canned{url: "https://api.github.com/repos/krallin/tini/releases/tags/v0.19.1", body: `{"assets": [{"name": "tini"}, {"name": "checksums.txt", "browser_download_url": "https://github.com/krallin/tini/releases/download/v0.19.1/checksums.txt"}]}`},
+		canned{url: "https://github.com/krallin/tini/releases/download/v0.19.1/checksums.txt", body: newSum + "  tini\n" + otherSum + "  tini-arm64\n"},
+	)
+	noDigest := replayCanned(t,
+		release("v0.19.0", "tini", ""),
+		release("v0.19.1", "tini", ""),
+	)
+	url0, url1 := "https://github.com/krallin/tini/releases/download/v0.19.0/tini", "https://github.com/krallin/tini/releases/download/v0.19.1/tini"
+	tests := []struct {
+		name   string
+		f      core.Fetcher
+		file   string
+		line   int
+		want   string
+		refuse string
+	}{
+		{"ADD --checksum on the line", withSums,
+			"FROM alpine@" + image + "\nADD --checksum=sha256:" + oldSum + " " + url0 + " /tini\n", 2,
+			"FROM alpine@" + image + "\nADD --checksum=sha256:" + newSum + " " + url1 + " /tini\n", ""},
+		{"sha256sum -c on the next line", sumsFile,
+			"RUN curl -fsSLo /tini " + url0 + " && \\\n    echo \"" + oldSum + "  /tini\" | sha256sum -c\n", 1,
+			"RUN curl -fsSLo /tini " + url1 + " && \\\n    echo \"" + newSum + "  /tini\" | sha256sum -c\n", ""},
+		{"ARG a few lines above", noDigest,
+			"FROM alpine\nARG TINI_SHA256=" + oldSum + "\nRUN apk add curl\nRUN apk add bash\nRUN curl -fsSLo /tini " + url0 + "\n", 5,
+			"FROM alpine\nARG TINI_SHA256=" + oldSum + "\nRUN apk add curl\nRUN apk add bash\nRUN curl -fsSLo /tini " + url1 + "\n", "cannot find the digest"},
+		{"ARG a few lines above, with a digest", withSums,
+			"FROM alpine\nARG TINI_SHA256=" + oldSum + "\nRUN apk add curl\nRUN curl -fsSLo /tini " + url0 + "\n", 4,
+			"FROM alpine\nARG TINI_SHA256=" + newSum + "\nRUN apk add curl\nRUN curl -fsSLo /tini " + url1 + "\n", ""},
+		{"checksum variable far above", withSums,
+			"TINI_SHA256=" + oldSum + "\n\n\n\n\n\ncurl -fsSLo /tini " + url0 + "\necho \"${TINI_SHA256}  /tini\" | sha256sum -c\n", 7,
+			"TINI_SHA256=" + newSum + "\n\n\n\n\n\ncurl -fsSLo /tini " + url1 + "\necho \"${TINI_SHA256}  /tini\" | sha256sum -c\n", ""},
+		{"no client", nil,
+			"ADD --checksum=sha256:" + oldSum + " " + url0 + " /tini\n", 1, "", "no GitHub client"},
+		{"asset named by a variable", withSums,
+			"ADD --checksum=sha256:" + oldSum + " https://github.com/krallin/tini/releases/download/v0.19.0/tini-${ARCH} /tini\n", 1, "", "cannot tell which asset"},
+		{"no checksum, image digest only", nil,
+			"FROM alpine@" + image + "\nADD " + url0 + " /tini\n", 2,
+			"FROM alpine@" + image + "\nADD " + url1 + " /tini\n", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := gitClient.get()
+			gitClient.set(tt.f)
+			t.Cleanup(func() { gitClient.set(old) })
+			root := t.TempDir()
+			write(t, root, map[string]string{"Dockerfile": tt.file})
+			d := core.Dep{Ecosystem: core.Git, Name: "krallin/tini", Version: "v0.19.0", Req: "v0.19.0", Line: tt.line, Manifest: core.Manifest{Path: "Dockerfile"}}
+			res, err := (gitRefs{}).Bump(context.Background(), root, d, "v0.19.1", "")
+			got := treeSnapshot(t, root)["Dockerfile"]
+			if tt.refuse != "" {
+				if !errors.Is(err, core.ErrNotSupported) || !strings.Contains(err.Error(), tt.refuse) {
+					t.Errorf("err = %v, want %q", err, tt.refuse)
+				}
+				if got != tt.file {
+					t.Errorf("Dockerfile changed:\n%s", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want || !slices.Equal(res.Files, []string{"Dockerfile"}) {
+				t.Errorf("Dockerfile =\n%s\nwant\n%s\nfiles %v", got, tt.want, res.Files)
+			}
+		})
 	}
 }

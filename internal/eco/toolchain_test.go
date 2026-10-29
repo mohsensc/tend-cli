@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mohsensc/tend-cli/internal/core"
@@ -181,5 +182,50 @@ func TestLowestAndRaise(t *testing.T) {
 		if err != nil || got != tt.want {
 			t.Errorf("raise(%q, %s) = %q, %v; want %q", tt.req, tt.to, got, err, tt.want)
 		}
+	}
+}
+
+func TestToolchainGoPruning(t *testing.T) {
+	if !have("go") {
+		t.Skip("go not found")
+	}
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"go.mod":     "module example.com/main\n\ngo 1.16\n\nrequire example.com/a v0.0.0\n\nreplace (\n\texample.com/a => ./a\n\texample.com/b => ./b\n)\n",
+		"main.go":    "package main\n\nimport \"example.com/a\"\n\nfunc main() { a.A() }\n",
+		"a/go.mod":   "module example.com/a\n\ngo 1.16\n\nrequire example.com/b v0.0.0\n\nreplace example.com/b => ../b\n",
+		"a/a.go":     "package a\n\nimport \"example.com/b\"\n\nfunc A() { b.B() }\n",
+		"b/go.mod":   "module example.com/b\n\ngo 1.16\n",
+		"b/b.go":     "package b\n\nfunc B() {}\n",
+		"other/x.go": "package other\n",
+	})
+	if out, err := run(context.Background(), root, nil, "go mod tidy && go build ./..."); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	var d core.Dep
+	for _, x := range depsIn(t, toolchain{}, root, "go.mod") {
+		if x.Min {
+			d = x
+		}
+	}
+	if d.Version != "1.16" {
+		t.Fatalf("dep = %+v", d)
+	}
+	b, err := toolchain{}.Bump(context.Background(), root, d, "1.26", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.Locked || !slices.Contains(b.Files, "go.mod") {
+		t.Errorf("bump = %+v", b)
+	}
+	got, _ := os.ReadFile(filepath.Join(root, "go.mod"))
+	if !strings.Contains(string(got), "go 1.26") || !strings.Contains(string(got), "example.com/b v0.0.0 // indirect") {
+		t.Errorf("go.mod =\n%s", got)
+	}
+	if out, err := run(context.Background(), root, nil, "go build ./... && go vet ./..."); err != nil {
+		t.Errorf("build after the bump: %v\n%s", err, out)
 	}
 }

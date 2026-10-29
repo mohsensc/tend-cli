@@ -539,3 +539,90 @@ func TestDockerNothingToRun(t *testing.T) {
 		t.Errorf("Imports = %v", got)
 	}
 }
+
+func TestDockerBumpVariables(t *testing.T) {
+	tests := []struct {
+		name, file, to, want, err string
+	}{
+		{"whole reference from an ARG", "ARG IMAGE=node:20\nFROM ${IMAGE}\n", "22", "ARG IMAGE=node:22\nFROM ${IMAGE}\n", ""},
+		{"bare whole reference with alias", "ARG IMAGE=node:20\nFROM $IMAGE AS b\n", "22", "ARG IMAGE=node:22\nFROM $IMAGE AS b\n", ""},
+		{"whole reference with a digest", "ARG IMAGE=node:20@" + digestOf("a") + "\nFROM ${IMAGE}\n", "22", "", "holds the whole reference"},
+		{"whole reference pinned on the line", "ARG IMAGE=node:20\nFROM ${IMAGE}@" + digestOf("a") + "\n", "22", "", "no registry to ask"},
+		{"whole reference inline default", "FROM ${IMAGE:-node:20}\n", "22", "", "holds the whole reference"},
+		{"name only from an ARG", "ARG IMAGE=node\nFROM ${IMAGE}\n", "22", "ARG IMAGE=node\nFROM ${IMAGE}:22\n", ""},
+		{"registry from an ARG", "ARG REGISTRY=docker.io\nFROM ${REGISTRY}/node:20\n", "22", "ARG REGISTRY=docker.io\nFROM ${REGISTRY}/node:22\n", ""},
+		{"name from an ARG with a tag", "ARG IMAGE=node\nFROM ${IMAGE}:20\n", "22", "ARG IMAGE=node\nFROM ${IMAGE}:22\n", ""},
+		{"ARG with a suffix", "ARG NODE_VERSION=20\nFROM node:${NODE_VERSION}-alpine\n", "22-alpine", "ARG NODE_VERSION=22\nFROM node:${NODE_VERSION}-alpine\n", ""},
+		{"ARG with a prefix", "ARG V=1.2.0\nFROM acme/tool:v${V}\n", "v1.3.0", "ARG V=1.3.0\nFROM acme/tool:v${V}\n", ""},
+		{"target drops the suffix", "ARG NODE_VERSION=20\nFROM node:${NODE_VERSION}-alpine\n", "22-bookworm", "", "does not fit"},
+		{"lowercase arg and from", "arg NODE=20\nfrom node:${NODE}\n", "22", "arg NODE=22\nfrom node:${NODE}\n", ""},
+		{"two variables", "ARG A=1\nARG B=x\nFROM acme/tool:${A}-${B}\n", "2-x", "", "not settable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withRegistry(t, nil)
+			root := t.TempDir()
+			write(t, root, map[string]string{"Dockerfile": tt.file})
+			deps := depsIn(t, docker{}, root, "Dockerfile")
+			if len(deps) != 1 {
+				t.Fatalf("deps = %+v", deps)
+			}
+			res, err := (docker{}).Bump(context.Background(), root, deps[0], tt.to, "")
+			got := treeSnapshot(t, root)["Dockerfile"]
+			if tt.err != "" {
+				if !errors.Is(err, core.ErrNotSupported) || !strings.Contains(err.Error(), tt.err) {
+					t.Errorf("err = %v, want %q and not supported", err, tt.err)
+				}
+				if got != tt.file {
+					t.Errorf("Dockerfile changed:\n%s", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("Dockerfile =\n%s\nwant\n%s", got, tt.want)
+			}
+			if !reflect.DeepEqual(res.Files, []string{"Dockerfile"}) {
+				t.Errorf("Files = %v", res.Files)
+			}
+		})
+	}
+}
+
+func TestDockerSetArgMissing(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{"Dockerfile": "RUN true\nFROM node:${NODE}\n"})
+	d := core.Dep{Name: "library/node", Manifest: core.Manifest{Path: "Dockerfile"}}
+	_, err := dockerSetArg(filepath.Join(root, "Dockerfile"), d, dockerRef{arg: "NODE", argLine: 1}, "22")
+	if err == nil || strings.Contains(err.Error(), root) || !strings.Contains(err.Error(), "Dockerfile:1: ARG NODE default not found") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestDockerBumpArgAmongOthers(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{"Dockerfile": "ARG BASE=x NODE=20 OTHER=1\nFROM node:${NODE}\n"})
+	d := depIn(t, docker{}, root, "Dockerfile", "library/node", true)
+	if _, err := (docker{}).Bump(context.Background(), root, d, "22", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := treeSnapshot(t, root)["Dockerfile"], "ARG BASE=x NODE=22 OTHER=1\nFROM node:${NODE}\n"; got != want {
+		t.Errorf("Dockerfile =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestDockerBumpWholePinned(t *testing.T) {
+	withRegistry(t, replayCanned(t, manifest("library/node", "22", digestOf("b"))))
+	root := t.TempDir()
+	write(t, root, map[string]string{"Dockerfile": "ARG IMAGE=node:20\nFROM ${IMAGE}@" + digestOf("a") + " AS web\n"})
+	d := depIn(t, docker{}, root, "Dockerfile", "library/node", true)
+	if _, err := (docker{}).Bump(context.Background(), root, d, "22", ""); err != nil {
+		t.Fatal(err)
+	}
+	want := "ARG IMAGE=node:22\nFROM ${IMAGE}@" + digestOf("b") + " AS web\n"
+	if got := treeSnapshot(t, root)["Dockerfile"]; got != want {
+		t.Errorf("Dockerfile =\n%s\nwant\n%s", got, want)
+	}
+}

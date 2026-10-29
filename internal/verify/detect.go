@@ -12,9 +12,10 @@ import (
 
 // Detect merges the commands in config with each ecosystem's defaults. A
 // non-empty install, build or test list in config replaces that list entirely.
-// Each ecosystem runs its lines from the right directory itself; installs that
-// a manifest higher up already covers (npm workspaces, a nested requirements
-// file without a lock of its own) are left out.
+// Each ecosystem runs its lines from the right directory itself. A nested
+// install is left out when a manifest higher up installs for it, as a
+// workspace root does for its members, or when nothing runs in its
+// directory, as with a requirements file another one pulls in.
 func Detect(root string, manifests []core.Manifest, ecos map[string]core.Ecosystem, cfg config.Verify) core.Commands {
 	var res core.Commands
 	for _, e := range eco.All() {
@@ -26,7 +27,7 @@ func Detect(root string, manifests []core.Manifest, ecos map[string]core.Ecosyst
 		ms := byDepth(manifests, name)
 		for _, m := range ms {
 			c := ec.Commands(root, m)
-			if !covered(ms, m) {
+			if !covered(ms, m) && (path.Dir(m.Path) == "." || len(c.Build)+len(c.Test) > 0) {
 				res.Install = append(res.Install, c.Install...)
 			}
 			res.Build = append(res.Build, c.Build...)
@@ -55,19 +56,20 @@ func byDepth(manifests []core.Manifest, name string) []core.Manifest {
 	return res
 }
 
-// covered reports whether a manifest in a parent directory installs for m.
+// covered reports whether a manifest higher up installs for m: m's lock
+// sits in an ancestor directory that has a manifest of its own, as with an
+// npm, pnpm, yarn or cargo workspace member. A nested manifest with no lock,
+// or a lock of its own, installs for itself.
 func covered(ms []core.Manifest, m core.Manifest) bool {
 	dir := path.Dir(m.Path)
-	if dir == "." || m.Lock != "" && path.Dir(m.Lock) == dir {
+	if dir == "." || m.Lock == "" {
 		return false
 	}
-	for _, n := range ms {
-		up := path.Dir(n.Path)
-		if up != dir && (up == "." || strings.HasPrefix(dir, up+"/")) {
-			return true
-		}
+	up := path.Dir(m.Lock)
+	if up == dir || up != "." && !strings.HasPrefix(dir, up+"/") {
+		return false
 	}
-	return false
+	return slices.ContainsFunc(ms, func(n core.Manifest) bool { return path.Dir(n.Path) == up })
 }
 
 func pick(override, detected []string) []string {

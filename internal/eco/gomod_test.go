@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +53,7 @@ func goPublic(t *testing.T) {
 	for _, k := range []string{"GOPROXY", "GOPRIVATE", "GONOPROXY"} {
 		t.Setenv(k, "")
 	}
+	withGoEnvFile(t, nil)
 }
 
 func TestGoMeta(t *testing.T) {
@@ -234,6 +236,7 @@ func TestGoProxy(t *testing.T) {
 		{"", "corp.example/*,github.com/corp", "github.com/corp/lib", "", true},
 		{"", "corp.example/*", "github.com/x/y", "https://proxy.golang.org", false},
 	}
+	withGoEnvFile(t, nil)
 	for _, tt := range tests {
 		t.Setenv("GOPROXY", tt.proxy)
 		t.Setenv("GOPRIVATE", tt.private)
@@ -303,10 +306,24 @@ func TestGoBumpRefused(t *testing.T) {
 }
 
 func TestGoCommands(t *testing.T) {
-	got := gomod{}.Commands("", core.Manifest{Path: "tools/go.mod"})
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"tools/go.mod":         "module example.com/tools\n",
+		"tools/main.go":        "package main\n",
+		"ci/go.mod":            "module example.com/ci\n",
+		"ci/magefile.go":       "//go:build mage\n\npackage main\n",
+		"ci/mage.go":           "// +build ignore\n\npackage main\n",
+		"ci/sub/go.mod":        "module example.com/ci/sub\n",
+		"ci/sub/x.go":          "package sub\n",
+		"ci/testdata/t/one.go": "package t\n",
+	})
+	got := gomod{}.Commands(root, core.Manifest{Path: "tools/go.mod"})
 	want := core.Commands{Build: []string{"cd tools && go build ./..."}, Test: []string{"cd tools && go vet ./... && go test ./..."}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Commands = %+v", got)
+	}
+	if got := (gomod{}).Commands(root, core.Manifest{Path: "ci/go.mod"}); !reflect.DeepEqual(got, core.Commands{Build: []string{"cd ci && go build ./..."}}) {
+		t.Errorf("a module of tagged files: Commands = %+v", got)
 	}
 	if got := (gomod{}).Imports(core.Dep{Name: "github.com/x/y/v2"}); !reflect.DeepEqual(got, []string{"github.com/x/y/v2"}) {
 		t.Errorf("Imports = %v", got)
@@ -497,5 +514,119 @@ func TestGoBumpKeepsUnusedRequires(t *testing.T) {
 	}
 	if out, err := run(ctx, root, append(goEnv()[1:], "GOFLAGS=-mod=readonly"), "go list -m all && go build ./..."); err != nil {
 		t.Errorf("the kept requires do not verify: %v\n%s", err, out)
+	}
+}
+
+func withGoEnvFile(t *testing.T, m map[string]string) {
+	t.Helper()
+	old := goEnvFile
+	goEnvFile = func() map[string]string { return m }
+	t.Cleanup(func() { goEnvFile = old })
+}
+
+func TestGoProxyEnvFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "env")
+	if err := os.WriteFile(p, []byte("GOPRIVATE=github.com/corp/*\nGOPROXY=https://goproxy.corp.example,direct\nbroken line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withGoEnvFile(t, readGoEnvFile(p))
+	t.Setenv("GOPROXY", "")
+	t.Setenv("GOPRIVATE", "")
+	t.Setenv("GONOPROXY", "")
+	if _, err := goProxy("github.com/corp/lib"); !errors.Is(err, core.ErrNotSupported) {
+		t.Errorf("private module from the env file: %v", err)
+	}
+	if got, err := goProxy("github.com/x/y"); err != nil || got != "https://goproxy.corp.example" {
+		t.Errorf("proxy from the env file = %q, %v", got, err)
+	}
+	t.Setenv("GOPROXY", "https://other.example")
+	t.Setenv("GONOPROXY", "none.example")
+	if got, err := goProxy("github.com/corp/lib"); err != nil || got != "https://other.example" {
+		t.Errorf("the environment wins = %q, %v", got, err)
+	}
+}
+
+func TestGoSumOrder(t *testing.T) {
+	lines := []string{
+		"example.com/a v0.10.0/go.mod h1:b=",
+		"example.com/b v1.0.0 h1:e=",
+		"example.com/a v0.9.0 h1:c=",
+		"example.com/a v0.10.0 h1:a=",
+		"example.com/a v1.0.0-rc.1 h1:f=",
+		"example.com/a v0.9.0/go.mod h1:d=",
+		"example.com/a v1.0.0 h1:g=",
+	}
+	slices.SortFunc(lines, goSumCompare)
+	want := []string{
+		"example.com/a v0.9.0 h1:c=",
+		"example.com/a v0.9.0/go.mod h1:d=",
+		"example.com/a v0.10.0 h1:a=",
+		"example.com/a v0.10.0/go.mod h1:b=",
+		"example.com/a v1.0.0-rc.1 h1:f=",
+		"example.com/a v1.0.0 h1:g=",
+		"example.com/b v1.0.0 h1:e=",
+	}
+	if !slices.Equal(lines, want) {
+		t.Errorf("order =\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A module far behind its newest major finds it in a few requests: majors
+// v2 through v90 of github.com/acme/far exist, and the latest is v90.
+func TestGoMetaFarMajors(t *testing.T) {
+	goPublic(t)
+	var mu sync.Mutex
+	lists := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rest, ok := strings.CutPrefix(r.URL.Path, "/github.com/acme/far")
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		major, file := 1, strings.TrimPrefix(rest, "/@")
+		if m, f, ok := strings.Cut(strings.TrimPrefix(rest, "/v"), "/@"); ok && strings.HasPrefix(rest, "/v") {
+			if _, err := fmt.Sscanf(m, "%d", &major); err != nil || major > 90 {
+				http.NotFound(w, r)
+				return
+			}
+			file = f
+		}
+		v := fmt.Sprintf("v%d.0.0", major)
+		mod := "github.com/acme/far"
+		if major > 1 {
+			mod += fmt.Sprintf("/v%d", major)
+		}
+		switch {
+		case file == "v/list":
+			mu.Lock()
+			lists++
+			mu.Unlock()
+			fmt.Fprintln(w, v)
+		case file == "latest" || strings.HasSuffix(file, ".info"):
+			fmt.Fprintf(w, `{"Version": %q, "Time": "2026-01-01T00:00:00Z"}`, v)
+		case strings.HasSuffix(file, ".mod"):
+			fmt.Fprintf(w, "module %s\n", mod)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("GOPROXY", srv.URL)
+	meta, err := (gomod{}).Meta(context.Background(), fetch.New("", "test"), "github.com/acme/far/v28")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Latest != "v90.0.0" {
+		t.Errorf("latest = %q, want v90.0.0", meta.Latest)
+	}
+	var vs []string
+	for _, r := range meta.Releases {
+		vs = append(vs, r.Version)
+	}
+	if !slices.Equal(vs, []string{"v28.0.0", "v29.0.0", "v90.0.0"}) {
+		t.Errorf("releases = %v", vs)
+	}
+	if lists > 20 {
+		t.Errorf("%d list requests, want a few", lists)
 	}
 }

@@ -60,16 +60,22 @@ func lockfile(ctx context.Context, p *pass) ([]core.Finding, string) {
 }
 
 // moves says which packages a clean lockfile change moved: only the bumped
-// ones, or those and so many of their dependencies.
+// ones the lockfile names, or those and so many of their dependencies.
 func moves(ch *core.Change, moved []string) string {
+	in := func(n string) bool {
+		return len(moved) == 0 || slices.ContainsFunc(moved, func(m string) bool { return strings.EqualFold(m, n) })
+	}
 	var roots []string
 	for _, d := range ch.Deps {
-		if !slices.Contains(roots, d.Name) {
+		if !slices.Contains(roots, d.Name) && in(d.Name) {
 			roots = append(roots, d.Name)
 		}
 	}
-	if ch.ToName != "" {
+	if ch.ToName != "" && in(ch.ToName) {
 		roots = append(roots, ch.ToName)
+	}
+	if len(roots) == 0 {
+		return "only the bumped packages and their dependencies changed"
 	}
 	rest := 0
 	for _, n := range moved {
@@ -77,14 +83,21 @@ func moves(ch *core.Change, moved []string) string {
 			rest++
 		}
 	}
-	res := "only " + strings.Join(roots, ", ") + " changed"
+	names := strings.Join(roots, ", ")
+	if len(roots) > 8 {
+		names = fmt.Sprintf("the %d bumped packages", len(roots))
+	}
+	its := "its"
+	if len(roots) > 1 {
+		its = "their"
+	}
 	switch {
 	case rest == 1:
-		res = "only " + strings.Join(roots, ", ") + " and 1 of its dependencies changed"
+		return fmt.Sprintf("only %s and 1 of %s dependencies changed", names, its)
 	case rest > 1:
-		res = fmt.Sprintf("only %s and %d of its dependencies changed", strings.Join(roots, ", "), rest)
+		return fmt.Sprintf("only %s and %d of %s dependencies changed", names, rest, its)
 	}
-	return res
+	return "only " + names + " changed"
 }
 
 // checkLock compares one lockfile before and after the patch. It returns the
@@ -216,11 +229,12 @@ var relock = func(ctx context.Context, dir string, m core.Manifest, deps []core.
 	if _, err := exec.LookPath(tool); err != nil {
 		return core.ToolMissing{Tool: tool}
 	}
-	cmd := exec.CommandContext(ctx, "sh", "-c", line)
-	cmd.Dir = filepath.Join(dir, filepath.FromSlash(path.Dir(m.Path)))
-	out, err := cmd.CombinedOutput()
+	out, err := eco.Run(ctx, filepath.Join(dir, filepath.FromSlash(path.Dir(m.Path))), line)
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			msg = err.Error()
+		}
 		if i := strings.LastIndexByte(msg, '\n'); i >= 0 {
 			msg = msg[i+1:]
 		}

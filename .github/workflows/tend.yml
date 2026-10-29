@@ -1,14 +1,20 @@
 name: tend
 
+# Runs the action from this checkout on this repository. Its PRs only start
+# ci.yml when TEND_TOKEN holds a GitHub App or fine-grained token; with the
+# default token, "Allow GitHub Actions to create and approve pull requests"
+# has to be on and the PRs get no CI.
 on:
   schedule:
-    - cron: "17 6 * * 1"
+    - cron: "17 6 * * 1,4"
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: read
+  statuses: read
 
 concurrency:
   group: tend
@@ -21,20 +27,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          go-version: stable
+          check-latest: true
+      - uses: ./
         with:
-          path: ~/.cache/tend/repos
-          key: tend-${{ github.repository }}-${{ github.run_id }}
-          restore-keys: tend-${{ github.repository }}-
-      - run: go run ./cmd/tend run
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TEND_MODEL_KEY: ${{ secrets.TEND_MODEL_KEY }}
-      - if: always()
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/tend/repos
-          key: tend-${{ github.repository }}-${{ github.run_id }}
+          token: ${{ secrets.TEND_TOKEN || github.token }}
+          model-key: ${{ secrets.TEND_MODEL_KEY }}

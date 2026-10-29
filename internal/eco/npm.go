@@ -39,6 +39,8 @@ var npmLocks = []struct{ file, tool string }{
 	{"package-lock.json", "npm"},
 	{"pnpm-lock.yaml", "pnpm"},
 	{"yarn.lock", "yarn"},
+	{"bun.lock", "bun"},
+	{"bun.lockb", "bun"},
 }
 
 const npmDefaultRegistry = "https://registry.npmjs.org"
@@ -112,6 +114,12 @@ func npmMember(root, dir, member string) bool {
 	if json.Unmarshal(raw, &pats) != nil && json.Unmarshal(raw, &ws) == nil {
 		pats = append(pats, ws.Packages...)
 	}
+	return globsMatch(pats, member)
+}
+
+// globsMatch reports whether a workspace's member patterns take the dir
+// member, relative to the workspace root; a trailing ** takes any depth.
+func globsMatch(pats []string, member string) bool {
 	for _, p := range pats {
 		p = strings.TrimSuffix(strings.TrimPrefix(p, "./"), "/")
 		if ok, _ := path.Match(p, member); ok {
@@ -127,7 +135,7 @@ func npmMember(root, dir, member string) bool {
 func npmManager(info npmInfo) string {
 	name, _, _ := strings.Cut(info.PackageManager, "@")
 	switch name {
-	case "npm", "pnpm", "yarn":
+	case "npm", "pnpm", "yarn", "bun":
 		return name
 	}
 	return ""
@@ -152,7 +160,9 @@ type npmBlock struct {
 // npmParse reads the dependency blocks of package.json in file order. It walks
 // tokens instead of unmarshaling so that order and offsets survive.
 func npmParse(src []byte) ([]npmBlock, error) {
-	dec := json.NewDecoder(bytes.NewReader(src))
+	body := stripBOM(src)
+	off := len(src) - len(body)
+	dec := json.NewDecoder(bytes.NewReader(body))
 	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
 		return nil, errors.New("package.json is not a JSON object")
 	}
@@ -170,7 +180,7 @@ func npmParse(src []byte) ([]npmBlock, error) {
 		if !npmBlocks[key] || len(raw) == 0 || raw[0] != '{' {
 			continue
 		}
-		start := int(dec.InputOffset()) - len(raw)
+		start := off + int(dec.InputOffset()) - len(raw)
 		b, err := npmParseBlock(src, start, key)
 		if err != nil {
 			return nil, err
@@ -542,6 +552,9 @@ func npmValid(v string) bool {
 
 func (n npm) Bump(ctx context.Context, root string, d core.Dep, to, toName string) (*core.Bump, error) {
 	m := d.Manifest
+	if err := lockUnsupported(m); err != nil {
+		return nil, err
+	}
 	if toName != "" && !d.Direct {
 		return nil, fmt.Errorf("%s: replacing %s, which only the lockfile names: %w", m.Path, d.Name, core.ErrNotSupported)
 	}
@@ -568,17 +581,20 @@ func (n npm) Bump(ctx context.Context, root string, d core.Dep, to, toName strin
 		return nil, err
 	}
 	if !have(m.Tool) {
-		if !edited {
-			return nil, core.ToolMissing{Tool: m.Tool}
-		}
-		return &core.Bump{Files: snap.changed(root), Note: m.Tool + " not found"}, nil
+		return nil, errors.Join(core.ToolMissing{Tool: m.Tool}, snap.restore(root))
 	}
 	var before map[string]bool
 	if targeted {
 		if before, err = lockedVersions(root, m.Lock, core.Npm, d.Name); err != nil {
 			return nil, err
 		}
+		if m.Tool == "yarn" && !yarnBerry(root, m) {
+			if err := yarnDrop(root, m.Lock, d.Name); err != nil {
+				return nil, errors.Join(err, snap.restore(root))
+			}
+		}
 	}
+	format := npmLockVersion(root, m)
 	if exact {
 		if err := n.lockAt(ctx, root, []core.Dep{d}, to, line); err != nil {
 			return nil, err
@@ -587,6 +603,9 @@ func (n npm) Bump(ctx context.Context, root string, d core.Dep, to, toName strin
 	if err := runIn(ctx, root, path.Dir(m.Lock), nil, line); err != nil {
 		return nil, err
 	}
+	if err := n.keepFormat(ctx, root, m, line, format); err != nil {
+		return nil, errors.Join(err, snap.restore(root))
+	}
 	landed := ""
 	if targeted {
 		if landed, err = lockedTo(root, m.Lock, core.Npm, d.Name, to, before); err != nil {
@@ -594,6 +613,35 @@ func (n npm) Bump(ctx context.Context, root string, d core.Dep, to, toName strin
 		}
 	}
 	return &core.Bump{Files: snap.changed(root), Locked: true, Landed: landed}, nil
+}
+
+// npmLockVersion is package-lock.json's lockfileVersion, 0 for none or
+// another lockfile.
+func npmLockVersion(root string, m core.Manifest) int {
+	if path.Base(m.Lock) != "package-lock.json" {
+		return 0
+	}
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(m.Lock)))
+	if err != nil {
+		return 0
+	}
+	var doc struct {
+		LockfileVersion int `json:"lockfileVersion"`
+	}
+	if json.Unmarshal(b, &doc) != nil {
+		return 0
+	}
+	return doc.LockfileVersion
+}
+
+// keepFormat runs line again with the lockfile's old format when the npm on
+// PATH rewrote it in its own, as npm 7 and later do with a version 1 lock:
+// thousands of changed lines, and an npm 7 floor for every contributor.
+func (npm) keepFormat(ctx context.Context, root string, m core.Manifest, line string, was int) error {
+	if was == 0 || npmLockVersion(root, m) == was {
+		return nil
+	}
+	return runIn(ctx, root, path.Dir(m.Lock), nil, line+" --lockfile-version="+strconv.Itoa(was))
 }
 
 // lockAt locks deps, all of one manifest, at exactly to. Left to itself the
@@ -636,6 +684,18 @@ func (npm) lockAt(ctx context.Context, root string, deps []core.Dep, to, line st
 		return err
 	}
 	err = runIn(ctx, root, path.Dir(m.Lock), nil, line)
+	if err == nil && m.Tool == "yarn" && !yarnBerry(root, m) {
+		for _, e := range es {
+			req := to
+			if strings.HasPrefix(e.req, "npm:") {
+				name, _ := npmRegistryName(e.key, e.req)
+				req = "npm:" + name + "@" + to
+			}
+			if _, err = yarnAlias(root, m.Lock, e.key+"@"+req, e.key+"@"+e.req); err != nil {
+				break
+			}
+		}
+	}
 	if werr := writeKeepMode(p, src); err == nil {
 		err = werr
 	}
@@ -647,6 +707,9 @@ func (npm) lockAt(ctx context.Context, root string, deps []core.Dep, to, line st
 // move at once.
 func (n npm) BumpGroup(ctx context.Context, root string, deps []core.Dep, to string) (*core.Bump, error) {
 	m := deps[0].Manifest
+	if err := lockUnsupported(m); err != nil {
+		return nil, err
+	}
 	snap := snapFiles(root, m.Path, m.Lock)
 	for _, d := range deps {
 		if !d.Direct || d.Manifest.Path != m.Path {
@@ -660,17 +723,21 @@ func (n npm) BumpGroup(ctx context.Context, root string, deps []core.Dep, to str
 	case m.Lock == "":
 		return &core.Bump{Files: snap.changed(root), Note: "no lockfile"}, nil
 	case !have(m.Tool):
-		return &core.Bump{Files: snap.changed(root), Note: m.Tool + " not found"}, nil
+		return nil, errors.Join(core.ToolMissing{Tool: m.Tool}, snap.restore(root))
 	}
 	line, err := npmLockLine(root, m, "", false)
 	if err != nil {
 		return nil, err
 	}
+	format := npmLockVersion(root, m)
 	if err := n.lockAt(ctx, root, deps, to, line); err != nil {
 		return nil, err
 	}
 	if err := runIn(ctx, root, path.Dir(m.Lock), nil, line); err != nil {
 		return nil, err
+	}
+	if err := n.keepFormat(ctx, root, m, line, format); err != nil {
+		return nil, errors.Join(err, snap.restore(root))
 	}
 	return &core.Bump{Files: snap.changed(root), Locked: true}, nil
 }
@@ -910,9 +977,6 @@ func npmLockLine(root string, m core.Manifest, name string, targeted bool) (stri
 			}
 			return "yarn install --mode=update-lockfile", nil
 		}
-		if targeted {
-			return "", fmt.Errorf("yarn v1 cannot update %s alone: %w", name, core.ErrNotSupported)
-		}
 		return "yarn install --ignore-scripts --non-interactive", nil
 	}
 	if targeted {
@@ -938,6 +1002,8 @@ func (npm) Commands(root string, m core.Manifest) core.Commands {
 	tool := cmp.Or(m.Tool, "npm")
 	var install string
 	switch {
+	case tool == "bun":
+		install = "bun install --frozen-lockfile"
 	case tool == "pnpm":
 		install = "pnpm install --frozen-lockfile"
 	case tool == "yarn" && yarnBerry(root, m):
@@ -956,7 +1022,11 @@ func (npm) Commands(root string, m core.Manifest) core.Commands {
 		c.Build = []string{inDir(dir, tool+" run build")}
 	}
 	if s, _ := scripts["test"].(string); s != "" && !strings.Contains(s, "no test specified") {
-		c.Test = []string{inDir(dir, tool+" test")}
+		test := tool + " test"
+		if tool == "bun" {
+			test = "bun run test"
+		}
+		c.Test = []string{inDir(dir, test)}
 	}
 	return c
 }

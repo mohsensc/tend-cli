@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -93,9 +95,13 @@ type Model struct {
 // the model it serves: "groq/openai/gpt-oss-120b".
 func (m *Model) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind == yaml.ScalarNode {
+		if n.Value == "none" {
+			m.Provider, m.Model = "none", ""
+			return nil
+		}
 		provider, id, ok := strings.Cut(n.Value, "/")
 		if !ok || provider == "" || id == "" {
-			return fmt.Errorf("line %d: model: want provider/model or a mapping, got %q", n.Line, n.Value)
+			return fmt.Errorf("line %d: model: want provider/model, none or a mapping, got %q", n.Line, n.Value)
 		}
 		m.Provider, m.Model = provider, id
 		return nil
@@ -185,7 +191,7 @@ func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	}
 	v, err := ParseDuration(s)
 	if err != nil {
-		return fmt.Errorf("line %d: %w", n.Line, err)
+		return fmt.Errorf("line %d: %w; want e.g. 20m, 1h30m or 3d", n.Line, err)
 	}
 	*d = Duration(v)
 	return nil
@@ -198,14 +204,21 @@ func (d Duration) String() string {
 	if v > 0 && v%(24*time.Hour) == 0 {
 		return strconv.Itoa(int(v/(24*time.Hour))) + "d"
 	}
-	return v.String()
+	s := v.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
 }
 
 func ParseDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if days, ok := strings.CutSuffix(s, "d"); ok {
 		n, err := strconv.Atoi(days)
-		if err != nil || n < 0 {
+		if err != nil || n < 0 || int64(n) > math.MaxInt64/int64(24*time.Hour) {
 			return 0, fmt.Errorf("bad duration %q", s)
 		}
 		return time.Duration(n) * 24 * time.Hour, nil
@@ -254,16 +267,19 @@ func Load(root, path string) (*Config, string, error) {
 			path = filepath.Join(root, path)
 		}
 		b, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, "", fmt.Errorf("%s: config file not found", Shown(root, path))
+		}
 		if err != nil {
 			return nil, "", err
 		}
 		cfg, err := Parse(b)
 		if err != nil {
-			return nil, "", at(shown(root, path), err)
+			return nil, "", At(Shown(root, path), err)
 		}
 		return cfg, path, nil
 	}
-	for _, name := range []string{"tend.yml", filepath.Join(".github", "tend.yml")} {
+	for _, name := range Files {
 		p := filepath.Join(root, name)
 		b, err := os.ReadFile(p)
 		if errors.Is(err, os.ErrNotExist) {
@@ -274,20 +290,24 @@ func Load(root, path string) (*Config, string, error) {
 		}
 		cfg, err := Parse(b)
 		if err != nil {
-			return nil, "", at(name, err)
+			return nil, "", At(name, err)
 		}
 		return cfg, p, nil
 	}
 	return Default(), "", nil
 }
 
-// at puts the file's name in front of each line of err.
-func at(name string, err error) error {
+// Files are where tend looks for its config under the repo's top level, in
+// order; the first that exists is the one it reads.
+var Files = []string{"tend.yml", filepath.Join(".github", "tend.yml")}
+
+// At puts the file's name in front of each line of err.
+func At(name string, err error) error {
 	return errors.New(name + ": " + strings.ReplaceAll(err.Error(), "\n", "\n"+name+": "))
 }
 
-// shown is p as a person would type it: relative to root when it is inside.
-func shown(root, p string) string {
+// Shown is p as a person would type it: relative to root when it is inside.
+func Shown(root, p string) string {
 	if rel, err := filepath.Rel(root, p); err == nil && !strings.HasPrefix(rel, "..") {
 		return rel
 	}
@@ -301,7 +321,15 @@ func Parse(b []byte) (*Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(b))
 	dec.KnownFields(true)
 	if err := dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
+		return nil, keyed(b, plain(err))
+	}
+	var extra yaml.Node
+	switch err := dec.Decode(&extra); {
+	case errors.Is(err, io.EOF):
+	case err != nil:
 		return nil, plain(err)
+	case len(extra.Content) > 0 && extra.Content[0].Tag != "!!null":
+		return nil, fmt.Errorf("line %d: only one YAML document is allowed", extra.Content[0].Line)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -342,6 +370,12 @@ func (c *Config) Validate() error {
 		bad("schedule: want 1h, 2h, 3h, 4h, 6h, 8h, 12h, 1d or 7d, got %s", c.Schedule)
 	}
 	oneOf("onboarding", c.Onboarding, onboardings)
+	if c.Base != "" && !branchName(c.Base) {
+		bad("base: %q is not a branch name", c.Base)
+	}
+	if c.Deliver.Branch != "" && !branchName(c.Deliver.Branch) {
+		bad("deliver.branch: %q is not a branch name", c.Deliver.Branch)
+	}
 	for i, ig := range c.Ignore {
 		if ig.Name == "" {
 			bad("ignore[%d]: name is required", i)
@@ -370,19 +404,39 @@ func (c *Config) Validate() error {
 		if re, err := regexp.Compile(d.Match); err != nil || re.SubexpIndex("v") < 0 {
 			bad("deps[%d]: match must be a regexp with a group (?P<v>...) around the version", i)
 		}
+		if _, err := path.Match(d.File, ""); err != nil {
+			bad("deps[%d]: file %q is not a glob", i, d.File)
+		}
 		if scheme, rest, _ := strings.Cut(d.Source, ":"); scheme == "" || rest == "" {
 			bad("deps[%d]: source wants github:, npm:, pypi:, url: or another ecosystem's name, got %q", i, d.Source)
 		}
 	}
 	oneOf("model.provider", c.Model.Provider, providers)
-	if c.Model.Provider == "command" && c.Model.Command == "" {
-		bad("model.command: required when model.provider is command")
+	switch c.Model.Provider {
+	case "command":
+		if c.Model.Command == "" {
+			bad("model.command: required when model.provider is command")
+		}
+	case "none":
+	default:
+		if c.Model.Model == "" && slices.Contains(providers, c.Model.Provider) {
+			bad("model.model: required for model.provider %s; name the model it serves", c.Model.Provider)
+		}
 	}
-	if k := c.Model.KeyEnv; k == "GITHUB_TOKEN" || k == "GH_TOKEN" || strings.HasPrefix(k, "TEND_") && k != "TEND_MODEL_KEY" {
+	switch k := c.Model.KeyEnv; {
+	case k == "":
+	case !envName.MatchString(k):
+		bad("model.key_env: %q is not a variable name", k)
+	case k == "GITHUB_TOKEN" || k == "GH_TOKEN" || strings.HasPrefix(k, "TEND_") && k != "TEND_MODEL_KEY":
 		bad("model.key_env: %s is not a model key; name the variable that holds one", k)
 	}
-	if u := c.Model.BaseURL; u != "" && c.Model.sendsKey() && !private(u) {
-		bad("model.base_url: http is only allowed for a local server")
+	if u := c.Model.BaseURL; u != "" {
+		switch p, err := url.Parse(u); {
+		case err != nil || p.Scheme != "http" && p.Scheme != "https" || p.Host == "":
+			bad("model.base_url: want an http or https URL, got %q", u)
+		case c.Model.sendsKey() && !private(u):
+			bad("model.base_url: http is only allowed for a local server")
+		}
 	}
 	if c.Model.Attempts < 1 {
 		bad("model.attempts: want at least 1, got %d", c.Model.Attempts)
@@ -411,6 +465,26 @@ func (c *Config) Validate() error {
 }
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// branchName reports whether name is a branch name git accepts, as
+// git check-ref-format --branch does for a plain name.
+func branchName(name string) bool {
+	if name == "" || name == "@" || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "/") || strings.HasSuffix(name, ".") ||
+		strings.Contains(name, "..") || strings.Contains(name, "@{") || strings.Contains(name, "//") {
+		return false
+	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f || strings.ContainsRune(" ~^:?*[\\", r) {
+			return false
+		}
+	}
+	for part := range strings.SplitSeq(name, "/") {
+		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
+			return false
+		}
+	}
+	return true
+}
 
 // Off reports whether tend.yml turns an ecosystem off: ecosystems lists
 // others but not it, or an ignore entry with the name "*" names it.

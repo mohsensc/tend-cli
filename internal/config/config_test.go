@@ -29,6 +29,9 @@ func TestDuration(t *testing.T) {
 		{"3", 0, true},
 		{"d", 0, true},
 		{"-1d", 0, true},
+		{"106751d", 106751 * 24 * time.Hour, false},
+		{"106752d", 0, true},
+		{"300000d", 0, true},
 		{"1.5d", 0, true},
 		{"soon", 0, true},
 		{"[1d]", 0, true},
@@ -57,6 +60,11 @@ func TestDurationRoundTrip(t *testing.T) {
 		var got Duration
 		if err := yaml.Unmarshal(b, &got); err != nil || time.Duration(got) != d {
 			t.Errorf("%s -> %q -> %s, %v", d, b, time.Duration(got), err)
+		}
+	}
+	for d, want := range map[time.Duration]string{6 * time.Hour: "6h", 90 * time.Minute: "1h30m", 20 * time.Minute: "20m", 45 * time.Second: "45s", 36 * time.Hour: "36h"} {
+		if s := Duration(d).String(); s != want {
+			t.Errorf("Duration(%s) = %q, want %q", d, s, want)
 		}
 	}
 	if s := Duration(72 * time.Hour).String(); s != "3d" {
@@ -248,11 +256,22 @@ func TestParseErrors(t *testing.T) {
 		{"verify: {test: go test}\n", `line 1: want a list, such as [go test]`},
 		{"updates: true\n", `line 1: want a map with the keys security, deprecations, major, minor, patch`},
 		{"zzz: 1\n", `line 1: unknown key "zzz"`},
+		{"base: main\n---\nbogus: 1\n", "line 3: only one YAML document is allowed"},
+		{"cooldown: 200000d\n", `line 1: cooldown: bad duration "200000d"; want e.g. 20m, 1h30m or 3d`},
 	}
 	for _, tt := range tests {
 		_, err := Parse([]byte(tt.in))
 		if err == nil || err.Error() != tt.want {
 			t.Errorf("Parse(%q) = %v, want %q", tt.in, err, tt.want)
+		}
+	}
+}
+
+// A file may end with a bare document marker or a comment after one.
+func TestParseOneDocument(t *testing.T) {
+	for _, in := range []string{"base: main\n---\n", "base: main\n---\n# later\n", "---\nbase: main\n"} {
+		if cfg, err := Parse([]byte(in)); err != nil || cfg.Base != "main" {
+			t.Errorf("Parse(%q) = %+v, %v", in, cfg, err)
 		}
 	}
 }
@@ -300,11 +319,32 @@ func TestValidate(t *testing.T) {
 		{"key from the repo token", func(c *Config) { c.Model.Provider, c.Model.KeyEnv = "openai", "GITHUB_TOKEN" }, "model.key_env: GITHUB_TOKEN"},
 		{"key from gh", func(c *Config) { c.Model.KeyEnv = "GH_TOKEN" }, "model.key_env"},
 		{"key from tend's own", func(c *Config) { c.Model.KeyEnv = "TEND_SIGNING_KEY" }, "model.key_env"},
-		{"key from the usual place", func(c *Config) { c.Model.Provider, c.Model.KeyEnv = "openai", "TEND_MODEL_KEY" }, ""},
+		{"key from the usual place", func(c *Config) { c.Model.Provider, c.Model.Model, c.Model.KeyEnv = "openai", "m", "TEND_MODEL_KEY" }, ""},
+		{"key not a name", func(c *Config) { c.Model.Provider, c.Model.Model, c.Model.KeyEnv = "openai", "m", "a b" }, `model.key_env: "a b" is not a variable name`},
 		{"key in the clear", func(c *Config) { c.Model.Provider, c.Model.BaseURL = "openai", "http://example.net/v1" }, "model.base_url: http is only allowed for a local server"},
-		{"key to this machine", func(c *Config) { c.Model.Provider, c.Model.BaseURL = "openai", "http://127.0.0.1:8080/v1" }, ""},
-		{"key over https", func(c *Config) { c.Model.Provider, c.Model.BaseURL = "openai", "https://llm.internal/v1" }, ""},
-		{"no key on the lan", func(c *Config) { c.Model.Provider, c.Model.BaseURL = "ollama", "http://gpu-box:11434/v1" }, ""},
+		{"key to this machine", func(c *Config) {
+			c.Model.Provider, c.Model.Model, c.Model.BaseURL = "openai", "m", "http://127.0.0.1:8080/v1"
+		}, ""},
+		{"key over https", func(c *Config) {
+			c.Model.Provider, c.Model.Model, c.Model.BaseURL = "openai", "m", "https://llm.internal/v1"
+		}, ""},
+		{"no key on the lan", func(c *Config) {
+			c.Model.Provider, c.Model.Model, c.Model.BaseURL = "ollama", "qwen3", "http://gpu-box:11434/v1"
+		}, ""},
+		{"base url not http", func(c *Config) {
+			c.Model.Provider, c.Model.Model, c.Model.BaseURL = "openai", "m", "ftp://localhost/v1"
+		}, `model.base_url: want an http or https URL, got "ftp://localhost/v1"`},
+		{"base url without a host", func(c *Config) { c.Model.Provider, c.Model.Model, c.Model.BaseURL = "ollama", "m", "localhost:11434" }, "model.base_url: want an http or https URL"},
+		{"model id missing", func(c *Config) { c.Model.Provider = "anthropic" }, "model.model: required for model.provider anthropic"},
+		{"model id not needed for a command", func(c *Config) { c.Model.Provider, c.Model.Command = "command", "llm" }, ""},
+		{"base", func(c *Config) { c.Base = "release/2.x" }, ""},
+		{"base not a branch", func(c *Config) { c.Base = "main..dev" }, `base: "main..dev" is not a branch name`},
+		{"base with a space", func(c *Config) { c.Base = "my branch" }, "base: "},
+		{"base a ref", func(c *Config) { c.Base = "refs/heads/main^" }, "base: "},
+		{"deliver branch not a branch", func(c *Config) { c.Deliver.Branch = "-x" }, `deliver.branch: "-x" is not a branch name`},
+		{"dep glob", func(c *Config) {
+			c.Deps = []Dep{{Name: "x", File: "[abc", Match: `v(?P<v>\S+)`, Source: "github:a/b"}}
+		}, `deps[0]: file "[abc" is not a glob`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -513,6 +553,7 @@ func TestModelLine(t *testing.T) {
 		{"model: ollama/qwen3\n", "ollama", "qwen3", ""},
 		{"model: {provider: openai, model: m, base_url: http://localhost:8080/v1}\n", "openai", "m", ""},
 		{"model: groq\n", "", "", "want provider/model"},
+		{"model: none\n", "none", "", ""},
 		{"model: {provider: groq, name: openai/gpt-oss-120b}\n", "groq", "openai/gpt-oss-120b", ""},
 		{"model: {provider: openai, model: m, name: n}\n", "", "", "the same key"},
 		{"model: {provider: openai, model: m, temperature: 0}\n", "", "", `unknown key "temperature"`},
@@ -532,6 +573,19 @@ func TestModelLine(t *testing.T) {
 		}
 		if cfg.Model.Provider != tt.provider || cfg.Model.Model != tt.model || cfg.Model.Attempts != 2 {
 			t.Errorf("%q: model = %+v", tt.in, cfg.Model)
+		}
+	}
+}
+
+// A bad duration names its key, as every other config error does.
+func TestDurationKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"cooldown: 3x\n":             `line 1: cooldown: bad duration "3x"; want e.g. 20m, 1h30m or 3d`,
+		"verify:\n  timeout: soon\n": `line 2: verify.timeout: bad duration "soon"`,
+	} {
+		_, err := Parse([]byte(in))
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("Parse(%q) = %v, want %s", in, err, want)
 		}
 	}
 }

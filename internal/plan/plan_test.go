@@ -154,11 +154,11 @@ func TestFixFor(t *testing.T) {
 		{"4.18.0", "4.18.1"},
 	}
 	for _, tt := range tests {
-		if got, _ := fixFor(m, tt.to); got.Version != tt.want {
+		if got, _ := fixFor(core.Dep{}, m, tt.to); got.Version != tt.want {
 			t.Errorf("fixFor(%s) = %s, want %s", tt.to, got.Version, tt.want)
 		}
 	}
-	if got, ok := fixFor(nil, "1.2.3"); ok || got.Version != "1.2.3" {
+	if got, ok := fixFor(core.Dep{}, nil, "1.2.3"); ok || got.Version != "1.2.3" {
 		t.Errorf("fixFor without meta = %v, %v", got, ok)
 	}
 }
@@ -196,7 +196,7 @@ func TestMerge(t *testing.T) {
 	for _, ev := range sec.Evidence {
 		titles = append(titles, ev.Source+":"+strings.Fields(ev.Title)[0])
 	}
-	if want := []string{"releases:1.0.2", "osv:GHSA-aaaa-bbbb-cccc", "osv:CVE-2026-1234"}; !slices.Equal(titles, want) {
+	if want := []string{"osv:GHSA-aaaa-bbbb-cccc", "osv:CVE-2026-1234", "releases:1.0.2"}; !slices.Equal(titles, want) {
 		t.Errorf("evidence = %v, want %v", titles, want)
 	}
 	if got[1].To != "1.1.0" || got[1].Kind != core.Update {
@@ -1187,5 +1187,168 @@ func TestStale(t *testing.T) {
 		if got := Stale(p, inv, tt.id); got != tt.want {
 			t.Errorf("Stale(%q) = %q, want %q", tt.id, got, tt.want)
 		}
+	}
+}
+
+func TestCandidateKeepsQualifier(t *testing.T) {
+	guava := []core.Release{rel("32.1.2-android", 400), rel("32.1.2-jre", 400), rel("33.4.0-android", 30), rel("33.4.0-jre", 30)}
+	tests := []struct {
+		eco, from, want string
+		rels            []core.Release
+	}{
+		{"maven", "32.1.2-jre", "33.4.0-jre", guava},
+		{"gradle", "32.1.2-jre", "33.4.0-jre", guava},
+		{"maven", "32.1.2-android", "33.4.0-android", guava},
+		{"maven", "20.0", "33.4.0-jre", guava},
+		{"maven", "5.4.0.Final", "6.0.0.Final", []core.Release{rel("5.4.0.Final", 400), rel("6.0.0.Final", 30), rel("6.0.0.CR1", 60)}},
+		{"maven", "5.2.0.RELEASE", "5.3.0", []core.Release{rel("5.2.0.RELEASE", 400), rel("5.2.9.RELEASE", 200), rel("5.3.0", 30)}},
+		{"maven", "1.0", "2.0", []core.Release{rel("2.0-jre", 30), rel("2.0", 30)}},
+	}
+	for _, tt := range tests {
+		d := core.Dep{Ecosystem: tt.eco, Name: "com.google.guava:guava", Version: tt.from}
+		got, ok := candidate(d, &core.Meta{Releases: tt.rels}, time.Now(), 72*time.Hour, -1)
+		if !ok || got.Version != tt.want {
+			t.Errorf("%s %s: candidate = %q, %v; want %s", tt.eco, tt.from, got.Version, ok, tt.want)
+		}
+	}
+	d := core.Dep{Ecosystem: "maven", Name: "com.google.guava:guava", Version: "31.0-jre"}
+	m := &core.Meta{Releases: []core.Release{rel("32.0.0-android", 300), rel("32.0.0-jre", 300), rel("32.0.1-jre", 200)}}
+	if got, _ := fixFor(d, m, "32.0.0-android"); got.Version != "32.0.0-jre" {
+		t.Errorf("fixFor = %s, want 32.0.0-jre", got.Version)
+	}
+	if got, _ := fixFor(d, nil, "32.0.0-android"); got.Version != "32.0.0-jre" {
+		t.Errorf("fixFor without meta = %s, want 32.0.0-jre", got.Version)
+	}
+}
+
+// A commit sha that starts with digits is no version.
+func TestCandidateNotACommit(t *testing.T) {
+	d := core.Dep{Ecosystem: "actions", Name: "actions/checkout", Version: "11bd71901bbe5b1630ceea73d27597364c9af683"}
+	if got, ok := candidate(d, names([]core.Release{rel("v12.0.0", 30)}), time.Now(), 0, -1); ok {
+		t.Errorf("candidate = %s", got.Version)
+	}
+}
+
+func TestMergeSecurityPerLine(t *testing.T) {
+	old := npmDep("ansi-regex", "4.1.0", "package.json")
+	root := npmDep("ansi-regex", "5.0.0", "package.json")
+	old.Direct, root.Direct = false, false
+	ev := core.Evidence{Source: "osv", Title: "GHSA-93q8-gq69-wqmw", URL: "https://osv.dev/vulnerability/GHSA-93q8-gq69-wqmw"}
+	both := core.Evidence{Source: "osv", Title: "GHSA-xxxx", URL: "https://osv.dev/vulnerability/GHSA-xxxx"}
+	got := merge([]core.Change{
+		{Kind: core.Security, Deps: []core.Dep{old}, To: "4.1.1", Evidence: []core.Evidence{ev}},
+		{Kind: core.Security, Deps: []core.Dep{old}, To: "4.1.2", Evidence: []core.Evidence{both}},
+		{Kind: core.Security, Deps: []core.Dep{root}, To: "5.0.1", Evidence: []core.Evidence{ev}},
+	})
+	var rows []string
+	for _, ch := range got {
+		rows = append(rows, Lowest(ch.Deps)+"->"+ch.To)
+	}
+	if want := []string{"4.1.0->4.1.2", "5.0.0->5.0.1"}; !slices.Equal(rows, want) {
+		t.Errorf("rows = %v, want %v", rows, want)
+	}
+}
+
+// A lockless manifest among the tests is a fixture the tests read; one with
+// a lockfile of its own, or that another manifest names, is a project.
+func TestInventorySkipsTestFixtures(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"pyproject.toml":                "[tool.poetry]\nname = \"tomlkit\"\n\n[tool.poetry.dependencies]\npython = \"^3.6\"\n\n[tool.poetry.dev-dependencies]\npytest = \"^6.0\"\n",
+		"poetry.lock":                   "[[package]]\nname = \"pytest\"\nversion = \"6.2.5\"\n",
+		"tests/examples/pyproject.toml": "[tool.poetry]\nname = \"poetry\"\n\n[tool.poetry.dependencies]\npython = \"^3.6\"\nblack = \"18.3-alpha.0\"\n\n[tool.poetry.dev-dependencies]\npytest = \"3.4\"\n",
+		"tests/e2e/package.json":        `{"name": "e2e", "dependencies": {"left-pad": "1.3.0"}}`,
+		"tests/e2e/package-lock.json":   `{"lockfileVersion": 3, "packages": {"": {"name": "e2e"}, "node_modules/left-pad": {"version": "1.3.0"}}}`,
+	}
+	for name, body := range files {
+		p := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inv, notes, err := Inventory(root, config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, m := range inv.Manifests {
+		paths = append(paths, m.Path)
+	}
+	if slices.Contains(paths, "tests/examples/pyproject.toml") || !slices.Contains(paths, "tests/e2e/package.json") || !slices.Contains(paths, "pyproject.toml") {
+		t.Errorf("manifests = %v", paths)
+	}
+	if !slices.ContainsFunc(notes, func(u Untracked) bool { return u.What == "tests/examples/pyproject.toml" }) {
+		t.Errorf("notes = %+v", notes)
+	}
+}
+
+// Two go.mod files past end of life merge into one change whose evidence
+// speaks for the older, whichever order they come in.
+func TestMergeEndOfLifeOldestLeads(t *testing.T) {
+	dep := func(path, v string) core.Dep {
+		return core.Dep{Ecosystem: core.Toolchain, Name: "go", Version: v, Min: true, Manifest: core.Manifest{Path: path}}
+	}
+	ev := func(v string) core.Evidence {
+		return core.Evidence{Source: "eol", Title: "go " + v + " reached end of life", URL: "https://endoflife.date/go"}
+	}
+	root := core.Change{ID: "toolchain/go@1.26", Kind: core.Deprecation, To: "1.26", Deps: []core.Dep{dep("go.mod", "1.13")}, Evidence: []core.Evidence{ev("1.13")}, Sunset: ago(2000)}
+	ci := core.Change{ID: "toolchain/go@1.26", Kind: core.Deprecation, To: "1.26", Deps: []core.Dep{dep("ci/go.mod", "1.15")}, Evidence: []core.Evidence{ev("1.15")}, Sunset: ago(1500)}
+	for _, order := range [][]core.Change{{root, ci}, {ci, root}} {
+		got := merge(order)
+		if len(got) != 1 || got[0].Evidence[0].Title != "go 1.13 reached end of life" || !got[0].Sunset.Equal(ago(2000)) {
+			t.Errorf("merged = %+v", got)
+		}
+	}
+}
+
+func TestAfterSecurityFix(t *testing.T) {
+	d := core.Dep{Ecosystem: core.Pip, Name: "pytest", Version: "6.2.4", Direct: true, Manifest: core.Manifest{Path: "requirements.txt"}}
+	got := after([]core.Change{
+		{Kind: core.Security, To: "9.0.3", Level: "major", Deps: []core.Dep{d}},
+		{Kind: core.Breaking, To: "9.1.1", Level: "major", Deps: []core.Dep{d}},
+		{Kind: core.Breaking, To: "10.0.0", Level: "major", Deps: []core.Dep{{Ecosystem: core.Pip, Name: "other", Version: "1.0"}}},
+	})
+	if got[1].Kind != core.Update || got[1].Level != "minor" {
+		t.Errorf("follow-up = %s %s", got[1].Kind, got[1].Level)
+	}
+	if got[2].Kind != core.Breaking {
+		t.Errorf("an unrelated bump moved: %+v", got[2])
+	}
+}
+
+func TestInventoryNotesSetupPy(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "setup.py", "from setuptools import setup\nsetup(name='x', install_requires=['requests==2.20.0'])\n")
+	writeFile(t, root, "requirements.txt", "flask==2.0.0\n")
+	_, notes, err := Inventory(root, config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(notes, func(u Untracked) bool { return u.What == "setup.py install_requires" }) {
+		t.Errorf("notes = %+v", notes)
+	}
+}
+
+func TestTaggedDropsAMissingSuffix(t *testing.T) {
+	rels := func(vs ...string) *core.Meta {
+		m := &core.Meta{}
+		for _, v := range vs {
+			m.Releases = append(m.Releases, core.Release{Version: v})
+		}
+		return m
+	}
+	b := &builder{meta: map[pkg]*core.Meta{
+		{core.Docker, "library/mongo"}: rels("4.2.1-bionic", "4.4.6-bionic"),
+		{core.Docker, "library/node"}:  rels("22-alpine", "24-alpine"),
+	}}
+	got := b.tagged([]core.Change{
+		{Kind: core.Deprecation, To: "9.0-bionic", Deps: []core.Dep{{Ecosystem: core.Docker, Name: "library/mongo", Version: "4.2.1-bionic"}}},
+		{Kind: core.Deprecation, To: "24-alpine", Deps: []core.Dep{{Ecosystem: core.Docker, Name: "library/node", Version: "16-alpine"}}},
+	})
+	if got[0].To != "9.0" || got[1].To != "24-alpine" {
+		t.Errorf("targets = %s, %s", got[0].To, got[1].To)
 	}
 }

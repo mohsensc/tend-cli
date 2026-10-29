@@ -1,6 +1,6 @@
 files: [reqs/dev-requirements.in]
-locked: false
-note: pip-compile not found
+locked: true
+note: 
 --- reqs/dev-requirements.in
 1: -pytest~=8.3
 1: +pytest~=9.0

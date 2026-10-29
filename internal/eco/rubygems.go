@@ -442,7 +442,7 @@ func gemEdit(root string, d core.Dep, to, toName string) (bool, error) {
 		return false, nil
 	}
 	old := strings.Join(e.reqs(), ", ")
-	next, err := fixReq(old, to, false)
+	next, err := fixReq(old, to, anyDialect)
 	if err != nil {
 		return false, fmt.Errorf("rubygems: %s: %w", d.Name, err)
 	}

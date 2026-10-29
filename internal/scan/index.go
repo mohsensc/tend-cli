@@ -33,7 +33,10 @@ type key struct {
 
 type ref struct{ file, n int }
 
-var _ core.ScanIndex = (*Index)(nil)
+var (
+	_ core.ScanIndex   = (*Index)(nil)
+	_ core.TestReacher = (*Index)(nil)
+)
 
 // Build scans the source files under o.Root: what git tracks or would track,
 // or every file when git is not there. Files it cannot use are skipped with a
@@ -201,7 +204,7 @@ func walkFiles(root string, skip []string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if p != root && slices.Contains(skip, d.Name()) {
+			if p != root && (slices.Contains(skip, d.Name()) || core.NestedRepo(p)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -449,45 +452,84 @@ func (x *Index) Files() []string {
 // Reached reports whether a test reaches the file p: a JavaScript or
 // TypeScript test names a relative path that resolves to it, a Python test
 // imports the module it is, or a Go test sits in its package's directory.
-// In the other languages a test whose file name holds p's base name counts,
-// as FooTest.java does for Foo.java.
+// In the other languages a test named for p counts, as FooTest.java,
+// FooTests.cs, foo_spec.rb or test_foo.rb is for Foo: the name less its test
+// marker must be p's base name. A Rust file with a #[test] or #[cfg(test)]
+// of its own is reached by it, and a crate's src/ by the tests/ and
+// benches/ next to it.
 func (x *Index) Reached(p string) bool {
+	return slices.ContainsFunc(x.files, func(f *file) bool {
+		return reaches(f, p) || f.File == p && f.Lang == "rust" && (bytes.Contains(f.code, []byte("#[test]")) || bytes.Contains(f.code, []byte("#[cfg(test)]")))
+	})
+}
+
+// Reaches reports whether the test file test reaches the file p, as Reached
+// reads it.
+func (x *Index) Reaches(test, p string) bool {
+	return slices.ContainsFunc(x.files, func(f *file) bool { return f.File == test && reaches(f, p) })
+}
+
+func reaches(f *file, p string) bool {
+	if f.File == p || !IsTest(f.File) {
+		return false
+	}
 	stem := strings.TrimSuffix(p, path.Ext(p))
-	for _, f := range x.files {
-		if f.File == p || !IsTest(f.File) {
-			continue
-		}
-		switch strings.TrimSuffix(f.Lang, "?") {
-		case "go":
-			if path.Dir(f.File) == path.Dir(p) {
+	switch strings.TrimSuffix(f.Lang, "?") {
+	case "go":
+		return path.Dir(f.File) == path.Dir(p)
+	case "js":
+		for _, l := range f.lits {
+			if !strings.HasPrefix(l.Text, ".") {
+				continue
+			}
+			r := path.Join(path.Dir(f.File), l.Text)
+			if r == p || r == stem || path.Join(r, "index") == stem {
 				return true
 			}
-		case "js":
-			for _, l := range f.lits {
-				if !strings.HasPrefix(l.Text, ".") {
-					continue
-				}
-				r := path.Join(path.Dir(f.File), l.Text)
-				if r == p || r == stem || path.Join(r, "index") == stem {
+		}
+	case "python":
+		for _, im := range f.imps {
+			for _, q := range im.quals {
+				m := strings.ReplaceAll(q, ".", "/")
+				if stem == m || strings.HasSuffix(stem, "/"+m) || stem == m+"/__init__" || strings.HasSuffix(stem, "/"+m+"/__init__") {
 					return true
 				}
 			}
-		case "python":
-			for _, im := range f.imps {
-				for _, q := range im.quals {
-					m := strings.ReplaceAll(q, ".", "/")
-					if stem == m || strings.HasSuffix(stem, "/"+m) || stem == m+"/__init__" || strings.HasSuffix(stem, "/"+m+"/__init__") {
-						return true
-					}
-				}
-			}
-		default:
-			if strings.Contains(strings.ToLower(path.Base(f.File)), strings.ToLower(path.Base(stem))) {
-				return true
-			}
 		}
+	case "rust":
+		dir := path.Dir(f.File)
+		if b := path.Base(dir); b != "tests" && b != "benches" || path.Ext(p) != ".rs" {
+			return false
+		}
+		src := path.Join(path.Dir(dir), "src") + "/"
+		return strings.HasPrefix(p, strings.TrimPrefix(src, "./"))
+	default:
+		return slices.ContainsFunc(subjects(f.File), func(s string) bool { return strings.EqualFold(s, path.Base(stem)) })
 	}
 	return false
+}
+
+var (
+	testSuffixes = []string{"Tests", "Test", "IT", "Spec", "_test", "_spec"}
+	testPrefixes = []string{"test_", "Test"}
+)
+
+func subjects(p string) []string {
+	name := strings.TrimSuffix(path.Base(p), path.Ext(p))
+	var res []string
+	for _, a := range testSuffixes {
+		if s, ok := strings.CutSuffix(name, a); ok && s != "" {
+			res = append(res, s)
+			break
+		}
+	}
+	for _, a := range testPrefixes {
+		if s, ok := strings.CutPrefix(name, a); ok && s != "" {
+			res = append(res, s)
+			break
+		}
+	}
+	return res
 }
 
 // Notes lists the files left out or only partly read, and why.

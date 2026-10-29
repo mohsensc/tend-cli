@@ -1,11 +1,11 @@
 ## @fixture/pay 1.4.0 → 2.0.0
 
-**Why**: deprecation · 1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*
+**Why**: deprecation · 1.x is deprecated, use 2.x: charges.\* was replaced by paymentIntents.\*
 **Level**: major (1 → 2)
 
 ### What changed upstream
 
-- **@fixture/pay 1.4.0 is deprecated** · [source](https://www.npmjs.com/package/@fixture/pay)
+- **@&#8203;fixture/pay 1.4.0 is deprecated** · [source](https://www.npmjs.com/package/@fixture/pay)
   ```
   1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*
   ```

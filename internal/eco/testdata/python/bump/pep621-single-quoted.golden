@@ -1,6 +1,6 @@
 files: [uv/pyproject.toml]
-locked: false
-note: uv not found
+locked: true
+note: 
 --- uv/pyproject.toml
 8: -    'PyYAML>=6.0,<7 ; sys_platform != "win32"',
 8: +    'PyYAML>=7.0,<8 ; sys_platform != "win32"',

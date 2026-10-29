@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/ver"
 )
 
 const (
@@ -373,5 +374,22 @@ func TestMentions(t *testing.T) {
 				t.Errorf("input was modified: %+v", in[0])
 			}
 		})
+	}
+}
+
+func TestPickNotesKeepsMajors(t *testing.T) {
+	names := []string{"3.37.0", "3.36.0", "3.35.0", "3.34.0", "3.33.0", "3.32.0", "3.31.0", "3.30.0", "3.0.0", "2.5.0", "2.0.0", "1.2.0", "1.0.0"}
+	var vs []ver.V
+	for _, s := range names {
+		v, _ := ver.Parse(s)
+		vs = append(vs, v)
+	}
+	var got []string
+	for _, i := range pickNotes(vs) {
+		got = append(got, names[i])
+	}
+	want := []string{"3.37.0", "3.36.0", "3.35.0", "3.34.0", "3.33.0", "3.32.0", "3.31.0", "3.30.0", "3.0.0", "2.0.0", "1.0.0"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("picked %v, want %v", got, want)
 	}
 }

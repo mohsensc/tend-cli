@@ -65,7 +65,6 @@ func TestFirst(t *testing.T) {
 		{ID: "npm/moment@", Kind: core.Deprecation, Deps: []core.Dep{moment}, Options: []core.Option{{Title: "Migrate to dayjs"}}},
 		{ID: "npm/request->undici@6.19.8", Kind: core.Deprecation, Deps: []core.Dep{request}, ToName: "undici", To: "6.19.8", Sites: many},
 		{ID: "npm/vitest@3.2.4", Kind: core.Breaking, Level: "major", Deps: []core.Dep{vitest}, To: "3.2.4", Sites: []core.Site{site("test/a.test.js", 1)}},
-		// deprecated and unused: the first PR removes it rather than moves off it
 		{ID: "npm/left-pad@1.3.0", Kind: core.Deprecation, Deps: []core.Dep{pad}, To: "1.3.0", Evidence: []core.Evidence{{Source: "registry"}}},
 	}}
 
@@ -181,9 +180,11 @@ func TestTier(t *testing.T) {
 	site := func(file string) core.Site { return core.Site{File: file, Line: 1} }
 	lib := core.Dep{Ecosystem: core.Npm, Name: "lib", Version: "1.0.0", Direct: true}
 	tool := core.Dep{Ecosystem: core.Npm, Name: "webpack", Version: "4.0.0", Direct: true, Dev: true}
-	var many []core.Site
+	runner := core.Dep{Ecosystem: core.Npm, Name: "vitest", Version: "1.6.0", Direct: true, Dev: true}
+	var many, tests []core.Site
 	for i := range Spread + 1 {
 		many = append(many, core.Site{File: "src/a.js", Line: i + 1})
+		tests = append(tests, core.Site{File: fmt.Sprintf("test/%d.test.js", i), Line: 1})
 	}
 	for _, tt := range []struct {
 		name string
@@ -191,7 +192,12 @@ func TestTier(t *testing.T) {
 		want int
 	}{
 		{"security", core.Change{Kind: core.Security, Deps: []core.Dep{lib}, To: "1.0.1"}, Fixes},
-		{"security past Spread", core.Change{Kind: core.Security, Deps: []core.Dep{lib}, To: "2.0.0", Sites: many}, Migrations},
+		{"security past Spread", core.Change{Kind: core.Security, Level: "major", Deps: []core.Dep{lib}, To: "2.0.0", Sites: many}, Migrations},
+		{"security patch of a wide package", core.Change{Kind: core.Security, Level: "patch", Deps: []core.Dep{lib}, To: "1.0.1", Sites: many}, Fixes},
+		{"minor of a wide package", core.Change{Kind: core.Update, Level: "minor", Deps: []core.Dep{lib}, To: "1.1.0", Sites: many}, Majors},
+		{"test runner minor in many tests", core.Change{Kind: core.Update, Level: "minor", Deps: []core.Dep{runner}, To: "1.7.0", Sites: tests}, Runtimes},
+		{"test runner major in many tests", core.Change{Kind: core.Breaking, Level: "major", Deps: []core.Dep{runner}, To: "3.0.0", Sites: tests}, Migrations},
+		{"unsafe option past Spread", core.Change{Kind: core.Security, Level: "patch", Deps: []core.Dep{lib}, To: "1.0.1", Sites: many, Options: []core.Option{{Title: "Rewrite the calls"}}}, Migrations},
 		{"api", core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "x"}}, Fixes},
 		{"deprecated version", core.Change{Kind: core.Deprecation, Deps: []core.Dep{lib}, To: "2.0.0"}, Fixes},
 		{"no single replacement", core.Change{Kind: core.Deprecation, Deps: []core.Dep{lib}}, Migrations},

@@ -41,13 +41,16 @@ type outcome struct {
 	Proof    *core.Proof   `json:"proof"`
 	Vetting  *core.Vetting `json:"vetting"`
 	Notes    []string      `json:"notes"`
+	Summary  string        `json:"summary"`
+	Detail   string        `json:"detail,omitempty"`
 
-	line string
-	code int
+	code   int
+	parked bool // unproven, and the change waits in the tracking issue to be tried again
+
 }
 
 func run(ctx context.Context, e Env, o opts) int {
-	s, err := open(ctx, e, o)
+	s, err := open(ctx, e, o, false)
 	if err != nil {
 		return fail(e, err)
 	}
@@ -69,8 +72,30 @@ func (s *session) report(res *outcome) int {
 	if !s.o.quiet && res.Body != "" && (res.Action == "dry-run" || res.Action == "branch") {
 		fmt.Fprintf(s.e.Stdout, "%s\n\n%s\n", res.Title, strings.TrimRight(res.Body, "\n"))
 	}
-	fmt.Fprintf(s.e.Stdout, "tend: %s\n", res.line)
+	line := res.Summary
+	if s.o.keep && res.Worktree != "" && res.Action != "dry-run" {
+		line += "; the worktree is kept at " + res.Worktree
+	}
+	fmt.Fprintf(s.e.Stdout, "tend: %s\n", line)
+	if s.listed(res) {
+		where := "the tracking issue"
+		if n := s.st.Issue.Number; n != 0 {
+			where = fmt.Sprintf("#%d", n)
+		}
+		fmt.Fprintf(s.e.Stdout, "::warning title=tend::%s; listed in %s\n", res.Summary, where)
+		return exitOK
+	}
 	return res.code
+}
+
+// listed says whether an unproven outcome is already in hand: the change
+// waits in the tracking issue for its next try, and the run is a scheduled
+// Action, where a failed job each time the base moves says nothing the
+// issue does not, and buries the failures that do need someone.
+// TEND_FAIL_ON_UNPROVEN=true keeps the failure.
+func (s *session) listed(res *outcome) bool {
+	_, tracked := s.forge.(core.Tracker)
+	return res.parked && tracked && !s.o.dryRun && s.e.Getenv("GITHUB_ACTIONS") == "true" && s.e.Getenv("TEND_FAIL_ON_UNPROVEN") != "true"
 }
 
 // pass is one run: plan, pick, patch, prove, vet, deliver.
@@ -79,6 +104,12 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 		return nil, fmt.Errorf("%s is not a git repository", s.root)
 	}
 	s.notice(ctx)
+	if err := s.reach(ctx); err != nil {
+		return nil, fmt.Errorf("forge: %w", err)
+	}
+	if s.noRepo && s.cfg.Deliver.Mode == "pr" && !s.o.dryRun {
+		return nil, errors.New(s.why)
+	}
 	if s.forge == nil && s.cfg.Deliver.Mode == "pr" && !s.o.dryRun {
 		s.logf("%s, so this run ends at a local branch", s.why)
 	}
@@ -99,32 +130,54 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 	if err != nil {
 		return nil, fmt.Errorf("forge: %w", err)
 	}
-	rev := s.baseRev(ctx, baseRef, true)
+	rev, err := s.baseRev(ctx, baseRef, true)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if !hasCommit(ctx, s.root, "HEAD") {
+			return noCommits(), nil
+		}
+		return nil, err
+	}
 	// Commit mode builds on the branch it pushes to, so what lands is a
-	// fast-forward to the very tree that was proven.
+	// fast-forward to the very tree that was proven. A branch that does not
+	// exist yet starts from the base.
 	if c := s.cfg.Deliver; c.Mode == "commit" && c.Branch != "" && c.Branch != baseRef {
-		if r := s.baseRev(ctx, c.Branch, true); r != "HEAD" {
+		if r, err := s.baseRev(ctx, c.Branch, true); err == nil {
 			rev = r
 		}
 	}
 	sha, err := gitx.Run(ctx, s.root, "rev-parse", "--verify", rev+"^{commit}")
 	if err != nil {
-		if _, herr := gitx.Run(ctx, s.root, "rev-parse", "--verify", "--quiet", "HEAD"); herr != nil {
-			return &outcome{Action: "nothing", line: "nothing to watch: the repository has no commits"}, nil
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if !hasCommit(ctx, s.root, "HEAD") {
+			return noCommits(), nil
 		}
 		return nil, err
+	}
+	if head, err := gitx.Run(ctx, s.root, "rev-parse", "--verify", "HEAD^{commit}"); err == nil && head != sha {
+		s.logf("working on %s at %s, not the checkout at %s", rev, core.Short(sha), core.Short(head))
 	}
 	wt, err := verify.Checkout(ctx, s.root, filepath.Join(s.dir, "wt", dirName(sha)), sha)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create the worktree: %w", err)
 	}
-	if !s.o.keep && !s.o.dryRun {
-		defer func() {
+	for _, dir := range []string{"wt", "baseline"} {
+		if err := verify.Sweep(ctx, s.root, filepath.Join(s.dir, dir), wt.Dir); err != nil {
+			s.logf("cannot remove the worktrees earlier runs left: %v", err)
+		}
+	}
+	kept := s.o.keep
+	defer func() {
+		if !kept {
 			if err := wt.Remove(context.WithoutCancel(ctx)); err != nil {
 				s.logf("cannot remove the worktree %s: %v", wt.Dir, err)
 			}
-		}()
-	}
+		}
+	}()
 
 	r := &runner{s: s, wt: wt, baseRef: baseRef, ecos: ecosFor(s.cfg)}
 	// The base commit's run comes first: what the runtimes say is deprecated
@@ -150,15 +203,31 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 	}
 	if len(inv.Manifests) == 0 && len(inv.Providers) == 0 && len(p.Untracked) == 0 {
 		s.save()
-		return &outcome{Action: "nothing", line: "nothing to watch: no manifests or API calls found in " + s.root}, nil
+		res := &outcome{Action: "nothing", Summary: s.nothing()}
+		if kept {
+			res.Worktree = wt.Dir
+		}
+		return res, nil
 	}
+	stage := s.st.Stage
 	if err := s.onboard(ctx, inv, p, wt.Base); err != nil {
 		return nil, err
 	}
+	if s.st.Stage == plan.Last && stage != plan.Last {
+		s.logf("the catch-up is done; from here on tend works one change at a time")
+	}
 	r.inv, r.p = inv, p
 	res, err := r.work(ctx)
+	if err == nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		return nil, err
+	}
+	kept = kept || s.o.dryRun && (res.Action == "dry-run" || res.Action == "unproven")
+	res.Worktree = ""
+	if kept {
+		res.Worktree = wt.Dir
 	}
 	res.Notes = append(res.Notes, p.Notes...)
 	// A dry run does not move the API baseline forward.
@@ -168,6 +237,10 @@ func (s *session) pass(ctx context.Context) (*outcome, error) {
 	s.track(ctx, p, wt.Base)
 	s.save()
 	return res, nil
+}
+
+func noCommits() *outcome {
+	return &outcome{Action: "nothing", Summary: "nothing to watch: the repository has no commits"}
 }
 
 // ecosFor is every ecosystem tend.yml turns on, by name.
@@ -277,14 +350,14 @@ func (r *runner) work(ctx context.Context) (*outcome, error) {
 		if n := len(p.Queue); n > 0 {
 			line += fmt.Sprintf("; %d queued behind it", n)
 		}
-		return &outcome{Action: "waiting", PR: wait, line: line}, nil
+		return &outcome{Action: "waiting", PR: wait, Summary: line}, nil
 	}
 	if pick == nil {
-		return &outcome{Action: "nothing", line: "up to date"}, nil
+		return &outcome{Action: "nothing", Summary: "up to date"}, nil
 	}
 	if p.Open != nil && preempt == nil && deliver.Foreign(r.comments) {
 		line := fmt.Sprintf("waiting on PR #%d (%s), whose branch has commits tend did not push", p.Open.Number, p.Open.Title)
-		return &outcome{Action: "waiting", PR: p.Open, line: line}, nil
+		return &outcome{Action: "waiting", PR: p.Open, Summary: line}, nil
 	}
 	if hasCmd && cmd.Verb == "apply" && !r.option(ctx, pick, cmd) {
 		hasCmd = false
@@ -293,7 +366,7 @@ func (r *runner) work(ctx context.Context) (*outcome, error) {
 		r.cmdAt = cmd.At
 	}
 	if r.upToDate(pick, preempt, cmd, hasCmd) {
-		return &outcome{Action: "up-to-date", Change: pick, PR: p.Open, line: fmt.Sprintf("waiting on PR #%d (%s), which is up to date", p.Open.Number, p.Open.Title)}, nil
+		return &outcome{Action: "up-to-date", Change: pick, PR: p.Open, Summary: fmt.Sprintf("waiting on PR #%d (%s), which is up to date", p.Open.Number, p.Open.Title)}, nil
 	}
 	s.logf("working on %s (%s)", strings.TrimSpace(subject(pick)+" "+target(pick)), pick.Kind)
 
@@ -335,6 +408,9 @@ func (r *runner) declined(ctx context.Context, pick *core.Change, preempt, wait 
 		pr, err := s.forge.FindPR(ctx, deliver.Branch(pick))
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("forge: %w", err)
+		}
+		if pr != nil && !deliver.Carries(pr, pick) {
+			pr = nil
 		}
 		no, err := deliver.Declined(ctx, s.forge, pr)
 		if err != nil {
@@ -378,7 +454,7 @@ func (r *runner) upToDate(pick *core.Change, preempt *core.PR, cmd plan.Command,
 		return false
 	}
 	id, base, _, ok := deliver.ParseMarker(open.Body)
-	if !ok || id != pick.ID || base != r.wt.Base || !holds(s.st.Open, open, pick) {
+	if !ok || id != pick.ID || base != r.wt.Base || r.baseRef != "" && open.Base != "" && open.Base != r.baseRef || !holds(s.st.Open, open, pick) {
 		return false
 	}
 	return !hasCmd || s.st.Open == nil || !cmd.At.After(s.st.Open.At)
@@ -498,10 +574,14 @@ func (r *runner) change(ctx context.Context, ch *core.Change, preempt *core.PR) 
 func (r *runner) options(ch *core.Change, cmds core.Commands, proof *core.Proof) patch.Options {
 	s := r.s
 	o := patch.Options{Ecos: r.ecos, Index: r.inv.Index, Model: r.model, Attempts: s.cfg.Model.Attempts, Option: r.pick, Proven: !proof.Nothing, Log: s.logf}
-	if _, ok := r.model.(model.Agent); ok && !proof.Nothing {
-		o.Commands, o.Turns, o.Tokens = cmds, s.cfg.Model.Turns, s.cfg.Model.Tokens
+	if proof.Nothing {
+		return o
+	}
+	o.Commands = cmds
+	o.Prove = func(ctx context.Context, c core.Commands) (*core.Run, error) { return r.prove(ctx, c, "patched") }
+	if _, ok := r.model.(model.Agent); ok {
+		o.Turns, o.Tokens = s.cfg.Model.Turns, s.cfg.Model.Tokens
 		o.Transcript = filepath.Join(s.dir, "logs", r.slug, "agent.jsonl")
-		o.Prove = func(ctx context.Context, c core.Commands) (*core.Run, error) { return r.prove(ctx, c, "patched") }
 		scale(&o, shares(ch))
 	}
 	return o
@@ -586,7 +666,7 @@ func (r *runner) prove(ctx context.Context, cmds core.Commands, name string) (*c
 	if s.o.verbose {
 		o.Stream = s.e.Stderr
 	}
-	s.logf("proving %s: %s", name, strings.Join(slices.Concat(cmds.Install, cmds.Build, cmds.Test), " && "))
+	s.logf("proving %s: %s", name, showSteps(slices.Concat(cmds.Install, cmds.Build, cmds.Test)))
 	run, err := verify.Run(ctx, r.wt, o)
 	if err != nil {
 		return nil, err
@@ -596,7 +676,8 @@ func (r *runner) prove(ctx context.Context, cmds core.Commands, name string) (*c
 
 // discard puts the worktree back to what is staged: whatever the build and
 // tests wrote (a binary, a regenerated file) is not part of the patch.
-// Ignored files such as installed dependencies stay.
+// Ignored files stay, and so do installed dependencies such as
+// node_modules, which tend's worktrees ignore whatever .gitignore says.
 func discard(ctx context.Context, wt *verify.Worktree) error {
 	if _, err := gitx.Run(ctx, wt.Dir, "checkout", "--quiet", "--", "."); err != nil {
 		return err
@@ -608,7 +689,7 @@ func discard(ctx context.Context, wt *verify.Worktree) error {
 // baseline runs the commands on the base commit in a worktree of its own,
 // once per base: a base that already fails is shown next to the patch. A
 // failing base runs twice before it is kept, so one flaky install does not
-// stand for the whole commit.
+// stand for the whole commit, unless a command it needs is missing.
 func (r *runner) baseline(ctx context.Context, cmds core.Commands) *core.Run {
 	s, sha := r.s, r.wt.Base
 	if b := s.st.Baseline; b != nil && b.Sha == sha {
@@ -616,7 +697,9 @@ func (r *runner) baseline(ctx context.Context, cmds core.Commands) *core.Run {
 	}
 	bwt, err := verify.Checkout(ctx, s.root, filepath.Join(s.dir, "baseline", dirName(sha)), sha)
 	if err != nil {
-		s.logf("baseline: %v", err)
+		if ctx.Err() == nil {
+			s.logf("baseline: %v", err)
+		}
 		return nil
 	}
 	defer func() {
@@ -626,9 +709,12 @@ func (r *runner) baseline(ctx context.Context, cmds core.Commands) *core.Run {
 	}()
 	br := &runner{s: s, wt: bwt, listen: r.listen}
 	run, err := br.prove(ctx, cmds, "base")
-	if err == nil && !run.Pass {
+	if err == nil && !run.Pass && ctx.Err() == nil && !missing(run) {
 		s.logf("the base fails at %s; running it once more", run.Last().Cmd)
 		run, err = br.prove(ctx, cmds, "base")
+	}
+	if ctx.Err() != nil {
+		return nil
 	}
 	if err != nil {
 		s.logf("baseline: %v", err)
@@ -637,6 +723,56 @@ func (r *runner) baseline(ctx context.Context, cmds core.Commands) *core.Run {
 	s.st.Baseline = &state.BaseRun{Sha: sha, Run: run}
 	s.save()
 	return run
+}
+
+// runtimeOf is the command that says which version of a runtime the
+// project's commands run on, by the ecosystem that needs it.
+var runtimeOf = map[string][2]string{
+	core.Npm: {"node", "node --version"},
+	core.Pip: {"python", "python3 --version"},
+	core.Go:  {"go", "go env GOVERSION"},
+}
+
+// runtimes says what the proof ran on, one line per runtime the project's
+// manifests need: a pin a change moves is proven only on what was there.
+func (r *runner) runtimes(ctx context.Context) []string {
+	run := r.s.e.Runtime
+	if run == nil || r.inv == nil {
+		return nil
+	}
+	var res []string
+	seen := map[string]bool{}
+	for _, m := range r.inv.Manifests {
+		rt, ok := runtimeOf[m.Ecosystem]
+		if !ok || seen[rt[0]] {
+			continue
+		}
+		seen[rt[0]] = true
+		if f := strings.Fields(run(ctx, r.wt.Dir, rt[1])); len(f) > 0 {
+			res = append(res, rt[0]+" "+strings.TrimPrefix(f[len(f)-1], "go"))
+		}
+	}
+	return res
+}
+
+// showSteps writes the proof's steps as one shell line that runs them the
+// same way: a step that changes directory does so in a subshell of its own.
+func showSteps(steps []string) string {
+	out := make([]string, len(steps))
+	for i, st := range steps {
+		if strings.HasPrefix(st, "cd ") {
+			st = "(" + st + ")"
+		}
+		out[i] = st
+	}
+	return strings.Join(out, " && ")
+}
+
+// missing says whether run stopped because a command it needs is not there,
+// which running it again does not change.
+func missing(run *core.Run) bool {
+	st := run.Last()
+	return st != nil && (st.Exit == 126 || st.Exit == 127)
 }
 
 func (r *runner) vet(ctx context.Context, ch *core.Change, pt *core.Patch, proof *core.Proof) (*core.Vetting, error) {
@@ -702,10 +838,13 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 	if s.forge == nil && cfg.Mode == "pr" {
 		in.Notes = append(in.Notes, "Prepared without a pull request: "+s.why+".")
 	}
+	if proof != nil && !proof.Nothing && proof.Container == "" {
+		proof.Runtimes = r.runtimes(ctx)
+	}
 	res := &outcome{Change: ch, Proof: proof, Vetting: vt, Title: deliver.Title(in, cfg.TitlePrefix), Worktree: wt.Dir, Branch: deliver.Branch(ch)}
 	res.Body = deliver.Body(in)
 	if s.o.dryRun {
-		res.Action, res.line = "dry-run", "dry run; the worktree is kept at "+wt.Dir
+		res.Action, res.Summary = "dry-run", "dry run; until the next run, the worktree is kept at "+wt.Dir
 		return res, nil
 	}
 	// A commit goes in with nobody to read it first, so only a proven one does.
@@ -744,14 +883,17 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 			s.st.Open.Stage = ch.Batch.Stage
 		}
 		res.Action, res.Branch = "committed", branch
-		res.line = fmt.Sprintf("committed %s to %s: %s", core.Short(res.Commit), branch, res.Title)
+		res.Summary = fmt.Sprintf("committed %s to %s: %s", core.Short(res.Commit), branch, res.Title)
 	case s.forge == nil || s.remote == "":
 		if _, err := gitx.Run(ctx, wt.Dir, "branch", "--force", res.Branch, "HEAD"); err != nil {
 			return nil, err
 		}
 		why := cmp.Or(s.why, "no remote to push to")
 		res.Action = "branch"
-		res.line = fmt.Sprintf("branch %s has the change; %s, so no pull request was opened", res.Branch, why)
+		if s.cfg.Deliver.Mode == "pr" && s.remote != "" && s.noToken {
+			res.code = exitUndelivered
+		}
+		res.Summary = fmt.Sprintf("branch %s has the change; %s, so no pull request was opened", res.Branch, why)
 	default:
 		last := ""
 		if o := s.st.Open; o != nil && o.ID == ch.ID && o.Branch == res.Branch {
@@ -767,8 +909,11 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 		if err != nil {
 			return r.undelivered(ch, res, err)
 		}
-		res.Action, res.PR = "opened", pr
-		if r.p.Open != nil && r.p.Open.Number == pr.Number {
+		res.Action, res.PR, res.Commit = "opened", pr, cmp.Or(pr.Head, sha)
+		switch o := r.p.Open; {
+		case o != nil && o.Number == pr.Number && o.Body == pr.Body && o.Title == pr.Title:
+			res.Action = "up-to-date"
+		case o != nil && o.Number == pr.Number:
 			res.Action = "updated"
 		}
 		s.st.Open = &state.OpenPR{ID: ch.ID, PR: pr.Number, Branch: pr.Branch, Base: pr.Base, Commit: cmp.Or(pr.Head, sha), At: now}
@@ -779,7 +924,10 @@ func (r *runner) deliver(ctx context.Context, ch *core.Change, pt *core.Patch, p
 			delete(s.st.Parked, ch.ID)
 		}
 		res.Body = pr.Body
-		res.line = fmt.Sprintf("%s #%d %s %s", res.Action, pr.Number, pr.Title, pr.URL)
+		res.Summary = fmt.Sprintf("%s #%d %s %s", res.Action, pr.Number, pr.Title, pr.URL)
+		if res.Action == "up-to-date" {
+			res.Summary = fmt.Sprintf("#%d %s is up to date %s", pr.Number, pr.Title, pr.URL)
+		}
 		if preempt != nil {
 			if err := deliver.Replaced(ctx, s.forge, preempt.Number, pr.Number); err != nil {
 				s.logf("cannot point #%d at #%d: %v", preempt.Number, pr.Number, err)
@@ -795,11 +943,11 @@ func (r *runner) undelivered(ch *core.Change, res *outcome, err error) (*outcome
 	s := r.s
 	switch {
 	case errors.Is(err, deliver.ErrMoved):
-		res.Action, res.line = "moved", err.Error()+"; the next run does the change again on the new tip"
+		res.Action, res.Summary, res.Detail = "moved", err.Error()+"; the next run does the change again on the new tip", err.Error()
 		return res, nil
 	case errors.Is(err, deliver.ErrForeign):
 		res.Action, res.PR = "waiting", r.p.Open
-		res.line = err.Error() + "; tend leaves that PR alone"
+		res.Summary, res.Detail = err.Error()+"; tend leaves that PR alone", err.Error()
 		return res, nil
 	case errors.Is(err, deliver.ErrRefused):
 		s.st.Fail(ch.ID, err.Error(), r.wt.Base, s.e.Now())
@@ -826,7 +974,7 @@ func (r *runner) unproven(ch *core.Change, detail string) *outcome {
 	if !s.o.quiet && strings.Contains(detail, "\n") {
 		fmt.Fprintf(s.e.Stderr, "%s\n", detail)
 	}
-	return &outcome{Action: "unproven", Change: ch, line: fmt.Sprintf("could not prove %s: %s", ch.ID, first), code: exitUnproven}
+	return &outcome{Action: "unproven", Change: ch, Worktree: r.wt.Dir, Summary: fmt.Sprintf("could not prove %s: %s", ch.ID, first), Detail: detail, code: exitUnproven, parked: true}
 }
 
 func failure(run *core.Run) string {
@@ -894,11 +1042,25 @@ func (s *session) skip(ctx context.Context, pr *core.PR, id string, c plan.Comma
 	if err := s.forge.ClosePR(ctx, pr.Number); err != nil {
 		return err
 	}
+	s.dropBranch(ctx, pr)
 	s.st.Parked[id] = state.Parked{PR: pr.Number, Reason: "rejected", To: core.TargetOf(id), At: s.e.Now()}
 	s.st.See(id, "parked", fmt.Sprintf("#%d skipped by @%s", pr.Number, c.Author), s.e.Now())
 	s.st.Open = nil
 	s.logf("skipped %s as @%s asked", id, c.Author)
 	return nil
+}
+
+// dropBranch deletes the branch of a PR tend just closed, as Dependabot
+// does: only while it holds the commit tend last pushed, so work someone
+// added to it stays. Failing to is logged, never fatal.
+func (s *session) dropBranch(ctx context.Context, pr *core.PR) {
+	o := s.st.Open
+	if s.push == nil || s.cfg.Deliver.Mode != "pr" || o == nil || o.PR != pr.Number || o.Branch == "" {
+		return
+	}
+	if err := deliver.DeleteBranch(ctx, s.push, o.Branch, o.Commit); err != nil {
+		s.logf("kept the branch %s of #%d: %v", o.Branch, pr.Number, err)
+	}
 }
 
 // displace closes the PR a new one is about to replace: the same change at an
@@ -918,6 +1080,7 @@ func (s *session) displace(ctx context.Context, old *core.PR, oldID string, ch *
 	if err := deliver.Close(ctx, s.forge, old.Number, msg); err != nil {
 		return err
 	}
+	s.dropBranch(ctx, old)
 	if !same && oldID != "" {
 		s.st.Parked[oldID] = state.Parked{PR: old.Number, Reason: "preempted", To: core.TargetOf(oldID), At: s.e.Now()}
 	}
@@ -944,12 +1107,13 @@ func folded(b *core.Batch, id string) string {
 // notice prints one line a day at most when a newer release of tend exists.
 func (s *session) notice(ctx context.Context) {
 	rel := &s.st.Release
-	if s.e.Now().Sub(rel.Checked) >= 24*time.Hour {
-		info, err := selfupdate.Latest(ctx, s.fetch, s.e.Version)
-		rel.Checked, rel.Tag = s.e.Now(), ""
-		if err == nil && info.Newer {
-			rel.Tag = info.Tag
-		}
+	if s.e.Now().Sub(rel.Checked) < 24*time.Hour {
+		return
+	}
+	info, err := selfupdate.Latest(ctx, s.fetch, s.e.Version)
+	rel.Checked, rel.Tag = s.e.Now(), ""
+	if err == nil && info.Newer {
+		rel.Tag = info.Tag
 	}
 	if rel.Tag != "" && !s.o.quiet && newer(rel.Tag, s.e.Version) {
 		fmt.Fprintf(s.e.Stderr, "tend: %s is available; run tend update\n", rel.Tag)

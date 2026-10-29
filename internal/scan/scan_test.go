@@ -109,6 +109,9 @@ func TestIsTest(t *testing.T) {
 		{"main.go", false},
 		{"src/billing.test.js", true},
 		{"src/billing.spec.tsx", true},
+		{"typings/index.test-d.ts", true},
+		{"index.spec-d.ts", true},
+		{"typings/index.d.ts", false},
 		{"src/__tests__/billing.js", true},
 		{"test/billing.js", true},
 		{"src/billing.js", false},
@@ -127,6 +130,13 @@ func TestIsTest(t *testing.T) {
 		{"Acme.Billing/Charge.cs", false},
 		{"testdata/projects/x/package.json", true},
 		{"contest/entry.go", false},
+		{"test.js", true},
+		{"tests.js", true},
+		{"packages/foo/test.mjs", true},
+		{"test.py", true},
+		{"app/tests.py", true},
+		{"latest.js", false},
+		{"contests.py", false},
 	}
 	for _, tt := range tests {
 		if got := IsTest(tt.path); got != tt.want {

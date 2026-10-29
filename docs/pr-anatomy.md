@@ -106,7 +106,7 @@ reading: the one that failed, else the last that ran. If the project has no
 build or test command, the section says so instead of showing an empty table.
 Two lines under the table matter:
 
-- "Tests already fail on `main@abc1234`, so this PR is a draft." The baseline was red before tend touched anything. The PR still opens, as a draft, with both columns visible.
+- "`npm test` already fails on `main@abc1234`, so this PR is a draft." The baseline was red before tend touched anything, at the step named. The PR still opens, as a draft, with both columns visible. When the change makes that step pass, it says so instead, and the output below is the base's failure.
 - "The baseline could not be run." There is nothing to compare the patched column with.
 
 **Vetting.** One line per check, saying what it verified: `scope: 3 files,
@@ -249,7 +249,7 @@ go:
 
 ### Deprecated
 
-- `stripe` 14.2.0 → 16.0.0: 14.x is deprecated: charges.* was replaced by paymentIntents.*
+- `stripe` 14.2.0 → 16.0.0: 14.x is deprecated: charges.\* was replaced by paymentIntents.\*
   - `src/billing.js:42` `const c = await stripe.charges.create({ amount: order.total })` → `const c = await stripe.paymentIntents.create({ amount: order.total })`
   - `src/billing.js:88` `return stripe.charges.retrieve(id)` → `return stripe.paymentIntents.retrieve(id)`
 
@@ -270,8 +270,9 @@ Possibly unused, kept: these look unused, but tend cannot prove it, so they are 
 Each comes as a pull request of its own once this one is merged, proven the same way.
 
 2. Runtimes and build tooling
+   - Carried over from an earlier stage, where they could not be made or proven, and tried again here:
+     - `axios` 0.27.2 → 1.12.0: with it in the batch, `npm test` fails (exit 1).
    - `nodejs` 18.20.4 → 22.20.0 in `.nvmrc`: Node.js 18 reached end of life on 2025-04-30.
-   - `axios` 0.27.2 → 1.12.0: with it in the batch, `npm test` fails (exit 1).
 3. Major upgrades
    - `vitest` 1.6.0 → 3.2.4: a new major release.
 4. Migrations and replacements

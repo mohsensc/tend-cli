@@ -38,6 +38,9 @@ type State struct {
 	Stage   int `json:",omitempty"`
 	Issue   Issue
 	Updated time.Time
+	// Discarded says why the state on disk could not be used, when Open set
+	// it aside and started fresh; "" when it loaded.
+	Discarded string `json:"-"`
 
 	path string
 }
@@ -47,6 +50,10 @@ type Seen struct {
 	Verdict     string // noise|ignored|cooldown|parked|queued|delivered|unsupported
 	Detail      string `json:",omitempty"`
 	Base        string `json:",omitempty"` // unsupported: the base commit tend failed on
+	// Failed and FailedBase keep why the change could not be made, and on
+	// which base, while it waits to be tried again after the base moved.
+	Failed     string `json:",omitempty"`
+	FailedBase string `json:",omitempty"`
 }
 
 // BaseRun is the project's own commands run on a base commit.
@@ -155,18 +162,31 @@ func trimRepo(p string) string {
 func Dir(home, key string) string { return filepath.Join(home, "repos", key) }
 
 // Open loads the state of the repo with this key under home and returns it with
-// the repo's directory. A missing or empty state is a fresh one.
+// the repo's directory. A missing or empty state is a fresh one. The state
+// is a cache of what the forge and a re-run can tell again, so one that
+// cannot be read, or that a newer tend wrote, is set aside next to it and
+// replaced by a fresh one, and Discarded says why.
 func Open(home, key string) (*State, string, error) {
 	dir := Dir(home, key)
-	s := &State{path: filepath.Join(dir, "state.json")}
-	b, err := os.ReadFile(s.path)
+	path := filepath.Join(dir, "state.json")
+	s := &State{path: path}
+	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 	case err != nil:
-		return nil, "", err
+		return nil, "", fmt.Errorf("state: %w; run with --reset to start over", err)
 	case len(b) > 0:
+		aside, why := "", ""
 		if err := json.Unmarshal(b, s); err != nil {
-			return nil, "", fmt.Errorf("state: %s: %w", s.path, err)
+			aside, why = path+".corrupt", err.Error()
+		} else if s.Version > 1 {
+			aside, why = fmt.Sprintf("%s.v%d", path, s.Version), fmt.Sprintf("a newer tend wrote it (version %d)", s.Version)
+		}
+		if aside != "" {
+			if err := os.Rename(path, aside); err != nil {
+				return nil, "", fmt.Errorf("state: %s: %s, and it cannot be set aside: %w; run with --reset to start over", path, why, err)
+			}
+			s = &State{path: path, Discarded: fmt.Sprintf("%s: %s; kept it as %s", path, why, filepath.Base(aside))}
 		}
 	}
 	s.init()
@@ -223,6 +243,12 @@ func (s *State) See(id, verdict, detail string, now time.Time) {
 	res := Seen{First: prev.First, Last: now, Verdict: verdict, Detail: detail}
 	if verdict == prev.Verdict {
 		res.Base = prev.Base
+	}
+	switch {
+	case verdict == "queued" && prev.Verdict == "unsupported":
+		res.Failed, res.FailedBase = prev.Detail, prev.Base
+	case verdict == "queued":
+		res.Failed, res.FailedBase = prev.Failed, prev.FailedBase
 	}
 	s.Seen[id] = res
 }
@@ -283,9 +309,6 @@ func writeFile(path string, b []byte) error {
 	return err
 }
 
-// StaleAfter is how old a lock gets before another run may take it over.
-const StaleAfter = 2 * time.Hour
-
 var now = time.Now
 
 // Locked is the error Lock returns when another run holds the lock.
@@ -295,49 +318,13 @@ type Locked struct {
 }
 
 func (e *Locked) Error() string {
+	if e.PID == 0 {
+		return "another tend run holds the lock"
+	}
 	return fmt.Sprintf("another tend run holds the lock (pid %d, since %s)", e.PID, e.At.UTC().Format(time.RFC3339))
 }
 
 const lockName = "lock"
-
-// Lock takes the run lock in dir. A lock older than two hours is stale.
-// Releasing it leaves alone a lock another run took over in the meantime.
-func Lock(dir string) (release func(), err error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	p := filepath.Join(dir, lockName)
-	for range 2 {
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err == nil {
-			mine := fmt.Sprintf("%d %d\n", os.Getpid(), now().Unix())
-			_, err = f.WriteString(mine)
-			if cerr := f.Close(); err == nil {
-				err = cerr
-			}
-			if err != nil {
-				os.Remove(p)
-				return nil, err
-			}
-			return func() {
-				if b, err := os.ReadFile(p); err == nil && string(b) == mine {
-					os.Remove(p)
-				}
-			}, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		held := readLock(p)
-		if now().Sub(held.At) < StaleAfter {
-			return nil, held
-		}
-		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-	}
-	return nil, fmt.Errorf("state: cannot take %s", p)
-}
 
 // readLock falls back to the file's mtime when the lock has no readable
 // content yet: another run may be between creating and writing it.

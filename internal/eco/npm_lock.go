@@ -46,6 +46,7 @@ func npmReadLock(root string, m core.Manifest) (npmLock, error) {
 		lk, err = pnpmLock(src, member)
 	case "yarn.lock":
 		lk = yarnLock(src)
+		err = yarnWorkspaces(root, path.Dir(m.Lock), member, &lk)
 	default:
 		return none, nil
 	}
@@ -59,6 +60,66 @@ func npmReadLock(root string, m core.Manifest) (npmLock, error) {
 	}
 	lk.all = npmSortLocked(lk.all)
 	return lk, nil
+}
+
+// yarnWorkspaces marks the workspace packages under lockDir as links. A
+// classic lockfile has no entry for them and a member may require a sibling
+// by a plain range, so only their package.json files name them. For the
+// root it also records what the members require directly.
+func yarnWorkspaces(root, lockDir, member string, lk *npmLock) error {
+	files, err := walk(root, "package.json")
+	if err != nil {
+		return err
+	}
+	var members []string
+	for _, f := range files {
+		dir := path.Dir(f)
+		if dir == lockDir || lockDir != "." && !strings.HasPrefix(dir, lockDir+"/") || !npmMember(root, lockDir, memberDir(lockDir, dir)) {
+			continue
+		}
+		members = append(members, f)
+		var info struct {
+			Name string `json:"name"`
+		}
+		if readJSON(filepath.Join(root, filepath.FromSlash(f)), &info) == nil && info.Name != "" {
+			lk.links[info.Name] = true
+		}
+	}
+	if member != "" {
+		return nil
+	}
+	lk.members = map[string]bool{}
+	for _, f := range members {
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f)))
+		if err != nil {
+			continue
+		}
+		blocks, err := npmParse(src)
+		if err != nil {
+			continue
+		}
+		for _, e := range npmDirect(blocks) {
+			name, ok := npmRegistryName(e.key, e.req)
+			if !ok || lk.links[e.key] {
+				continue
+			}
+			if v := lk.resolve(e.key, e.req); v != "" {
+				lk.members[name+"@"+v] = true
+			}
+		}
+	}
+	return nil
+}
+
+// unreadLocks are lockfiles tend finds but cannot read or bring in line, so
+// it changes nothing their projects lock rather than leave them stale.
+var unreadLocks = map[string]bool{"bun.lock": true, "bun.lockb": true, "pdm.lock": true}
+
+func lockUnsupported(m core.Manifest) error {
+	if base := path.Base(m.Lock); m.Lock != "" && unreadLocks[base] {
+		return fmt.Errorf("%s: %s lockfiles are not supported: %w", m.Path, base, core.ErrNotSupported)
+	}
+	return nil
 }
 
 // memberDir is dir relative to the lockfile's dir, "" when they are the same.
@@ -103,6 +164,7 @@ func packageLock(src []byte, member string) (npmLock, error) {
 			Version              string            `json:"version"`
 			Dev                  bool              `json:"dev"`
 			Link                 bool              `json:"link"`
+			Resolved             string            `json:"resolved"`
 			Dependencies         map[string]string `json:"dependencies"`
 			DevDependencies      map[string]string `json:"devDependencies"`
 			OptionalDependencies map[string]string `json:"optionalDependencies"`
@@ -110,7 +172,7 @@ func packageLock(src []byte, member string) (npmLock, error) {
 		} `json:"packages"`
 		Dependencies map[string]packageLockV1 `json:"dependencies"`
 	}
-	if err := json.Unmarshal(src, &lf); err != nil {
+	if err := json.Unmarshal(stripBOM(src), &lf); err != nil {
 		return npmLock{}, err
 	}
 	lk := npmLock{links: map[string]bool{}, members: map[string]bool{}}
@@ -125,7 +187,7 @@ func packageLock(src []byte, member string) (npmLock, error) {
 			if p.Link {
 				lk.links[key] = true
 			}
-			if p.Link || !npmValid(p.Version) {
+			if p.Link || !npmValid(p.Version) || !npmRegistryTarball(p.Resolved) {
 				continue
 			}
 			byPath[k] = p.Version
@@ -173,6 +235,18 @@ func packageLock(src []byte, member string) (npmLock, error) {
 	return lk, nil
 }
 
+// npmRegistryTarball reports whether a package-lock resolved URL is a
+// registry's, <registry>/<name>/-/<base>-<version>.tgz, or is not recorded.
+// Git, file and other tarball URLs install packages no registry has.
+func npmRegistryTarball(resolved string) bool {
+	if resolved == "" {
+		return true
+	}
+	u, _, _ := strings.Cut(resolved, "?")
+	u, _, _ = strings.Cut(u, "#")
+	return (strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) && strings.Contains(u, "/-/") && strings.HasSuffix(u, ".tgz")
+}
+
 // pnpmRef is an importer entry: a bare version in lockfile v5, a
 // {specifier, version} mapping from v6 on.
 type pnpmRef string
@@ -191,16 +265,23 @@ func (r *pnpmRef) UnmarshalYAML(n *yaml.Node) error {
 }
 
 // version drops the peer suffix pnpm appends: 1.2.3(react@18.2.0) in v6 and
-// later, 1.2.3_react@18.2.0 in v5. Links and other protocols are not versions.
+// later, 1.2.3_react@18.2.0 in v5. An alias refers to the package it
+// installs by its key: bar@1.2.3 in v9, /bar@1.2.3 in v6, /bar/1.2.3 in v5.
+// Links and other protocols are not versions.
 func (r pnpmRef) version() string {
 	s := string(r)
 	if i := strings.IndexAny(s, "(_"); i >= 0 {
 		s = s[:i]
 	}
-	if !npmValid(s) {
-		return ""
+	if npmValid(s) {
+		return s
 	}
-	return s
+	for _, major := range []int{5, 9} {
+		if _, v, ok := pnpmKey(string(r), major); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 type pnpmImporter struct {
@@ -419,11 +500,15 @@ func yarnLock(src []byte) npmLock {
 			}
 		case specs != nil:
 			v := strings.Trim(strings.TrimSpace(line[len("  version"):]), `:"' `)
+			workspace := slices.ContainsFunc(specs, func(spec string) bool {
+				_, rng, ok := yarnSpec(spec)
+				return ok && strings.HasPrefix(rng, "workspace:")
+			})
 			for _, spec := range specs {
 				name, rng, ok := yarnSpec(spec)
 				switch {
 				case !ok:
-				case strings.HasPrefix(rng, "workspace:"):
+				case workspace:
 					lk.links[name] = true
 				case !strings.Contains(rng, ":") && npmValid(v):
 					bySpec[name+"@"+rng] = v
@@ -466,4 +551,102 @@ func yarnSpec(spec string) (name, rng string, ok bool) {
 		return "", "", false
 	}
 	return s[:i], strings.TrimPrefix(s[i+1:], "npm:"), true
+}
+
+// yarnHeads are the specifiers a yarn v1 lock entry's header names, as
+// written: `"ms@2.1.2", ms@^2.1.3:`.
+func yarnHeads(line string) []string {
+	var res []string
+	for _, s := range strings.Split(strings.TrimSuffix(strings.TrimRight(line, "\r"), ":"), ", ") {
+		res = append(res, strings.Trim(s, `"`))
+	}
+	return res
+}
+
+// yarnNames says whether every specifier of a header is one of name: by its
+// own name, or the package an npm: alias points at.
+func yarnNames(line, name string) bool {
+	for _, spec := range yarnHeads(line) {
+		n, rng, ok := yarnSpec(spec)
+		if !ok {
+			return false
+		}
+		if real, _, ok := yarnSpec(rng); ok && strings.HasPrefix(spec[len(n)+1:], "npm:") {
+			n = real
+		}
+		if n != name {
+			return false
+		}
+	}
+	return true
+}
+
+// yarnDrop removes the yarn v1 lock entries of name, so the next install
+// resolves it again, to the newest release its ranges allow. yarn v1 has no
+// command that updates one package of the lockfile alone.
+func yarnDrop(root, lock, name string) error {
+	p := filepath.Join(root, filepath.FromSlash(lock))
+	src, err := os.ReadFile(p)
+	if err != nil {
+		return err
+	}
+	var out strings.Builder
+	drop, dropped := false, 0
+	for _, l := range strings.SplitAfter(string(src), "\n") {
+		t := strings.TrimRight(l, "\r\n")
+		switch {
+		case t != "" && t[0] != ' ' && t[0] != '#':
+			drop = yarnNames(t, name)
+			if drop {
+				dropped++
+			}
+		case t == "" && drop:
+			drop = false
+			continue
+		}
+		if !drop {
+			out.WriteString(l)
+		}
+	}
+	if dropped == 0 {
+		return fmt.Errorf("%s has no entry for %s", lock, name)
+	}
+	return writeKeepMode(p, []byte(out.String()))
+}
+
+// yarnAlias adds the specifier add to the yarn v1 lock entry whose header
+// names have, so an install with add in package.json keeps that entry, and
+// with it the version have locked. It reports whether there was one.
+func yarnAlias(root, lock, have, add string) (bool, error) {
+	p := filepath.Join(root, filepath.FromSlash(lock))
+	src, err := os.ReadFile(p)
+	if err != nil {
+		return false, err
+	}
+	lines := strings.SplitAfter(string(src), "\n")
+	for i, l := range lines {
+		t := strings.TrimRight(l, "\r\n")
+		if t == "" || t[0] == ' ' || t[0] == '#' || !slices.Contains(yarnHeads(t), have) {
+			continue
+		}
+		if slices.Contains(yarnHeads(t), add) {
+			return true, nil
+		}
+		lines[i] = strings.TrimSuffix(t, ":") + ", " + yarnKey(add) + ":" + l[len(t):]
+		return true, writeKeepMode(p, []byte(strings.Join(lines, "")))
+	}
+	return false, nil
+}
+
+// yarnKey writes a specifier the way yarn v1 does: quoted when it would not
+// read back bare.
+func yarnKey(s string) string {
+	bare := s != "" && (s[0] >= 'a' && s[0] <= 'z' || s[0] >= 'A' && s[0] <= 'Z') && !strings.ContainsAny(s, ": \t\n\\\",[]")
+	for _, w := range []string{"true", "false", "null"} {
+		bare = bare && !strings.HasPrefix(s, w)
+	}
+	if bare {
+		return s
+	}
+	return strconv.Quote(s)
 }

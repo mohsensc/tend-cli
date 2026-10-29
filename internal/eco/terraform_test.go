@@ -84,12 +84,12 @@ func TestTerraformConstraint(t *testing.T) {
 		{"<= 4.2", "5.0.0", "<= 5.0.0"},
 	}
 	for _, tt := range tests {
-		got, err := fixReq(tt.c, tt.to, false)
+		got, err := fixReq(tt.c, tt.to, anyDialect)
 		if err != nil || got != tt.want {
 			t.Errorf("fixReq(%q, %s) = %q, %v; want %q", tt.c, tt.to, got, err, tt.want)
 			continue
 		}
-		if v, _ := ver.Parse(tt.to); !admits(got, v, false) {
+		if v, _ := ver.Parse(tt.to); !admits(got, v, anyDialect) {
 			t.Errorf("%q does not admit %s", got, tt.to)
 		}
 	}
@@ -218,5 +218,49 @@ func TestTerraformMetaAndBump(t *testing.T) {
 	}
 	if c := (terraform{}).Commands(root, ds[0].Manifest); len(c.Test) != 0 {
 		t.Errorf("commands without terraform installed: %+v", c)
+	}
+}
+
+const tfInline = `terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 4.0, < 6.0"
+    }
+    null = "~> 3.0"
+  }
+}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.0.0"
+  tags = { version = "not-a-constraint" }
+  min_version = "9.9.9"
+}
+`
+
+func TestTerraformInline(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, map[string]string{"main.tf": tfInline, "only.tf": "terraform {\n  required_providers {\n    aws = { source = \"hashicorp/aws\", version = \"~> 5.0\" }\n  }\n}\n"})
+	ms := manifestsIn(t, terraform{}, root)
+	if len(ms) != 2 {
+		t.Fatalf("manifests = %+v", ms)
+	}
+	var got []string
+	for _, d := range depsIn(t, terraform{}, root, "main.tf") {
+		got = append(got, fmt.Sprintf("%d %s %s (%s)", d.Line, d.Name, d.Version, d.Req))
+	}
+	want := []string{"3 hashicorp/aws 5.0 (~> 5.0)", "6 hashicorp/google 4.0 (>= 4.0, < 6.0)", "8 hashicorp/null 3.0 (~> 3.0)", "14 terraform-aws-modules/vpc/aws 5.0.0 (5.0.0)"}
+	if !slices.Equal(got, want) {
+		t.Errorf("deps = %q\nwant %q", got, want)
+	}
+	aws := depIn(t, terraform{}, root, "main.tf", "hashicorp/aws", true)
+	if _, err := (terraform{}).Bump(context.Background(), root, aws, "6.1.0", ""); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "main.tf"))
+	if !strings.Contains(string(b), `aws = { source = "hashicorp/aws", version = "~> 6.1" }`) {
+		t.Errorf("main.tf =\n%s", b)
 	}
 }

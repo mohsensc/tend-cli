@@ -47,8 +47,8 @@ func TestSlug(t *testing.T) {
 		{"GET /v1/orders/{id}/legacy", "get-v1-orders-id-legacy"},
 		{"", ""},
 		{"日本", ""},
-		{"0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz", "0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmn"},
-		{"01234567890123456789012345678901234567890123456789012345678-xyz", "01234567890123456789012345678901234567890123456789012345678"},
+		{"0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz", "0123456789abcdefghijklmnopqrstuvwxyz0123456789abcde-b6034a6a"},
+		{"01234567890123456789012345678901234567890123456789012345678-xyz", "012345678901234567890123456789012345678901234567890-6c86414c"},
 	}
 	for _, tt := range tests {
 		if got := Slug(tt.in); got != tt.want {

@@ -38,8 +38,10 @@ func mergeKey(ch *core.Change) string {
 }
 
 // merge collapses changes that move the same packages to the same place.
-// Security changes on the same packages first collapse onto the highest fixed
-// version any advisory names, since only that one fixes them all.
+// Security changes on the same copy of a package first collapse onto the
+// highest fixed version any advisory names, since only that one fixes them
+// all. Copies on different release lines keep their own fix: a lockfile with
+// ansi-regex 4.1.0 and 5.0.0 moves to 4.1.1 and 5.0.1.
 func merge(chs []core.Change) []core.Change {
 	chs = slices.Clone(chs)
 	fix := map[string]string{}
@@ -47,14 +49,14 @@ func merge(chs []core.Change) []core.Change {
 		if ch.Kind != core.Security || ch.API != nil {
 			continue
 		}
-		k := depSet(&ch) + " ->" + ch.ToName
+		k := fixKey(&ch)
 		if to, ok := fix[k]; !ok || ver.Less(to, ch.To) {
 			fix[k] = ch.To
 		}
 	}
 	for i := range chs {
 		if chs[i].Kind == core.Security && chs[i].API == nil {
-			chs[i].To = fix[depSet(&chs[i])+" ->"+chs[i].ToName]
+			chs[i].To = fix[fixKey(&chs[i])]
 		}
 	}
 
@@ -73,12 +75,28 @@ func merge(chs []core.Change) []core.Change {
 	return res
 }
 
+// fixKey is equal for security changes on copies of the same packages that
+// sit on one release line.
+func fixKey(ch *core.Change) string {
+	k := depSet(ch) + " ->" + ch.ToName
+	if v, ok := ver.Parse(Lowest(ch.Deps)); ok {
+		k += " " + v.Line()
+	}
+	return k
+}
+
 // combine folds b into a: the stronger kind and the higher severity win,
 // everything else is a union.
 func combine(a, b core.Change) core.Change {
 	a.Kind = stronger(a, b)
-	if sevRank(b.Severity) < sevRank(a.Severity) {
+	first, then := a.Evidence, b.Evidence
+	older := len(a.Deps) > 0 && len(b.Deps) > 0 && ver.Less(Lowest(b.Deps), Lowest(a.Deps))
+	switch {
+	case sevRank(b.Severity) < sevRank(a.Severity):
 		a.Severity = b.Severity
+		first, then = b.Evidence, a.Evidence
+	case sevRank(b.Severity) == sevRank(a.Severity) && older:
+		first, then = b.Evidence, a.Evidence
 	}
 	if a.ID == "" {
 		a.ID = b.ID
@@ -93,7 +111,7 @@ func combine(a, b core.Change) core.Change {
 		a.API = b.API
 	}
 	a.Deps = unionDeps(a.Deps, b.Deps)
-	a.Evidence = addEvidence(a.Evidence, b.Evidence...)
+	a.Evidence = addEvidence(first, then...)
 	a.Options = slices.Clone(a.Options)
 	for _, o := range b.Options {
 		if !slices.ContainsFunc(a.Options, func(x core.Option) bool { return x.Title == o.Title }) {
@@ -358,6 +376,12 @@ func sevRank(s string) int {
 // soon is how close a sunset has to be for a deprecation to rank as breaking.
 const soon = 30 * 24 * time.Hour
 
+// Urgent says whether ch is a deprecation whose sunset is within soon or
+// already past, which is as urgent as a break.
+func Urgent(ch *core.Change, now time.Time) bool {
+	return ch.Kind == core.Deprecation && !ch.Sunset.IsZero() && ch.Sunset.Sub(now) <= soon
+}
+
 // Rank orders a queue: kind (the first PR, security, a removed API, a
 // deprecation, a major bump, an update), severity, nearest sunset, most
 // sites, oldest upstream change, then id so the order never depends on map
@@ -391,7 +415,7 @@ func compare(a, b *core.Change, now time.Time) int {
 // moving off something deprecated, since nothing is broken until it lands.
 func effectiveRank(ch *core.Change, now time.Time) int {
 	switch {
-	case ch.Kind == core.Deprecation && !ch.Sunset.IsZero() && ch.Sunset.Sub(now) <= soon:
+	case Urgent(ch, now):
 		return 2 * kindRank(core.Breaking)
 	case ch.Kind == core.Breaking && ch.API == nil:
 		return 2*kindRank(core.Deprecation) + 1

@@ -25,8 +25,8 @@ func (l Line) String() string {
 }
 
 // Diff compares two versions of a spec over the operations in used only. A
-// changed response field type is reported as such; the caller treats it as the
-// old field being gone.
+// response field whose type changed is reported as such; a field of no single
+// type, such as a union of a string and an object, has no type to compare.
 func Diff(old, cur *Doc, used []Usage) []Line {
 	var res []Line
 	for _, u := range used {
@@ -111,7 +111,7 @@ func diffOp(key string, o, n *Op) []Line {
 		switch {
 		case !ok:
 			add("response field removed", name, "")
-		case was.Type != "" && now.Type != "" && was.Type != now.Type:
+		case typed(was.Type) && typed(now.Type) && was.Type != now.Type:
 			add("response field type changed", name, was.Type+" -> "+now.Type)
 		case now.Deprecated && !was.Deprecated:
 			add("response field deprecated", name, "")
@@ -119,6 +119,10 @@ func diffOp(key string, o, n *Op) []Line {
 	}
 	return res
 }
+
+// typed reports whether a field has a type to compare. "null" is none: older
+// snapshots took it from the first member of a nullable union.
+func typed(t string) bool { return t != "" && t != "null" }
 
 func fields(s *Schema) map[string]*Schema {
 	res := map[string]*Schema{}

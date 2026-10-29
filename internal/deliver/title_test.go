@@ -175,37 +175,43 @@ func TestTitleAndBranch(t *testing.T) {
 		{
 			name:   "api deprecation",
 			ch:     core.Change{Kind: core.Deprecation, API: &core.APIChange{Provider: "fixture", Method: "GET", Path: "/v1/orders/{id}/legacy", What: "operation deprecated"}},
-			title:  "Migrate off deprecated GET /v1/orders/{id}/legacy",
+			title:  "Migrate off deprecated fixture GET /v1/orders/{id}/legacy",
 			branch: "tend/api-fixture-get-v1-orders-id-legacy",
 		},
 		{
 			name:   "api deprecated field",
 			ch:     core.Change{Kind: core.Deprecation, API: &core.APIChange{Provider: "fixture", Method: "get", Path: "/v1/orders", Field: "total", What: "response field deprecated"}},
-			title:  "Migrate off deprecated field total on GET /v1/orders",
+			title:  "Migrate off deprecated field total on fixture GET /v1/orders",
 			branch: "tend/api-fixture-get-v1-orders-total",
 		},
 		{
 			name:   "api field removed",
 			ch:     core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "fixture", Method: "GET", Path: "/v1/orders", Field: "total_cents", What: "response field removed"}},
-			title:  "Handle removed field total_cents on GET /v1/orders",
+			title:  "Handle removed field total_cents on fixture GET /v1/orders",
+			branch: "tend/api-fixture-get-v1-orders-total-cents",
+		},
+		{
+			name:   "api field type changed",
+			ch:     core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "fixture", Method: "GET", Path: "/v1/orders", Field: "total_cents", What: "response field type changed"}},
+			title:  "Handle changed type of field total_cents on fixture GET /v1/orders",
 			branch: "tend/api-fixture-get-v1-orders-total-cents",
 		},
 		{
 			name:   "api operation removed",
 			ch:     core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "fixture", Method: "DELETE", Path: "/v1/orders/{id}", What: "operation removed"}},
-			title:  "Handle removed DELETE /v1/orders/{id}",
+			title:  "Handle removed fixture DELETE /v1/orders/{id}",
 			branch: "tend/api-fixture-delete-v1-orders-id",
 		},
 		{
 			name:   "api parameter removed",
 			ch:     core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "fixture", Method: "GET", Path: "/v1/orders", Field: "expand", What: "parameter removed"}},
-			title:  "Handle removed parameter expand on GET /v1/orders",
+			title:  "Handle removed parameter expand on fixture GET /v1/orders",
 			branch: "tend/api-fixture-get-v1-orders-expand",
 		},
 		{
 			name:   "api required parameter added",
 			ch:     core.Change{Kind: core.Breaking, API: &core.APIChange{Provider: "fixture", Method: "POST", Path: "/v1/orders", Field: "currency", What: "required parameter added"}},
-			title:  "Handle new required parameter currency on POST /v1/orders",
+			title:  "Handle new required parameter currency on fixture POST /v1/orders",
 			branch: "tend/api-fixture-post-v1-orders-currency",
 		},
 		{
@@ -279,6 +285,30 @@ func TestBranchLength(t *testing.T) {
 	}
 }
 
+// Changes whose names share a long start get branches of their own.
+func TestBranchesStayApart(t *testing.T) {
+	op := func(field string) core.Change {
+		return core.Change{API: &core.APIChange{Provider: "stripe", Method: "POST", Path: "/v1/test_helpers/issuing/authorizations/{authorization}/finalize_amount", Field: field}}
+	}
+	azure := "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/"
+	pairs := [][2]core.Change{
+		{op("fleet.cardholder_prompt_data"), op("fuel.unit_cost_decimal")},
+		{
+			{Deps: []core.Dep{dep("go", azure+"armcontainerservice/v4", "1.0.0")}, To: "1.2.0"},
+			{Deps: []core.Dep{dep("go", azure+"armcontainerservicefleet", "1.0.0")}, To: "1.2.0"},
+		},
+	}
+	for _, p := range pairs {
+		a, b := Branch(&p[0]), Branch(&p[1])
+		if a == b || len(a) > 100 || len(b) > 100 {
+			t.Errorf("branches %q and %q", a, b)
+		}
+		if a != Branch(&p[0]) {
+			t.Errorf("branch %q is not stable", a)
+		}
+	}
+}
+
 func TestMessage(t *testing.T) {
 	ch := core.Change{Deps: []core.Dep{dep("npm", "stripe", "14.2.0")}, To: "16.1.0"}
 	p := &core.Patch{Applied: []string{"bumped stripe 14.2.0 -> 16.1.0 (package.json)", "renamed 2 call sites"}}
@@ -312,7 +342,7 @@ func TestTitleOfWhatThePRCarries(t *testing.T) {
 		{BodyInput{Change: &ch, Patch: &core.Patch{}, Option: 1}, "Migrate off deprecated @fixture/pay 1.x"},
 		{BodyInput{Change: &ch, Patch: &core.Patch{}, Option: 2}, "Pin @fixture/pay to 1.4.0"},
 		{BodyInput{Change: &core.Change{Kind: core.Deprecation, API: &core.APIChange{Provider: "fixture", Method: "GET", Path: "/v1/orders/{id}/legacy", What: "operation deprecated"}}, Patch: decision},
-			"Migrate off deprecated GET /v1/orders/{id}/legacy"},
+			"Migrate off deprecated fixture GET /v1/orders/{id}/legacy"},
 	}
 	for _, tt := range tests {
 		if got := Title(tt.in, ""); got != tt.want {

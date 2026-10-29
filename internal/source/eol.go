@@ -29,6 +29,7 @@ var eolProducts = map[string]string{
 	"mysql":           "mysql",
 	"mariadb":         "mariadb",
 	"redis":           "redis",
+	"mongo":           "mongodb",
 	"nginx":           "nginx",
 	"alpine":          "alpine-linux",
 	"debian":          "debian",
