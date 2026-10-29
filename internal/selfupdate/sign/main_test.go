@@ -158,7 +158,7 @@ func TestRunErrors(t *testing.T) {
 		{"key without file", []string{"-key", "00"}, "usage"},
 		{"not hex", []string{"-key", "zz", "-in", file}, "not hex"},
 		{"short key", []string{"-key", "0011", "-in", file}, "2 bytes"},
-		{"missing file", []string{"-key", strings.Repeat("00", 32), "-in", file + ".nope"}, "no such file"},
+		{"missing file", []string{"-key", strings.Repeat("00", 32), "-in", file + ".nope"}, "f.nope"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

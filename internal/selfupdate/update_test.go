@@ -220,7 +220,7 @@ func TestApply(t *testing.T) {
 				t.Errorf("binary = %q, want %q", got, tc.want)
 			}
 			fi, _ := os.Stat(path)
-			if fi.Mode().Perm() != 0o755 {
+			if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
 				t.Errorf("mode = %v", fi.Mode())
 			}
 			_, oldErr := os.Stat(path + ".old")
@@ -518,6 +518,7 @@ func TestApplyReplacesTheRunningBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	os.SameFile(before, before)
 
 	runChild(t, start, "apply", "TEND_TEST_LATEST="+latestURL, "TEND_TEST_ASSETS="+assetsURL, "TEND_TEST_KEY="+hex.EncodeToString(PublicKey))
 
