@@ -102,8 +102,14 @@ func (py python) needs(u *usage, d core.Dep) (need, doubt string) {
 	if why, ok := pyImplicit[n]; ok {
 		return why, ""
 	}
+	if n == "pytest" && pyTestLine(u.root, d.Manifest) == "pytest" {
+		return "tend runs it as the test command", ""
+	}
 	if by := u.pyRequiredBy(n); by != "" {
 		return "pinned for " + by + ", which requires it", ""
+	}
+	if u.pyBlindFreeze(d.Manifest) {
+		return "a frozen requirements file pins what its other pins require, and with nothing installed tend cannot tell which those are", ""
 	}
 	if why := pyExtra(u.root, d.Manifest, n); why != "" {
 		return "", why
@@ -193,6 +199,25 @@ func (u *usage) pyConstraint(rel string) bool {
 // installed virtualenv says, requires n directly or through others; "" when
 // none does. n's line then pins what that one installs anyway, and dropping
 // it would let the version move.
+// pyBlindFreeze says whether m is what pip freeze writes, every line
+// pinned with ==, with no installed distribution to say what requires
+// what: removing any line there may only unpin a dependency of another.
+func (u *usage) pyBlindFreeze(m core.Manifest) bool {
+	entries, err := pyEntries(u.root, m)
+	if err != nil || len(entries) < 3 || path.Ext(m.Path) != ".txt" {
+		return false
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(strings.TrimSpace(e.spec), "==") {
+			return false
+		}
+		if _, ok := pyDistReqs.Load(PyNorm(e.name)); ok {
+			return false
+		}
+	}
+	return true
+}
+
 func (u *usage) pyRequiredBy(n string) string {
 	for _, d := range u.deps {
 		if d.Ecosystem != core.Pip || d.Name == n {
@@ -240,6 +265,16 @@ func (python) Remove(ctx context.Context, root string, deps []core.Dep) (*core.B
 	if path.Base(m.Path) == "Pipfile" {
 		return nil, fmt.Errorf("%s is read only: %w", m.Path, core.ErrNotSupported)
 	}
+	if err := lockUnsupported(m); err != nil {
+		return nil, err
+	}
+	// A manifest its lockfile no longer matches fails every locked install,
+	// so a removal waits for the tool that locks again.
+	if m.Lock != "" {
+		if tool := pyLockTool(root, m); !have(tool) {
+			return nil, fmt.Errorf("%s not found to update %s", tool, m.Lock)
+		}
+	}
 	entries, err := pyEntries(root, m)
 	if err != nil {
 		return nil, err
@@ -259,10 +294,6 @@ func (python) Remove(ctx context.Context, root string, deps []core.Dep) (*core.B
 	}
 	if m.Lock == "" {
 		return &core.Bump{Files: snap.changed(root), Note: "no lockfile"}, nil
-	}
-	tool := pyLockTool(root, m)
-	if !have(tool) {
-		return &core.Bump{Files: snap.changed(root), Note: tool + " not found"}, nil
 	}
 	if err := runIn(ctx, root, path.Dir(m.Path), nil, pyRelock(ctx, root, m)); err != nil {
 		return nil, errors.Join(err, snap.restore(root))

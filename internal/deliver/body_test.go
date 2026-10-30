@@ -158,6 +158,25 @@ func TestBodyGoldens(t *testing.T) {
 			},
 		},
 		{
+			name: "deprecation_hostile",
+			in: BodyInput{
+				Change: &core.Change{
+					ID: "npm/stripe@16.0.1", Kind: core.Deprecation,
+					Deps: []core.Dep{dep("npm", "stripe", "16.0.0")}, To: "16.0.1",
+					Evidence: []core.Evidence{
+						{Source: "releases", Title: "v16.0.1 cc @octocat fixes #1 ![x](https://evil.example/p.png)", URL: "https://x/y", Text: "Closes #9, thanks @someone"},
+						{Source: "releases", Title: "<!-- v16.0.0 GH-7 resolved acme/shop#3 `ok @code`", URL: "javascript:alert(1)"},
+						{Source: "changelog", Title: "v15.9.0 | *bold* _it_ ~gone~ [link](https://evil.example)", URL: "https://example.test/notes (v15)"},
+					},
+				},
+				Meta:    &core.Meta{Name: "stripe", Deprecated: "Use @acme/evil instead, closes #2 ping @org/team <img src=x> & fixes https://github.com/acme/shop/issues/4"},
+				Patch:   &core.Patch{Files: []string{"package.json"}},
+				Proof:   &core.Proof{Base: passRun("abc1234", ok("npm test", 4, "")), Patched: passRun("bbb2222", ok("npm test", 5, ""))},
+				Vetting: pass("scope"),
+				Base:    "abc1234", BaseRef: "main", Rev: 1,
+			},
+		},
+		{
 			name: "api_field_removed",
 			in: BodyInput{
 				Change: &core.Change{
@@ -277,6 +296,28 @@ diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
 				},
 				Vetting: &core.Vetting{Checks: []string{"scope", "lockfile"}, Verdict: "draft", Findings: []core.Finding{{Check: "lockfile", Msg: "unrelated lockfile churn: ms, debug", Action: "flagged"}}},
 				Base:    "abc1234", BaseRef: "main", Rev: 1,
+			},
+		},
+		{
+			name: "broken_install_fixed",
+			in: BodyInput{
+				Change: &core.Change{
+					ID: "pip/requests@2.32.3", Kind: core.Update, Level: "minor",
+					Deps: []core.Dep{dep("pip", "requests", "2.19.0")}, To: "2.32.3",
+				},
+				Patch: &core.Patch{Files: []string{"requirements.txt"}, Diff: ""},
+				Proof: &core.Proof{
+					Base: &core.Run{Commit: "feaaca8", Pass: false, Steps: []core.Step{
+						{Cmd: "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt", Exit: 1, Took: 4 * time.Second, Tail: "ERROR: Cannot install urllib3==1.24 and requests==2.19.0 because these package versions have conflicting dependencies."},
+						{Cmd: ".venv/bin/python -m unittest", Skipped: "after failure"},
+					}},
+					Patched: &core.Run{Commit: "eee5555", Pass: true, Steps: []core.Step{
+						ok("python3 -m venv .venv && .venv/bin/pip install -r requirements.txt", 6, "Successfully installed requests-2.32.3\n[notice] A new release of pip is available"),
+						ok(".venv/bin/python -m unittest", 1, "OK"),
+					}},
+				},
+				Vetting: &core.Vetting{Checks: []string{"scope"}, Verdict: "draft"},
+				Base:    "feaaca8", BaseRef: "main", Rev: 1,
 			},
 		},
 		{
@@ -621,6 +662,10 @@ func TestGoMoved(t *testing.T) {
 	if got := goMoved(ch, strings.Replace(diff, "+go 1.25.0", "+go 1.24.0", 1)); got != "" {
 		t.Errorf("an unchanged go line is news: %q", got)
 	}
+	sum := diff + "diff --git a/go.sum b/go.sum\n--- a/go.sum\n+++ b/go.sum\n@@ -1 +1 @@\n-golang.org/x/mod v0.33.0 h1:x\n+golang.org/x/mod v0.40.0 h1:y\n"
+	if got := goMoved(ch, sum); got != want {
+		t.Errorf("with go.sum after go.mod: got %q", got)
+	}
 }
 
 func TestDur(t *testing.T) {
@@ -643,6 +688,101 @@ func TestDur(t *testing.T) {
 
 // A failing build that prints long lines, with a pile of advisories, still
 // fits in a PR body, keeps the end of the output and keeps the marker.
+func TestProse(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"plain words stay", "plain words stay"},
+		{"cc @octocat and @org/team", "cc @&#8203;octocat and @&#8203;org/team"},
+		{"fixes #1, Closes acme/shop#22, resolved GH-7", "f&#8203;ixes #&#8203;1, C&#8203;loses acme/shop#&#8203;22, r&#8203;esolved G&#8203;H-7"},
+		{"close fix resolve closed fixed resolves", "c&#8203;lose f&#8203;ix r&#8203;esolve c&#8203;losed f&#8203;ixed r&#8203;esolves"},
+		{"closer fixing prefix #a", "closer fixing prefix #a"},
+		{"fixes https://github.com/o/r/issues/1", "f&#8203;ixes https://github.com/o/r/issues/1"},
+		{"<!-- a & b -->", "&lt;!-- a &amp; b --&gt;"},
+		{"![x](https://e.x/p.png)", `!\[x\](https://e.x/p.png)`},
+		{"*a* _b_ ~c~ a|b \\", `\*a\* \_b\_ \~c\~ a\|b \\`},
+		{"run `npm test` @here", "run `npm test` @&#8203;here"},
+		{"a ``x ` @y`` b", "a ``x ` @y`` b"},
+		{"open ` @x", "open \\` @&#8203;x"},
+		{"nul\x00l", "null"},
+	}
+	for _, tc := range tests {
+		if got := prose(tc.in); got != tc.want {
+			t.Errorf("prose(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestLink(t *testing.T) {
+	tests := map[string]string{
+		"https://github.com/a/b/releases/tag/v1": "https://github.com/a/b/releases/tag/v1",
+		"http://example.test/notes (v2)":         "http://example.test/notes%20%28v2%29",
+		"javascript:alert(1)":                    "",
+		"/relative/path":                         "",
+		"https://":                               "",
+		"ftp://example.test/x":                   "",
+	}
+	for in, want := range tests {
+		if got := link(in); got != want {
+			t.Errorf("link(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// fenceOpen reports whether s ends inside a code fence, by the rules GitHub
+// renders with: a fence closes on a run at least as long, in the same list
+// item.
+func fenceOpen(s string) bool {
+	open, pad := "", -1
+	for _, l := range strings.Split(s, "\n") {
+		t := strings.TrimLeft(l, " ")
+		run := t[:len(t)-len(strings.TrimLeft(t, "`"))]
+		switch {
+		case open == "" && len(run) >= 3:
+			open, pad = run, len(l)-len(t)
+		case open != "" && len(run) >= len(open) && strings.TrimSpace(t) == run && len(l)-len(t) >= pad:
+			open = ""
+		case open != "" && pad > 0 && strings.TrimSpace(l) != "" && len(l)-len(t) < pad:
+			return true
+		}
+	}
+	return open != ""
+}
+
+func TestBodyCutClosesFences(t *testing.T) {
+	for _, text := range []string{"run ```go test``` first", "plain notes, nothing fenced"} {
+		t.Run(text, func(t *testing.T) {
+			ch := &core.Change{ID: "npm/a@2.0.0", Kind: core.Update, Level: "major", To: "2.0.0", Deps: []core.Dep{dep("npm", "a", "1.0.0")}}
+			for i := range 40 {
+				var notes []string
+				for j := range 6 {
+					notes = append(notes, fmt.Sprintf("%d.%d %s %s", i, j, text, strings.Repeat("z", 1000)))
+				}
+				ch.Evidence = append(ch.Evidence, core.Evidence{Source: "releases", Title: fmt.Sprintf("v1.%d.0", i), Text: strings.Join(notes, "\n")})
+			}
+			body := Body(BodyInput{Change: ch, Patch: &core.Patch{Files: []string{"package.json"}}, Base: "abc1234", Rev: 1})
+			if len(body) > bodyMax || !strings.Contains(body, "Cut to fit") {
+				t.Fatalf("body is %d bytes, cut: %v", len(body), strings.Contains(body, "Cut to fit"))
+			}
+			upto, _, _ := strings.Cut(body, "_Cut to fit")
+			if fenceOpen(upto) {
+				t.Errorf("the cut leaves a fence open:\n%s", upto[max(0, len(upto)-300):])
+			}
+			if fenceOpen(body) {
+				t.Error("the footer and marker render as code")
+			}
+		})
+	}
+}
+
+func TestCutKeepsEntitiesWhole(t *testing.T) {
+	s := strings.Repeat("a", 200) + "&#8203;" + strings.Repeat("b", 200)
+	for n := 150; n < 300; n++ {
+		got, _, _ := strings.Cut(cut(s, n), "\n\n_Cut")
+		if i := strings.LastIndexByte(got, '&'); i >= 0 && !strings.Contains(got[i:], ";") {
+			t.Fatalf("cut(%d) splits an entity: %q", n, got[i:])
+		}
+	}
+}
+
 func TestBodyFits(t *testing.T) {
 	var out strings.Builder
 	for i := range 40 {
@@ -696,5 +836,41 @@ func TestOneLineKeepsRunesWhole(t *testing.T) {
 	got := oneLine("ab"+strings.Repeat("é", 10), 5)
 	if !utf8.ValidString(got) || got != "abé…" {
 		t.Errorf("oneLine = %q", got)
+	}
+}
+
+func TestOneLineCutsAtAWord(t *testing.T) {
+	if got := oneLine("the newest release its ranges allow", 26); got != "the newest release its…" {
+		t.Errorf("oneLine = %q", got)
+	}
+}
+
+func TestStaleLockfile(t *testing.T) {
+	pt := &core.Patch{Applied: []string{"bumped joi 17.0.0 -> 17.13.0 (package.json)", "lockfile not regenerated, yarn not found"}}
+	got := proof(BodyInput{Patch: pt, Proof: &core.Proof{Base: &core.Run{Pass: true}, Patched: &core.Run{Pass: true}}})
+	if !strings.Contains(got, "The lockfile was not regenerated (yarn not found)") {
+		t.Errorf("proof = %s", got)
+	}
+	if stale(&core.Patch{Applied: []string{"bumped x"}}) != "" {
+		t.Error("a regenerated lockfile is called stale")
+	}
+}
+
+func TestThinTestsSaid(t *testing.T) {
+	ch := &core.Change{ID: core.FirstID, Kind: core.First, Batch: &core.Batch{Stage: 1, Thin: "no test reaches `app.go`, which the catch-up changes"}}
+	got := proof(BodyInput{Change: ch, Proof: &core.Proof{Base: &core.Run{Pass: true}, Patched: &core.Run{Pass: true}}})
+	if !strings.Contains(got, "The project's tests are thin (no test reaches `app.go`, which the catch-up changes), and tend could not add a baseline") {
+		t.Errorf("proof = %s", got)
+	}
+}
+
+func TestOffPin(t *testing.T) {
+	ch := &core.Change{Kind: core.Deprecation, To: "26", Deps: []core.Dep{{Ecosystem: core.Toolchain, Name: "nodejs", Version: "18", Manifest: core.Manifest{Path: ".nvmrc"}}}}
+	got := proof(BodyInput{Change: ch, Proof: &core.Proof{Base: &core.Run{Pass: true}, Patched: &core.Run{Pass: true}, Runtimes: []string{"node v22.23.4"}}})
+	if !strings.Contains(got, "Ran on node v22.23.4. The pin moves to 26, but the proof ran on node v22.23.4") {
+		t.Errorf("proof = %s", got)
+	}
+	if s := offPin(ch, []string{"node v26.9.0"}); s != "" {
+		t.Errorf("on the pinned major: %q", s)
 	}
 }

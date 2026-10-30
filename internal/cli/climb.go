@@ -41,6 +41,9 @@ func scale(o *patch.Options, n int) {
 // is named in the why. It returns nil when none passed, with the worktree
 // back on the base.
 func (r *runner) decide(ctx context.Context, ch *core.Change, cmds core.Commands, proof *core.Proof, left *int) (*core.Change, *core.Patch, error) {
+	if untestable(proof) != "" {
+		return nil, nil, nil
+	}
 	var failed []string
 	for _, t := range plan.Ranked(ch, r.inv.Deps) {
 		if left != nil && *left <= 0 {
@@ -60,8 +63,7 @@ func (r *runner) decide(ctx context.Context, ch *core.Change, cmds core.Commands
 		case err != nil && ctx.Err() != nil:
 			return nil, nil, ctx.Err()
 		case err != nil:
-			first, _, _ := strings.Cut(err.Error(), "\n")
-			failed = append(failed, fmt.Sprintf("option %d could not be made (%s)", t.N, first))
+			failed = append(failed, fmt.Sprintf("option %d could not be made (%s)", t.N, whyFailed(err)))
 		case pt.Decision:
 			failed = append(failed, fmt.Sprintf("option %d could not be made (%s)", t.N, deliver.Clause(pt.Note)))
 		case len(pt.Files) == 0:
@@ -84,9 +86,13 @@ func (r *runner) decide(ctx context.Context, ch *core.Change, cmds core.Commands
 // call sites from it. It stops at the first step that fails and returns
 // the change as far as it got, with the steps it climbed through in Via,
 // its patch staged against the base and the run that proved it, or a nil
-// change when not even the first step passed. why says where it stopped.
+// change when not even the first step passed, or when a security fix stops
+// short of the release that fixes it. why says where it stopped.
 func (r *runner) climb(ctx context.Context, ch *core.Change, cmds core.Commands, proof *core.Proof, left *int) (*core.Change, *core.Patch, *core.Run, string, error) {
 	wt := r.wt
+	if why := untestable(proof); why != "" {
+		return nil, nil, nil, why, nil
+	}
 	if err := r.restart(ctx); err != nil {
 		return nil, nil, nil, "", err
 	}
@@ -109,7 +115,7 @@ func (r *runner) climb(ctx context.Context, ch *core.Change, cmds core.Commands,
 		case err != nil && ctx.Err() != nil:
 			return nil, nil, nil, "", ctx.Err()
 		case err != nil:
-			why, _, _ = strings.Cut(err.Error(), "\n")
+			why = whyFailed(err)
 		case pt.Decision:
 			why = pt.Note
 		case len(pt.Files) == 0:
@@ -152,6 +158,10 @@ func (r *runner) climb(ctx context.Context, ch *core.Change, cmds core.Commands,
 			return nil, nil, nil, "", err
 		}
 	}
+	if shortOfFix(ch, done) {
+		why = fmt.Sprintf("climbed to %s, short of %s, the least release that fixes the advisories; %s", done[len(done)-1], ch.To, why)
+		done = nil
+	}
 	if len(done) == 0 {
 		return nil, nil, nil, why, r.restart(ctx)
 	}
@@ -163,8 +173,24 @@ func (r *runner) climb(ctx context.Context, ch *core.Change, cmds core.Commands,
 	res.Edited = slices.Compact(res.Edited)
 	c := *ch
 	c.To, c.Via = done[len(done)-1], done[:len(done)-1]
-	c.Level = ver.Step(plan.Lowest(ch.Deps), c.To)
+	c.Level = ver.StepIn(ch.Deps[0].Ecosystem, plan.Lowest(ch.Deps), c.To)
 	return &c, res, run, why, nil
+}
+
+// shortOfFix says whether a climb of a security fix stopped below the
+// release that fixes it: each major in between is still vulnerable, so
+// that is no fix at all.
+func shortOfFix(ch *core.Change, done []string) bool {
+	return len(done) > 0 && ch.Kind == core.Security && ver.Less(done[len(done)-1], ch.To)
+}
+
+// untestable says why no patch can be proven against a base that fails
+// before any of its tests run, "" when one can.
+func untestable(proof *core.Proof) string {
+	if proof == nil || proof.Nothing || proof.Base == nil || proof.Base.Pass || proof.Base.Tested() || proof.Base.Last() == nil {
+		return ""
+	}
+	return fmt.Sprintf("the base fails at `%s` before its tests run, so no step can be proven", proof.Base.Last().Cmd)
 }
 
 // rung is ch as one step of a climb: from deps, as the last step left them,
@@ -174,7 +200,7 @@ func rung(ch *core.Change, deps []core.Dep, sites []core.Site, to string) core.C
 	c := *ch
 	from := plan.Lowest(deps)
 	c.Deps, c.Sites, c.To, c.Steps = deps, sites, to, nil
-	c.Level = ver.Step(from, to)
+	c.Level = ver.StepIn(ch.Deps[0].Ecosystem, from, to)
 	c.Evidence = nil
 	for _, ev := range ch.Evidence {
 		if v, ok := noted(ev); !ok || ver.Less(from, v) && !ver.Less(to, v) {

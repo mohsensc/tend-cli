@@ -16,6 +16,7 @@ import (
 
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/gitx"
+	"github.com/mohsensc/tend-cli/internal/proc"
 )
 
 const defaultTimeout = 20 * time.Minute
@@ -45,16 +46,25 @@ func Run(ctx context.Context, w *Worktree, o Options) (*core.Run, error) {
 	start := time.Now()
 	res := &core.Run{}
 	res.Commit, _ = gitx.Run(ctx, w.Dir, "rev-parse", "HEAD")
-	var lines []string
-	lines = append(lines, o.Commands.Install...)
-	lines = append(lines, o.Commands.Build...)
-	lines = append(lines, o.Commands.Test...)
+	var lines, phases []string
+	for _, ph := range []struct {
+		name  string
+		lines []string
+	}{{core.PhaseInstall, o.Commands.Install}, {core.PhaseBuild, o.Commands.Build}, {core.PhaseTest, o.Commands.Test}} {
+		lines = append(lines, ph.lines...)
+		for range ph.lines {
+			phases = append(phases, ph.name)
+		}
+	}
 	if len(lines) == 0 {
 		res.Pass = true
 		return res, nil
 	}
 
 	env := Filter(os.Environ(), o.Env)
+	if o.Container == "" {
+		defer guardConfig(ctx, w)()
+	}
 	if o.Warnings {
 		env = warningsOn(env)
 	}
@@ -82,13 +92,14 @@ func Run(ctx context.Context, w *Worktree, o Options) (*core.Run, error) {
 	why := ""
 	for i, s := range steps {
 		if why != "" {
-			res.Steps = append(res.Steps, core.Step{Cmd: s.cmd, Skipped: why})
+			res.Steps = append(res.Steps, core.Step{Cmd: s.cmd, Phase: phases[i], Skipped: why})
 			continue
 		}
 		st, err := runStep(runCtx, w.Dir, env, i+1, s, o, timeout)
 		if err != nil {
 			return nil, err
 		}
+		st.Phase = phases[i]
 		res.Steps = append(res.Steps, st)
 		switch {
 		case ctx.Err() != nil:
@@ -113,6 +124,27 @@ func Run(ctx context.Context, w *Worktree, o Options) (*core.Run, error) {
 		res.Warnings = ws
 	}
 	return res, ctx.Err()
+}
+
+// guardConfig keeps the repository's git config as it was while the
+// project's commands run in a linked worktree, which shares that config: a
+// husky prepare script, or any step that calls git config, would otherwise
+// write the user's .git/config. The returned func puts it back.
+func guardConfig(ctx context.Context, w *Worktree) func() {
+	dir, err := gitx.Run(ctx, w.Dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || dir == "" {
+		return func() {}
+	}
+	p := filepath.Join(dir, "config")
+	was, err := os.ReadFile(p)
+	if err != nil {
+		return func() {}
+	}
+	return func() {
+		if now, err := os.ReadFile(p); err != nil || !bytes.Equal(now, was) {
+			_ = os.WriteFile(p, was, 0o644)
+		}
+	}
 }
 
 func hostSteps(lines []string) []step {
@@ -200,11 +232,11 @@ func execute(ctx context.Context, dir string, env []string, s step, out io.Write
 	cmd := exec.CommandContext(ctx, s.argv[0], s.argv[1:]...)
 	cmd.Dir, cmd.Env = dir, env
 	cmd.Stdout, cmd.Stderr = w, w
-	group(cmd)
+	proc.Group(cmd)
 	err = cmd.Start()
 	if err == nil {
 		err = cmd.Wait()
-		reap(cmd)
+		proc.Reap(cmd)
 	}
 	if ctx.Err() != nil && s.stop != nil {
 		s.stop()

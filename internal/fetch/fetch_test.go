@@ -394,3 +394,158 @@ func TestPrune(t *testing.T) {
 		t.Errorf("a missing cache: %v", err)
 	}
 }
+
+func hangUp(t *testing.T, w http.ResponseWriter, partial bool) {
+	t.Helper()
+	conn, buf, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if partial {
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nhalf")
+		_ = buf.Flush()
+	}
+	conn.Close()
+}
+
+func TestRetryDroppedConnection(t *testing.T) {
+	tests := []struct {
+		name    string
+		post    bool
+		opts    []core.FetchOpt
+		partial bool
+		drops   int
+		sent    int
+		err     bool
+	}{
+		{"get", false, nil, false, 1, 2, false},
+		{"get body cut short", false, nil, true, 1, 2, false},
+		{"get gives up", false, nil, false, 9, 4, true},
+		{"post sent once", true, nil, false, 1, 1, true},
+		{"idempotent post", true, []core.FetchOpt{Idempotent()}, false, 1, 2, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var n atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if int(n.Add(1)) <= tt.drops {
+					hangUp(t, w, tt.partial)
+					return
+				}
+				fmt.Fprint(w, "body")
+			}))
+			defer srv.Close()
+
+			cl := newClock().client("")
+			ws := waits(cl)
+			var res *core.Response
+			var err error
+			if tt.post {
+				res, err = cl.Post(context.Background(), srv.URL, []byte(`{}`), tt.opts...)
+			} else {
+				res, err = cl.Get(context.Background(), srv.URL, tt.opts...)
+			}
+			if tt.err != (err != nil) {
+				t.Fatalf("res = %+v, err = %v", res, err)
+			}
+			if !tt.err && string(res.Body) != "body" {
+				t.Errorf("body = %q", res.Body)
+			}
+			if got := int(n.Load()); got != tt.sent || len(*ws) != tt.sent-1 {
+				t.Errorf("sent %d times with waits %v, want %d", got, *ws, tt.sent)
+			}
+			if tt.err && tt.sent > 1 && !strings.Contains(err.Error(), fmt.Sprintf("after %d attempts", tt.sent)) {
+				t.Errorf("err = %v, want the attempts counted", err)
+			}
+		})
+	}
+}
+
+func TestNoRetryAfterCancel(t *testing.T) {
+	var n atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		cancel()
+		hangUp(t, w, false)
+	}))
+	defer srv.Close()
+
+	cl := newClock().client("")
+	waits(cl)
+	if _, err := cl.Get(ctx, srv.URL); err == nil {
+		t.Fatal("no error")
+	}
+	if got := n.Load(); got != 1 {
+		t.Errorf("sent %d times, want once after the context ended", got)
+	}
+}
+
+func TestRetryTimeoutOnce(t *testing.T) {
+	var n atomic.Int32
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.Add(1)
+		select {
+		case <-block:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(block)
+
+	cl := newClock().client("")
+	cl.HTTP.Timeout = 50 * time.Millisecond
+	ws := waits(cl)
+	_, err := cl.Get(context.Background(), srv.URL)
+	if err == nil || !strings.Contains(err.Error(), "after 2 attempts") {
+		t.Fatalf("err = %v, want a timeout after 2 attempts", err)
+	}
+	if len(*ws) != 1 {
+		t.Errorf("waits = %v, want one retry", *ws)
+	}
+}
+
+func TestNoRetryPermanent(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "body")
+	}))
+	defer srv.Close()
+
+	cl := newClock().client("")
+	ws := waits(cl)
+	for _, u := range []string{srv.URL, "ftp://example.invalid/x"} {
+		if _, err := cl.Get(context.Background(), u); err == nil || strings.Contains(err.Error(), "attempts") {
+			t.Errorf("%s: err = %v, want one failed attempt", u, err)
+		}
+	}
+	if len(*ws) != 0 {
+		t.Errorf("waits = %v, want none", *ws)
+	}
+}
+
+// A body that takes longer than the client's own limit fails, unless the
+// request is given longer, and the client's limit stays as it was.
+func TestTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.(http.Flusher).Flush()
+		time.Sleep(300 * time.Millisecond)
+		fmt.Fprint(w, "slow")
+	}))
+	defer srv.Close()
+	c := New("", "test")
+	c.HTTP = &http.Client{Timeout: 100 * time.Millisecond}
+	c.wait = func(context.Context, time.Duration) error { return nil }
+	if _, err := c.Get(context.Background(), srv.URL, NoCache()); err == nil {
+		t.Fatal("a slow body within the client's limit")
+	}
+	res, err := c.Get(context.Background(), srv.URL, NoCache(), Timeout(5*time.Second))
+	if err != nil || string(res.Body) != "slow" {
+		t.Fatalf("with a longer timeout: %v", err)
+	}
+	if c.HTTP.Timeout != 100*time.Millisecond {
+		t.Errorf("the client's timeout became %s", c.HTTP.Timeout)
+	}
+}

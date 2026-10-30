@@ -364,7 +364,8 @@
       "Line": 47,
       "Method": "POST",
       "URL": "https://api.stripe.com/v1/refunds",
-      "Host": "api.stripe.com"
+      "Host": "api.stripe.com",
+      "Text": "req, _ := http.NewRequest(http.MethodPost, \"https://api.stripe.com/v1/refunds\", nil)"
     }
   ]
 }

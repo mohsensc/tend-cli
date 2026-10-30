@@ -115,8 +115,12 @@ func (o *openai) Chat(ctx context.Context, system string, turns []Turn, tools []
 	}
 	for _, t := range turns {
 		m := openaiTurn{Role: t.Role, Content: text(t.Text), ToolCallID: t.CallID}
-		if t.Role == "assistant" && t.Text == "" {
+		switch {
+		case t.Role != "assistant" || t.Text != "":
+		case len(t.Calls) > 0:
 			m.Content = nil
+		default:
+			m.Content = text(noReply)
 		}
 		for _, c := range t.Calls {
 			var call openaiCall

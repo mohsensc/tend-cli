@@ -328,7 +328,7 @@ func (f *npmFacts) packageLock(src []byte) {
 			PeerMeta map[string]any  `json:"peerDependenciesMeta"`
 		} `json:"packages"`
 	}
-	if json.Unmarshal(src, &lf) != nil || lf.Packages == nil {
+	if json.Unmarshal(stripBOM(src), &lf) != nil || lf.Packages == nil {
 		return
 	}
 	f.known = true
@@ -420,6 +420,9 @@ func npmInstalledBins(root string, d core.Dep) []string {
 // that went with each, and has the package manager lock again.
 func (npm) Remove(ctx context.Context, root string, deps []core.Dep) (*core.Bump, error) {
 	m := deps[0].Manifest
+	if err := lockUnsupported(m); err != nil {
+		return nil, err
+	}
 	p := filepath.Join(root, filepath.FromSlash(m.Path))
 	src, err := os.ReadFile(p)
 	if err != nil {

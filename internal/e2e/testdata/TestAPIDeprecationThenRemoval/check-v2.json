@@ -4,13 +4,13 @@
   "notes": [],
   "open": {
     "base": "main",
-    "body": "## fixture GET /v1/orders/{id}/legacy\n\n**Why**: deprecation · operation deprecated · sunset 2027-03-01\n\n### What changed upstream\n\n- **fixture spec 2025-01-01** · [source](https://api.fixture.dev/openapi.json)\n  ```\n  Fetch an order in the legacy shape\n  Use GET /v1/orders/{id} instead; it returns the total as an amount and a currency.\n  ```\n\n### Touched in this repo\n\nNothing was changed in the code. No model is configured to move the call site, and there is nothing to bump.\n\nWhere the code uses it:\n\n- `app/orders.py:25` `/v1/orders/%s/legacy`\n\n### Proof\n\n| step | base (main@BASE) | patched |\n|---|---|---|\n| `python3 -m unittest` | ok · 0s | not run |\n\n<sub>tend · comment `tend skip` or `tend retry`</sub>\n<!-- tend id=\"api/fixture/GET /v1/orders/{id}/legacy\" base=\"BASE\" rev=\"1\" -->\n",
+    "body": "## fixture GET /v1/orders/{id}/legacy\n\n**Why**: deprecation · operation deprecated · sunset 2027-03-01\n\n### What changed upstream\n\n- **fixture spec 2025-01-01** · [source](https://api.fixture.dev/openapi.json)\n  ```\n  Fetch an order in the legacy shape\n  Use GET /v1/orders/{id} instead; it returns the total as an amount and a currency.\n  ```\n\n### Touched in this repo\n\nNothing was changed in the code. No model is configured to move the call site, and there is nothing to bump.\n\nWhere the code uses it:\n\n- `app/orders.py:25` `with urllib.request.urlopen(BASE + \"/v1/orders/%s/legacy\" % order_id) as res:`\n\n### Proof\n\n| step | base (main@BASE) | patched |\n|---|---|---|\n| `python3 -m unittest` | ok · 0s | not run |\n\n<sub>tend · comment `tend skip` or `tend retry`</sub>\n<!-- tend id=\"api/fixture/GET /v1/orders/{id}/legacy\" base=\"BASE\" rev=\"1\" -->\n",
     "branch": "tend/api-fixture-get-v1-orders-id-legacy",
     "draft": false,
     "nodeID": "PR_1",
     "number": 1,
     "state": "open",
-    "title": "Migrate off deprecated GET /v1/orders/{id}/legacy",
+    "title": "Migrate off deprecated fixture GET /v1/orders/{id}/legacy",
     "url": "https://github.com/acme/py-api/pull/1"
   },
   "queue": [
@@ -39,7 +39,7 @@
           "col": 0,
           "file": "app/orders.py",
           "line": 9,
-          "text": "/v1/orders"
+          "text": "with urllib.request.urlopen(BASE + \"/v1/orders\") as res:"
         },
         {
           "call": false,
@@ -76,12 +76,12 @@
           "col": 0,
           "file": "app/orders.py",
           "line": 25,
-          "text": "/v1/orders/%s/legacy"
+          "text": "with urllib.request.urlopen(BASE + \"/v1/orders/%s/legacy\" % order_id) as res:"
         }
       ],
       "sunset": "2027-03-01T00:00:00Z"
     }
   ],
-  "repo": "acme/py-api",
+  "repo": "$TMP/work",
   "untracked": []
 }

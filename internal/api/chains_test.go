@@ -59,11 +59,12 @@ func TestOperation(t *testing.T) {
 		{github, "octokit.issues.update", "js", "PATCH /issues/{id}"},
 		{github, "octokit.issues.send", "js", "POST /issues/{id}/send"},
 
-		{stripe, "stripe.charges.frobnicate", "js", ""},
+		{stripe, "stripe.charges.frobnicate", "js", "POST /v1/charges/{id}/frobnicate"},
+		{stripe, "stripe.issuing.authorizations.approve", "js", "POST /v1/issuing/authorizations/{id}/approve"},
 		{stripe, "stripe.charges", "js", ""},
 		{stripe, "stripe", "js", ""},
 		{stripe, "stripe.Charge.new", "ruby", ""},
-		{stripe, "stripe.webhooks.constructEvent", "js", ""},
+		{stripe, "stripe.webhooks.constructEvent", "js", "POST /v1/webhooks/{id}/construct_event"},
 		{openai, "openai.chat.completions.update", "js", "PATCH /v1/chat/completions/{id}"},
 	}
 	for _, tt := range tests {
@@ -83,11 +84,18 @@ func TestOperation(t *testing.T) {
 func TestOperationNeedsTheSpec(t *testing.T) {
 	stripe := provider(t, "stripe")
 	d := &Doc{Ops: map[string]*Op{
-		"POST /v1/charges":              {Method: "POST", Path: "/v1/charges"},
-		"GET /v1/charges/{charge}":      {Method: "GET", Path: "/v1/charges/{charge}"},
-		"POST /v1/payment_intents":      {Method: "POST", Path: "/v1/payment_intents"},
-		"GET /v1/payment_intents/{pi}":  {Method: "GET", Path: "/v1/payment_intents/{pi}"},
-		"POST /v1/payment_intents/{pi}": {Method: "POST", Path: "/v1/payment_intents/{pi}"},
+		"POST /v1/charges":                      {Method: "POST", Path: "/v1/charges"},
+		"GET /v1/charges/{charge}":              {Method: "GET", Path: "/v1/charges/{charge}"},
+		"POST /v1/payment_intents":              {Method: "POST", Path: "/v1/payment_intents"},
+		"GET /v1/payment_intents/{pi}":          {Method: "GET", Path: "/v1/payment_intents/{pi}"},
+		"POST /v1/payment_intents/{pi}":         {Method: "POST", Path: "/v1/payment_intents/{pi}"},
+		"POST /v1/customers/{customer}":         {Method: "POST", Path: "/v1/customers/{customer}"},
+		"GET /v1/customers/{customer}":          {Method: "GET", Path: "/v1/customers/{customer}"},
+		"POST /v1/customers/{customer}/sources": {Method: "POST", Path: "/v1/customers/{customer}/sources"},
+		"POST /v1/threads/{thread_id}":          {Method: "POST", Path: "/v1/threads/{thread_id}"},
+		"POST /v1/threads/{thread_id}/runs":     {Method: "POST", Path: "/v1/threads/{thread_id}/runs"},
+		"POST /v1/checkout/sessions":            {Method: "POST", Path: "/v1/checkout/sessions"},
+		"GET /v1/checkout/sessions/{session}":   {Method: "GET", Path: "/v1/checkout/sessions/{session}"},
 	}}
 	tests := []struct {
 		chain, lang, want string
@@ -97,11 +105,25 @@ func TestOperationNeedsTheSpec(t *testing.T) {
 		{"paymentintent.Get", "go", "GET /v1/payment_intents/{pi}"},
 		{"stripe.charges.del", "js", ""},
 		{"stripe.refunds.create", "js", ""},
+		{"stripe.customers.sources.create", "js", "POST /v1/customers/{customer}/sources"},
+		{"stripe.customers.balanceTransactions.create", "js", ""},
+		{"stripe.customers.balanceTransactions.list", "js", ""},
+		{"client.threads.runs.create", "js", "POST /v1/threads/{thread_id}/runs"},
+		{"stripe.checkout.sessions.create", "js", "POST /v1/checkout/sessions"},
+		{"stripe.checkout.sessions.retrieve", "js", "GET /v1/checkout/sessions/{session}"},
+		{"stripe.customers.update", "js", "POST /v1/customers/{customer}"},
 	}
 	for _, tt := range tests {
-		method, path, ok := stripe.Operation(strings.Split(tt.chain, "."), tt.lang)
+		chain := strings.Split(tt.chain, ".")
+		method, path, ok := stripe.Operation(chain, tt.lang)
+		op := d.find(method, path, true)
+		if ok && op == nil {
+			if method, path, ok = stripe.Nested(chain, tt.lang); ok {
+				op = d.find(method, path, true)
+			}
+		}
 		got := ""
-		if op := d.find(method, path, true); ok && op != nil {
+		if ok && op != nil {
 			got = op.Method + " " + op.Path
 		}
 		if got != tt.want {

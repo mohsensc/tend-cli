@@ -43,4 +43,8 @@ global: -C <dir>  --config <path>  --home <dir>  -v  -q
 ```
 
 Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 `check --fail-on`
-matched, 4 `run` could not prove the fix.
+matched, 4 `run` could not prove the fix (in a GitHub Action, only with
+`fail-on-unproven: true` once the change is in the tracking issue; otherwise
+a warning), 5 `run` proved a change but had no
+GitHub token to open its PR with, so it is only on a local branch, 130
+interrupted.

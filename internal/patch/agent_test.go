@@ -223,3 +223,61 @@ func TestAgentGrepGlob(t *testing.T) {
 		}
 	}
 }
+
+// suiteEco is fakeEco with a generated test suite next to each manifest.
+type suiteEco struct{ fakeEco }
+
+func (suiteEco) Suite(root string, m core.Manifest) *core.Suite {
+	dir := filepath.ToSlash(filepath.Dir(m.Path))
+	return &core.Suite{Smoke: filepath.ToSlash(filepath.Join(dir, "test/tend/smoke.js")), Tests: filepath.ToSlash(filepath.Join(dir, "test/tend/characterization.js"))}
+}
+
+// A migration edits the files its change explains and the tests that reach
+// them, never a test that reaches none of them and never the tests tend
+// wrote, committed or still only in the worktree.
+func TestAgentEditsTests(t *testing.T) {
+	f := newFixture(t)
+	for name, body := range map[string]string{
+		"test/billing.test.js":              "assert.equal(total(), 42)\n",
+		"test/unrelated.test.js":            "assert.equal(other(), 1)\n",
+		"test/tend/smoke.js":                "assert.ok(load())\n",
+		"pkg/tend_characterization_test.go": "if got != 42 { t.Fatal(got) }\n",
+	} {
+		if err := place(f.dir, name, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run(t, f.dir, "add", "-A")
+	run(t, f.dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "tests")
+	if err := place(f.dir, "test/tend/characterization.js", "assert.equal(total(), 42)\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := place(f.dir, "test/new.test.js", "assert.equal(total(), 42)\n"); err != nil {
+		t.Fatal(err)
+	}
+	o := f.opts(nil)
+	o.Ecos[core.Npm] = &suiteEco{fakeEco: *f.eco}
+	o.Index = &fakeIndex{reach: map[string][]string{"test/billing.test.js": {"src/billing.js"}, "test/new.test.js": {"src/billing.js"}}}
+	s := &session{t: &tree{wt: f.dir}, in: job{ch: f.ch, allowed: []string{"package.json", "src/billing.js"}}, o: o, ctx: context.Background(), counts: map[string]int{}}
+	for file, want := range map[string]string{
+		"src/billing.js":                    "edited",
+		"test/billing.test.js":              "edited",
+		"test/unrelated.test.js":            "tests none of the files this change explains",
+		"test/tend/smoke.js":                "tests tend wrote",
+		"test/tend/characterization.js":     "tests tend wrote",
+		"test/new.test.js":                  "tests tend wrote",
+		"pkg/tend_characterization_test.go": "tests tend wrote",
+		"README.md":                         "is not one of the files this change explains",
+	} {
+		body := "x"
+		if file != "README.md" {
+			body = readFile(t, f.dir, file)
+		}
+		if got := s.edit(file, strings.Split(body, "\n")[0], "z"); !strings.Contains(got, want) {
+			t.Errorf("edit %s = %q, want it to contain %q", file, got, want)
+		}
+	}
+	if !slices.Equal(s.edited, []string{"src/billing.js", "test/billing.test.js"}) {
+		t.Errorf("edited %q", s.edited)
+	}
+}

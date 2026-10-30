@@ -29,9 +29,12 @@ func (c custom) Detect(root string) ([]core.Manifest, error) {
 	seen := map[string]bool{}
 	var res []core.Manifest
 	for _, d := range c.deps {
-		files, err := walk(root, d.File)
+		files, err := walkNamed(root, d.File)
 		if err != nil {
 			return nil, err
+		}
+		if len(files) == 0 {
+			files = []string{d.File}
 		}
 		for _, f := range files {
 			if !seen[f] {
@@ -46,6 +49,15 @@ func (c custom) Detect(root string) ([]core.Manifest, error) {
 
 func (c custom) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(m.Path)))
+	if err != nil && !onDisk(root, m.Path) {
+		var names []string
+		for _, d := range c.deps {
+			if d.File == m.Path {
+				names = append(names, d.Name)
+			}
+		}
+		return nil, fmt.Errorf("no file matches %q, named by tend.yml deps entry %s", m.Path, strings.Join(names, ", "))
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -148,6 +148,9 @@ func TestOSVPaging(t *testing.T) {
 		if len(req.Queries) != 1 {
 			return status(400)
 		}
+		if req.Queries[0].Version != "1.0.0" {
+			return text(`{"results":[{"vulns":[]}]}`)
+		}
 		tok := req.Queries[0].PageToken
 		tokens = append(tokens, tok)
 		switch tok {
@@ -249,7 +252,10 @@ func TestOSVChanges(t *testing.T) {
 	if len(merged.Evidence) != 2 {
 		t.Fatalf("evidence = %+v, want both advisories", merged.Evidence)
 	}
-	ev := merged.Evidence[0]
+	if merged.Evidence[0].Title != "A2 second" {
+		t.Errorf("evidence starts with %+v, want the critical advisory", merged.Evidence[0])
+	}
+	ev := merged.Evidence[1]
 	if ev.Source != "osv" || ev.Title != "A1 first" || ev.URL != "https://osv.dev/vulnerability/A1" {
 		t.Errorf("evidence = %+v", ev)
 	}
@@ -520,4 +526,101 @@ func TestOSVUpstreamRenamed(t *testing.T) {
 	if len(got) != 1 || got[0].To != "0.25.0" || got[0].Deps[0].Name != "bundler" {
 		t.Fatalf("changes = %+v", got)
 	}
+}
+
+func TestReqFloor(t *testing.T) {
+	for req, want := range map[string]string{
+		"0.2.11": "0.2.11", "^0.2.11": "0.2.11", "~1.4": "1.4", "=2.0.1": "2.0.1", ">= 2.1, < 3": "2.1", ">=1.0": "1.0",
+		"*": "", "<3": "", ">1.0": "", "1.x": "", "": "",
+	} {
+		got, ok := reqFloor(req)
+		if got != want || ok != (want != "") {
+			t.Errorf("reqFloor(%q) = %q, %v; want %q", req, got, ok, want)
+		}
+	}
+	q, ok := osvFor(core.Dep{Ecosystem: core.Cargo, Name: "atty", Req: "0.2.11"})
+	if !ok || q.Version != "0.2.11" || q.Package.Ecosystem != "crates.io" {
+		t.Errorf("osvFor = %+v, %v", q, ok)
+	}
+}
+
+// RustSec's informational notices are no vulnerabilities: unmaintained is a
+// deprecation with the way off its title names, unsound a low one.
+func TestOSVInformational(t *testing.T) {
+	info := func(name, kind string) map[string]any {
+		a := affected(name, "crates.io", introduced("0"))
+		a["database_specific"] = map[string]any{"informational": kind}
+		return a
+	}
+	hits := osvHits{"term_size@0.3.1": {"R1"}, "dirs-sys@0.3.4": {"R2"}, "lru@0.6.0": {"R3"}}
+	details := map[string]any{
+		"R1": map[string]any{"id": "RUSTSEC-2020-0163", "summary": "`term_size` is unmaintained; use `terminal_size` instead", "affected": []any{info("term_size", "unmaintained")}},
+		"R2": map[string]any{"id": "RUSTSEC-2020-0053", "summary": "dirs-sys is unmaintained, use `dirs-sys-next` instead", "affected": []any{info("dirs-sys", "unmaintained")}},
+		"R3": map[string]any{"id": "RUSTSEC-2021-0130", "summary": "unsound IterMut", "database_specific": map[string]any{"severity": "HIGH"},
+			"affected": []any{func() map[string]any {
+				a := affected("lru", "crates.io", introduced("0"), fixed("0.7.1"))
+				a["database_specific"] = map[string]any{"informational": "unsound"}
+				return a
+			}()}},
+	}
+	inv := &core.Inventory{Deps: []core.Dep{dep(core.Cargo, "term_size", "0.3.1"), dep(core.Cargo, "dirs-sys", "0.3.4"), dep(core.Cargo, "lru", "0.6.0")}}
+	got, err := (&OSV{Fetch: osvServer(hits, details)}).Changes(context.Background(), inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("changes = %+v", got)
+	}
+	by := map[string]core.Change{}
+	for _, ch := range got {
+		by[ch.Deps[0].Name] = ch
+	}
+	if c := by["term_size"]; c.Kind != core.Deprecation || len(c.Options) != 1 || c.Options[0].ToName != "terminal_size" {
+		t.Errorf("term_size = %+v", c)
+	}
+	if c := by["dirs-sys"]; c.Kind != core.Deprecation || len(c.Options) != 1 || c.Options[0].ToName != "dirs-sys-next" {
+		t.Errorf("dirs-sys = %+v", c)
+	}
+	if c := by["lru"]; c.Kind != core.Security || c.Severity != "low" || c.To != "0.7.1" {
+		t.Errorf("lru = %+v", c)
+	}
+}
+
+// A fix that other advisories still hit is not where a security change
+// stops: axios 0.21.1's fix to 0.33.0 rises to 0.34.0, then past an
+// advisory of that release too, and one with no fix stays on the record.
+func TestOSVClearsTheTarget(t *testing.T) {
+	hits := osvHits{
+		"axios@0.21.1": {"A"},
+		"axios@0.33.0": {"B", "C"},
+		"axios@0.34.0": {"D", "N"},
+		"axios@0.35.0": {"N"},
+	}
+	details := map[string]any{
+		"A": map[string]any{"id": "A", "summary": "a", "database_specific": map[string]any{"severity": "HIGH"}, "affected": []any{affected("axios", "npm", introduced("0"), fixed("0.33.0"))}},
+		"B": map[string]any{"id": "B", "summary": "b", "database_specific": map[string]any{"severity": "HIGH"}, "affected": []any{affected("axios", "npm", introduced("0.27.2"), fixed("0.34.0"))}},
+		"C": map[string]any{"id": "C", "summary": "c", "aliases": []string{"B"}, "affected": []any{affected("axios", "npm", introduced("0.28.0"), fixed("0.34.0"))}},
+		"D": map[string]any{"id": "D", "summary": "d", "affected": []any{affected("axios", "npm", introduced("0.34.0"), fixed("0.35.0"))}},
+		"N": map[string]any{"id": "N", "summary": "n", "affected": []any{affected("axios", "npm", introduced("0"))}},
+	}
+	f := osvServer(hits, details)
+	got, err := (&OSV{Fetch: f}).Changes(context.Background(), &core.Inventory{Deps: []core.Dep{dep(core.Npm, "axios", "0.21.1")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []string
+	for _, c := range got {
+		rows = append(rows, c.To+":"+strings.Join(tagsOf(c.Evidence), ","))
+	}
+	if want := []string{"0.33.0:A", "0.34.0:B,C", "0.35.0:D", ":N"}; !reflect.DeepEqual(rows, want) {
+		t.Errorf("changes = %v, want %v", rows, want)
+	}
+}
+
+func tagsOf(evs []core.Evidence) []string {
+	var res []string
+	for _, ev := range evs {
+		res = append(res, strings.Fields(ev.Title)[0])
+	}
+	return res
 }

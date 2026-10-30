@@ -35,18 +35,30 @@ var dockerTags learned[string]
 const dockerTagCap = 500
 
 func (docker) Detect(root string) ([]core.Manifest, error) {
-	files, err := walk(root, "Dockerfile", "Dockerfile.*", "*.dockerfile",
-		"compose.yml", "compose.yaml", "docker-compose*.yml", "docker-compose*.yaml")
+	files, err := walkFunc(root, func(rel string) bool { return isDockerfile(rel) || composeFile.MatchString(path.Base(rel)) })
 	if err != nil {
 		return nil, err
 	}
 	var res []core.Manifest
 	for _, f := range files {
-		if !strings.HasSuffix(f, ".dockerignore") {
-			res = append(res, core.Manifest{Ecosystem: core.Docker, Path: f, Tool: "docker"})
-		}
+		res = append(res, core.Manifest{Ecosystem: core.Docker, Path: f, Tool: "docker"})
 	}
 	return res, nil
+}
+
+var composeFile = regexp.MustCompile(`^(?:docker-)?compose[^/]*\.ya?ml$`)
+
+func isDockerfile(rel string) bool {
+	base := strings.ToLower(path.Base(rel))
+	if strings.HasSuffix(base, ".dockerignore") || strings.HasSuffix(base, ".containerignore") {
+		return false
+	}
+	for _, n := range []string{"dockerfile", "containerfile"} {
+		if base == n || strings.HasPrefix(base, n+".") || strings.HasSuffix(base, "."+n) {
+			return true
+		}
+	}
+	return false
 }
 
 func dockerIsCompose(p string) bool {
@@ -55,16 +67,20 @@ func dockerIsCompose(p string) bool {
 }
 
 type dockerRef struct {
-	line    int
-	raw     string // as written, variables and all
-	name    string // canonical
-	rawName string
-	rawTag  string
-	tag     string // resolved; "" when absent or not resolvable
-	digest  string
-	note    string
-	arg     string // ARG that holds the tag
-	argLine int
+	line      int
+	raw       string // as written, variables and all
+	name      string // canonical
+	rawName   string
+	rawTag    string
+	tag       string // resolved; "" when absent or not resolvable
+	digest    string
+	note      string
+	arg       string // ARG that holds the tag, or with argWhole the whole reference
+	argLine   int
+	argPrefix string // what the tag carries around the ARG, as in v${V}-alpine
+	argSuffix string
+	argWhole  string // the name the ARG holds when it holds the whole reference
+	inName    bool   // the variables in rawName carry a tag or digest
 }
 
 const dockerUnknown = "\x00"
@@ -143,7 +159,8 @@ func dockerCanon(name string) string {
 }
 
 var (
-	dockerArgRef     = regexp.MustCompile(`^\$\{(\w+)\}$|^\$(\w+)$`)
+	dockerArgRef     = regexp.MustCompile(`^([^$]*)\$(?:\{(\w+)\}|(\w+))([^$]*)$`)
+	dockerArgWhole   = regexp.MustCompile(`^\$\{(\w+)\}$|^\$(\w+)$`)
 	dockerArgDefault = regexp.MustCompile(`^\$\{(\w+):?-([^}]*)\}$`)
 )
 
@@ -161,9 +178,18 @@ func dockerNewRef(line int, raw string, args map[string]*string, argLines map[st
 		r.tag, r.digest = "", ""
 		r.note = "unresolved ARG " + strings.Join(missing, ", ")
 	}
-	if m := dockerArgRef.FindStringSubmatch(r.rawTag); m != nil && args[m[1]+m[2]] != nil {
-		r.arg = m[1] + m[2]
+	if m := dockerArgRef.FindStringSubmatch(r.rawTag); m != nil && args[m[2]+m[3]] != nil {
+		r.arg, r.argPrefix, r.argSuffix = m[2]+m[3], m[1], m[4]
 		r.argLine = argLines[r.arg]
+	}
+	nameExp, _ := dockerExpand(r.rawName, args)
+	_, nameTag, nameDigest := dockerSplit(nameExp)
+	r.inName = nameTag+nameDigest != ""
+	if m := dockerArgWhole.FindStringSubmatch(r.rawName); m != nil && r.rawTag == "" && args[m[1]+m[2]] != nil {
+		if whole, tag, digest := dockerSplit(*args[m[1]+m[2]]); tag != "" && digest == "" && !strings.Contains(whole, "$") {
+			r.arg, r.argWhole = m[1]+m[2], whole
+			r.argLine = argLines[r.arg]
+		}
 	}
 	return r, true
 }
@@ -251,7 +277,7 @@ func composeRefs(src []byte) ([]dockerRef, error) {
 	}
 	for i := 1; i < len(svc.Content); i += 2 {
 		img := yamlGet(svc.Content[i], "image")
-		if img == nil || img.Kind != yaml.ScalarNode {
+		if img == nil || img.Kind != yaml.ScalarNode || yamlGet(svc.Content[i], "build") != nil {
 			continue
 		}
 		if r, ok := dockerNewRef(img.Line, img.Value, nil, nil); ok {
@@ -591,10 +617,22 @@ func (docker) Bump(ctx context.Context, root string, d core.Dep, to, toName stri
 		name = strings.TrimPrefix(toName, "library/")
 	}
 	p := filepath.Join(root, filepath.FromSlash(d.Manifest.Path))
-	next, argEdit := name+":"+to, false
+	if r.argWhole != "" {
+		return dockerBumpWhole(ctx, p, d, r, cmp.Or(strings.TrimPrefix(toName, "library/"), r.argWhole), to)
+	}
+	if r.inName && toName == "" {
+		return nil, fmt.Errorf("docker: %s: %q holds the whole reference and is not settable: %w", d.Name, r.rawName, core.ErrNotSupported)
+	}
+	next, argVal := name+":"+to, ""
 	switch m := dockerArgDefault.FindStringSubmatch(r.rawTag); {
 	case r.arg != "":
-		next, argEdit = name+":"+r.rawTag, true
+		val, ok := strings.CutPrefix(to, r.argPrefix)
+		val, ok2 := strings.CutSuffix(val, r.argSuffix)
+		if !ok || !ok2 || val == "" {
+			return nil, fmt.Errorf("docker: %s: target tag %s does not fit %q, which only ARG %s can move: %w",
+				d.Name, to, r.rawTag, r.arg, core.ErrNotSupported)
+		}
+		next, argVal = name+":"+r.rawTag, val
 	case m != nil:
 		next = name + ":${" + m[1] + ":-" + to + "}"
 	case strings.Contains(r.rawTag, "$"):
@@ -607,8 +645,8 @@ func (docker) Bump(ctx context.Context, root string, d core.Dep, to, toName stri
 	next += pin
 	res := &core.Bump{Note: "no lockfile"}
 	changed := false
-	if argEdit {
-		if changed, err = dockerSetArg(p, r, to); err != nil {
+	if argVal != "" {
+		if changed, err = dockerSetArg(p, d, r, argVal); err != nil {
 			return nil, err
 		}
 	}
@@ -655,20 +693,45 @@ func dockerCanonOf(name string) string {
 
 // dockerSetArg points the ARG behind a ${TAG} reference at a new default. It
 // reports whether the file changed: another stage may have done it already.
-func dockerSetArg(p string, r dockerRef, to string) (bool, error) {
+func dockerSetArg(p string, d core.Dep, r dockerRef, to string) (bool, error) {
 	lines, err := readLines(p)
 	if err != nil {
 		return false, err
 	}
-	re := regexp.MustCompile(`(\bARG\s+` + regexp.QuoteMeta(r.arg) + `\s*=\s*)(["']?)([^"'\s]*)(["']?)`)
-	m := re.FindStringSubmatch(lines[r.argLine-1])
+	re := regexp.MustCompile(`((?i:\bARG\b)(?:\s+\S+)*?\s+` + regexp.QuoteMeta(r.arg) + `=)(["']?)([^"'\s]*)(["']?)`)
+	var m []string
+	if r.argLine >= 1 && r.argLine <= len(lines) {
+		m = re.FindStringSubmatch(lines[r.argLine-1])
+	}
 	if m == nil {
-		return false, fmt.Errorf("%s:%d: ARG %s has no default", p, r.argLine, r.arg)
+		return false, fmt.Errorf("docker: %s: %s:%d: ARG %s default not found", d.Name, d.Manifest.Path, r.argLine, r.arg)
 	}
 	if m[3] == to {
 		return false, nil
 	}
 	return true, rewriteLine(p, r.argLine, m[0], m[1]+m[2]+to+m[4])
+}
+
+func dockerBumpWhole(ctx context.Context, p string, d core.Dep, r dockerRef, name, to string) (*core.Bump, error) {
+	pin, err := dockerRepin(ctx, d, r, dockerCanon(name), to)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := dockerSetArg(p, d, r, name+":"+to)
+	if err != nil {
+		return nil, err
+	}
+	if _, _, digest := dockerSplit(r.raw); digest != "" && "@"+digest != pin {
+		if err := rewriteLine(p, r.line, r.raw, strings.TrimSuffix(r.raw, "@"+digest)+pin); err != nil {
+			return nil, fmt.Errorf("docker: %s: %w", d.Name, err)
+		}
+		changed = true
+	}
+	res := &core.Bump{Note: "no lockfile"}
+	if changed {
+		res.Files = []string{d.Manifest.Path}
+	}
+	return res, nil
 }
 
 func (docker) Commands(root string, m core.Manifest) core.Commands { return core.Commands{} }

@@ -302,6 +302,9 @@ func (toolchain) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	if err != nil {
 		return nil, fmt.Errorf("toolchain: %s in %s: %w", d.Name, d.Manifest.Path, err)
 	}
+	if path.Base(d.Manifest.Path) == "go.mod" {
+		return goRaise(ctx, root, d, next, to)
+	}
 	if err := rewriteLine(p, d.Line, d.Req, next); err != nil {
 		return nil, fmt.Errorf("toolchain: %w", err)
 	}
@@ -328,6 +331,36 @@ func (toolchain) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 		res.Files, res.Locked, res.Note = append(res.Files, lock), true, ""
 	}
 	return res, nil
+}
+
+func goRaise(ctx context.Context, root string, d core.Dep, next, to string) (*core.Bump, error) {
+	m := d.Manifest
+	tidy := ver.Less(d.Version, "1.17") && !ver.Less(to, "1.17")
+	if tidy && !have("go") {
+		return nil, core.ToolMissing{Tool: "go"}
+	}
+	dir := path.Dir(m.Path)
+	snap := snapFiles(root, m.Path, path.Join(dir, "go.sum"))
+	if err := rewriteLine(filepath.Join(root, filepath.FromSlash(m.Path)), d.Line, d.Req, next); err != nil {
+		return nil, fmt.Errorf("toolchain: %w", err)
+	}
+	if !tidy {
+		return &core.Bump{Files: []string{m.Path}, Note: "no lockfile"}, nil
+	}
+	if err := runIn(ctx, root, dir, goEnv(), "go mod tidy"); err != nil {
+		return nil, fmt.Errorf("toolchain: %w", err)
+	}
+	if err := goKeep(root, m, snap); err != nil {
+		return nil, fmt.Errorf("toolchain: %w", err)
+	}
+	files := snap.changed(root)
+	if onDisk(root, path.Join(dir, "vendor/modules.txt")) {
+		if err := runIn(ctx, root, dir, goEnv(), "go mod vendor"); err != nil {
+			return nil, fmt.Errorf("toolchain: %w", err)
+		}
+		files = append(files, path.Join(dir, "vendor"))
+	}
+	return &core.Bump{Files: files, Locked: true}, nil
 }
 
 // lockEngines moves engines.node in package-lock.json's entry for the

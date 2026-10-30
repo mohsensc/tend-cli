@@ -17,16 +17,27 @@ const defaultAttempts = 2
 var errNoDiff = errors.New("the reply holds no unified diff")
 
 // migrate asks the model for a diff over the remaining sites and applies it. A reply
-// that cannot be used is sent back with the reason while attempts remain.
+// that cannot be used is sent back with the reason while attempts remain. With
+// o.Prove set, a diff that applies runs the project's commands too, and one that
+// fails them is taken back and sent back with their output; the last attempt's
+// diff stays for the caller's proof to judge.
 func migrate(ctx context.Context, t *tree, in job, o Options, p *core.Patch) error {
 	n := o.Attempts
 	if n < 1 {
 		n = defaultAttempts
 	}
+	snap := ""
+	if o.Prove != nil && n > 1 {
+		var err error
+		if snap, err = stage(ctx, t.wt); err != nil {
+			return err
+		}
+	}
 	var fails []string
 	var why, prev string
+	ran := false
 	for i := 0; i < n; i++ {
-		sys, user, err := prompt(t, in, o, why, prev)
+		sys, user, err := prompt(t, in, o, why, prev, ran)
 		if err != nil {
 			return err
 		}
@@ -53,8 +64,23 @@ func migrate(ctx context.Context, t *tree, in job, o Options, p *core.Patch) err
 		if err != nil {
 			o.logf("model attempt %d: %v", i+1, err)
 			fails = append(fails, fmt.Sprintf("attempt %d: %v", i+1, err))
-			why, prev = err.Error(), diff
+			why, prev, ran = err.Error(), diff, false
 			continue
+		}
+		if snap != "" && i < n-1 {
+			failed, err := check(ctx, t.wt, o)
+			if err != nil {
+				return err
+			}
+			if failed != "" {
+				o.logf("model attempt %d: the diff applies, but %s", i+1, strings.SplitN(failed, "\n", 2)[0])
+				fails = append(fails, fmt.Sprintf("attempt %d: %s", i+1, strings.SplitN(failed, "\n", 2)[0]))
+				if err := restore(ctx, t.wt, snap); err != nil {
+					return err
+				}
+				why, prev, ran = failed, diff, true
+				continue
+			}
 		}
 		p.Model = true
 		p.Edited = touched(diff)
@@ -62,6 +88,49 @@ func migrate(ctx context.Context, t *tree, in job, o Options, p *core.Patch) err
 		return nil
 	}
 	return errors.New(strings.Join(fails, "; "))
+}
+
+// check stages what a diff changed and runs the project's commands on it.
+// It returns the failing command and the end of its output, "" when they
+// pass.
+func check(ctx context.Context, wt string, o Options) (string, error) {
+	if _, err := stage(ctx, wt); err != nil {
+		return "", err
+	}
+	r, err := o.Prove(ctx, o.Commands)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", nil
+	}
+	if r.Pass {
+		return "", nil
+	}
+	for _, st := range r.Steps {
+		if st.Skipped == "" && st.Exit != 0 {
+			return fmt.Sprintf("%s exited %d\n%s", st.Cmd, st.Exit, tail(st.Tail, feedbackMax)), nil
+		}
+	}
+	return "the project's commands failed", nil
+}
+
+// stage stages everything in wt and returns its tree.
+func stage(ctx context.Context, wt string) (string, error) {
+	if _, err := gitx.Raw(ctx, wt, "add", "-A"); err != nil {
+		return "", err
+	}
+	tree, err := gitx.Run(ctx, wt, "write-tree")
+	return tree, err
+}
+
+// restore puts wt back to tree, staged, with nothing else left in it.
+func restore(ctx context.Context, wt, tree string) error {
+	if _, err := gitx.Raw(ctx, wt, "read-tree", "--reset", "-u", tree); err != nil {
+		return err
+	}
+	_, err := gitx.Raw(ctx, wt, "clean", "-fdq")
+	return err
 }
 
 // extract pulls the diff out of a reply: the first ```diff or bare ``` block, else the

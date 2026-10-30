@@ -1,6 +1,6 @@
 files: [poetry/pyproject.toml]
-locked: false
-note: poetry not found
+locked: true
+note: 
 --- poetry/pyproject.toml
 12: -sqlalchemy = "2.0.35"
 12: +sqlalchemy = "2.0.36"

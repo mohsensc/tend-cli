@@ -66,7 +66,7 @@ func ReadLock(file string, src []byte) ([]Locked, error) {
 		}
 	case "composer.lock":
 		var lock composerLock
-		if err := json.Unmarshal(src, &lock); err != nil {
+		if err := json.Unmarshal(stripBOM(src), &lock); err != nil {
 			return nil, err
 		}
 		for _, p := range append(lock.Packages, lock.PackagesDev...) {
@@ -84,7 +84,7 @@ func ReadLock(file string, src []byte) ([]Locked, error) {
 		}
 	case "packages.lock.json":
 		var lock nugetLockFile
-		if err := json.Unmarshal(src, &lock); err != nil {
+		if err := json.Unmarshal(stripBOM(src), &lock); err != nil {
 			return nil, err
 		}
 		for _, fw := range lock.Dependencies {
@@ -208,7 +208,9 @@ func lockedVersions(root, lock, ecosystem, name string) (map[string]bool, error)
 // what it actually locked. The tool moves such a dep to the newest release
 // its ranges allow, so to is a floor: every version of name the update
 // brought in must be to or later on to's major, and one of them must be
-// locked. It returns the newest one when that is past to, else "".
+// locked. A copy on another release line that the update only moved up
+// within its line is another fix's business. It returns the newest one when
+// that is past to, else "".
 func lockedTo(root, lock, ecosystem, name, to string, before map[string]bool) (string, error) {
 	after, err := lockedVersions(root, lock, ecosystem, name)
 	if err != nil {
@@ -222,12 +224,26 @@ func lockedTo(root, lock, ecosystem, name, to string, before map[string]bool) (s
 		}
 		return ver.Compare(x, floor) >= 0 && x.Major() == floor.Major()
 	}
+	raised := func(v string) bool {
+		x, okX := ver.Parse(v)
+		if !okX {
+			return false
+		}
+		for b := range before {
+			y, okY := ver.Parse(b)
+			if okY && y.Line() == x.Line() && ver.Compare(y, x) < 0 && y.Line() != floor.Line() {
+				return true
+			}
+		}
+		return false
+	}
 	var other, in []string
 	for _, v := range keys(after) {
 		switch {
 		case before[v] && !fits(v):
 		case fits(v):
 			in = append(in, v)
+		case raised(v):
 		default:
 			other = append(other, v)
 		}

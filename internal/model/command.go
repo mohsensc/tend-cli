@@ -12,6 +12,7 @@ import (
 
 	"github.com/mohsensc/tend-cli/internal/config"
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/proc"
 )
 
 type command struct {
@@ -49,6 +50,7 @@ func (c *command) Complete(ctx context.Context, system, prompt string) (string, 
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	cmd.WaitDelay = time.Second
+	proc.Group(cmd)
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("model: %s: %w", c.name, ctx.Err())

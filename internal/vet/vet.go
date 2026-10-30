@@ -67,6 +67,7 @@ var checks = []check{
 	{name: "debug", fn: debug},
 	{name: "comments", fn: comments},
 	{name: "commands", fn: commands, quiet: true},
+	{name: "tests", fn: tests, quiet: true},
 	{name: "dead", fn: dead},
 	{name: "question", fn: questions},
 }

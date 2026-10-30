@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -235,5 +236,113 @@ func TestGradleBumpReal(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(root, "gradle.lockfile")); !strings.Contains(string(b), "com.example:fixture:2.0.0=") {
 		t.Errorf("gradle.lockfile:\n%s", b)
+	}
+}
+
+func TestGradleDynamic(t *testing.T) {
+	build := "dependencies {\n" +
+		"    implementation(\"com.squareup.okhttp3:okhttp:4.+\")\n" +
+		"    implementation(\"com.example:floating:latest.release\")\n" +
+		"    implementation(\"com.example:ranged:[1.0,2.0)\")\n" +
+		"    implementation(\"com.example:unlocked:1.+\")\n" +
+		"    implementation(\"com.example:fixed:1.0.0\")\n" +
+		"    implementation(module(\"old:lib:1.0\"))\n" +
+		"    println(\"not:a:dependency\")\n" +
+		"}\n" +
+		"configurations.all { resolutionStrategy { force(\"com.example:forced:1.0\") } }\n" +
+		"println(\"not:a:dependency\")\n"
+	lock := "com.squareup.okhttp3:okhttp:4.11.0=compileClasspath\ncom.example:floating:3.2.0=compileClasspath\ncom.example:ranged:1.4.0=compileClasspath\ncom.example:fixed:1.0.0=compileClasspath\nempty=\n"
+	setup := func(t *testing.T) (string, string) {
+		root := t.TempDir()
+		log := filepath.Join(t.TempDir(), "log")
+		write(t, root, map[string]string{"settings.gradle.kts": "", "build.gradle.kts": build, "gradle.lockfile": lock})
+		if err := os.WriteFile(filepath.Join(root, "gradlew"), []byte("#!/bin/sh\necho \"$*\" >> "+log+"\necho changed >> gradle.lockfile\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return root, log
+	}
+	root, _ := setup(t)
+	var got []string
+	for _, d := range depsIn(t, gradle{}, root, "build.gradle.kts") {
+		got = append(got, d.Name+" "+d.Version+" "+d.Req)
+	}
+	want := []string{
+		"com.squareup.okhttp3:okhttp 4.11.0 4.+",
+		"com.example:floating 3.2.0 latest.release",
+		"com.example:ranged 1.4.0 [1.0,2.0)",
+		"com.example:fixed 1.0.0 1.0.0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("deps = %q\nwant %q", got, want)
+	}
+
+	tests := []struct {
+		name, dep, to, line, err string
+	}{
+		{"inside the prefix moves the lock alone", "com.squareup.okhttp3:okhttp", "4.12.0", `implementation("com.squareup.okhttp3:okhttp:4.+")`, ""},
+		{"a major keeps the prefix", "com.squareup.okhttp3:okhttp", "5.0.1", `implementation("com.squareup.okhttp3:okhttp:5.+")`, ""},
+		{"latest moves the lock alone", "com.example:floating", "4.0.0", `implementation("com.example:floating:latest.release")`, ""},
+		{"inside the range", "com.example:ranged", "1.9.0", `implementation("com.example:ranged:[1.0,2.0)")`, ""},
+		{"outside the range", "com.example:ranged", "2.0.0", "", "cannot be moved"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, log := setup(t)
+			d := depIn(t, gradle{}, root, "build.gradle.kts", tt.dep, true)
+			before := treeSnapshot(t, root)
+			res, err := (gradle{}).Bump(context.Background(), root, d, tt.to, "")
+			if tt.err != "" {
+				if !errors.Is(err, core.ErrNotSupported) || !strings.Contains(err.Error(), tt.err) {
+					t.Errorf("err = %v", err)
+				}
+				if !reflect.DeepEqual(before, treeSnapshot(t, root)) {
+					t.Error("a refused bump changed files")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !res.Locked || !slices.Contains(res.Files, "gradle.lockfile") {
+				t.Errorf("bump = %+v", res)
+			}
+			if b := treeSnapshot(t, root)["build.gradle.kts"]; !strings.Contains(b, tt.line) {
+				t.Errorf("build.gradle.kts =\n%s", b)
+			}
+			if b, _ := os.ReadFile(log); string(b) != "dependencies --update-locks "+tt.dep+"\n" {
+				t.Errorf("gradlew ran with %q", b)
+			}
+		})
+	}
+}
+
+func TestGradleAdmits(t *testing.T) {
+	tests := []struct {
+		spec, v string
+		want    bool
+	}{
+		{"4.+", "4.12.0", true},
+		{"4.+", "5.0.0", false},
+		{"4.1.+", "4.1.9", true},
+		{"4.1.+", "4.2.0", false},
+		{"+", "9.0.0", true},
+		{"latest.integration", "1.0.0", true},
+		{"[1.0,2.0)", "1.0", true},
+		{"[1.0,2.0)", "2.0.0", false},
+		{"[1.0,2.0]", "2.0", true},
+		{"(1.0,2.0)", "1.0", false},
+		{"]1.0,2.0[", "1.5", true},
+		{"[1.0,)", "9.0", true},
+		{"[1.5]", "1.5", true},
+	}
+	for _, tt := range tests {
+		if got := gradleAdmits(tt.spec, tt.v); got != tt.want {
+			t.Errorf("gradleAdmits(%q, %q) = %v, want %v", tt.spec, tt.v, got, tt.want)
+		}
+	}
+	for spec, want := range map[string]string{"4.+": "5.+", "4.1.+": "5.0.+"} {
+		if got, ok := gradleMove(spec, "5.0.1"); !ok || got != want {
+			t.Errorf("gradleMove(%q) = %q, %v; want %q", spec, got, ok, want)
+		}
 	}
 }

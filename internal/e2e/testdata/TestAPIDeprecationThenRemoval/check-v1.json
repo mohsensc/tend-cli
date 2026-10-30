@@ -27,12 +27,12 @@
           "col": 0,
           "file": "app/orders.py",
           "line": 25,
-          "text": "/v1/orders/%s/legacy"
+          "text": "with urllib.request.urlopen(BASE + \"/v1/orders/%s/legacy\" % order_id) as res:"
         }
       ],
       "sunset": "2027-03-01T00:00:00Z"
     }
   ],
-  "repo": "acme/py-api",
+  "repo": "$TMP/work",
   "untracked": []
 }

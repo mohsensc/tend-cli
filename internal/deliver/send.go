@@ -55,6 +55,9 @@ func Send(ctx context.Context, forge core.Forge, wt *verify.Worktree, in SendInp
 	if remote == nil {
 		return nil, errors.New("deliver: no remote to push to")
 	}
+	if err := sign(ctx, wt); err != nil {
+		return nil, err
+	}
 	if in.BaseRef == "" {
 		info, err := forge.Repo(ctx)
 		if err != nil {
@@ -67,17 +70,28 @@ func Send(ctx context.Context, forge core.Forge, wt *verify.Worktree, in SendInp
 		return nil, err
 	}
 	if pr != nil && pr.State == "open" {
+		if !Carries(pr, in.Change) {
+			id, _, _, _ := ParseMarker(pr.Body)
+			return nil, fmt.Errorf("deliver: #%d on %s is tend's PR for %s, not %s", pr.Number, branch, id, in.Change.ID)
+		}
 		return updatePR(ctx, forge, wt, in, pr, remote, title, draft)
 	}
 	return openPR(ctx, forge, wt, in, remote, branch, title, draft)
 }
 
+// Carries reports whether pr is tend's PR for ch, or for ch at another
+// target: what its marker names, when it has one.
+func Carries(pr *core.PR, ch *core.Change) bool {
+	id, _, _, ok := ParseMarker(pr.Body)
+	return !ok || ch == nil || id == "" || core.Subject(id) == core.Subject(ch.ID)
+}
+
 func openPR(ctx context.Context, forge core.Forge, wt *verify.Worktree, in SendInput, remote *Remote, branch, title string, draft bool) (*core.PR, error) {
-	exists, err := BranchExists(ctx, remote, branch)
+	left, err := remote.tip(ctx, branch)
 	if err != nil {
 		return nil, err
 	}
-	if err := Push(ctx, wt, remote, branch, exists); err != nil {
+	if err := push(ctx, wt, remote, branch, left != "", left); err != nil {
 		return nil, err
 	}
 	tip, err := head(ctx, wt, "HEAD")
@@ -101,7 +115,7 @@ func updatePR(ctx context.Context, forge core.Forge, wt *verify.Worktree, in Sen
 	branch := pr.Branch
 	same, tip, err := SameTree(ctx, wt, remote, branch)
 	if err != nil {
-		same, tip = false, ""
+		return nil, err
 	}
 	_, base, rev, ok := ParseMarker(pr.Body)
 	if !ok {
@@ -109,18 +123,14 @@ func updatePR(ctx context.Context, forge core.Forge, wt *verify.Worktree, in Sen
 	}
 	res := *pr
 	res.Head = tip
-	if same && ok && base == in.Base && pr.Title == title && pr.Draft == draft {
+	if same && ok && base == in.Base && pr.Base == in.BaseRef && pr.Title == title && pr.Draft == draft {
 		return &res, nil
 	}
 	if !same {
-		last := in.Last
-		if tip != "" {
-			if !ours(ctx, remote, wt, pr, tip, in.Last) {
-				return nil, foreign(ctx, forge, pr)
-			}
-			last = tip
+		if !ours(ctx, remote, wt, pr, tip, in.Last) {
+			return nil, foreign(ctx, forge, pr)
 		}
-		err := push(ctx, wt, remote, branch, true, last)
+		err := push(ctx, wt, remote, branch, true, tip)
 		if errors.Is(err, ErrRejected) {
 			return nil, foreign(ctx, forge, pr)
 		}
@@ -133,21 +143,23 @@ func updatePR(ctx context.Context, forge core.Forge, wt *verify.Worktree, in Sen
 	}
 	in.Rev = rev + 1
 	body := Body(in.BodyInput)
-	err = forge.UpdatePR(ctx, pr.Number, core.PRInput{Title: title, Body: body, Branch: branch, Base: pr.Base, Draft: draft})
+	err = forge.UpdatePR(ctx, pr.Number, core.PRInput{Title: title, Body: body, Branch: branch, Base: in.BaseRef, Draft: draft})
 	if err != nil {
 		return nil, err
 	}
-	res.Title, res.Body, res.Draft = title, body, draft
+	res.Title, res.Body, res.Draft, res.Base = title, body, draft, in.BaseRef
 	return merge(ctx, forge, in, &res, title, draft)
 }
 
 // ours reports whether tip, the commit the PR's branch is at, holds nothing
 // but tend's own work. The forge decides, not state, which may be stale or
 // lost: the PR is tend's when its branch is under tend/ and its body carries
-// the marker, and tip is then tend's when it is the one commit tend makes,
-// straight on the base the marker names, or adds nothing to the base tend
-// builds on. A commit pushed on top, or a merge of the base branch, is
-// someone else's. The last push state knows of counts as well.
+// the marker, and tip is then tend's when it adds nothing to the base tend
+// builds on, or is the one commit tend makes, straight on the base the
+// marker names, with the files tend signed it for. A commit pushed on top, a
+// merge of the base branch or an amend that changes files is someone else's.
+// The last push state knows of counts as well, and a commit from before tend
+// signed its work is taken as tend's only when state knows of no other.
 func ours(ctx context.Context, r *Remote, wt *verify.Worktree, pr *core.PR, tip, last string) bool {
 	if tip == last {
 		return true
@@ -163,8 +175,83 @@ func ours(ctx context.Context, r *Remote, wt *verify.Worktree, pr *core.PR, tip,
 	if err != nil {
 		return false
 	}
+	if f := strings.Fields(out); len(f) != 2 || base == "" || f[1] != base {
+		return false
+	}
+	tree, err := gitx.Run(ctx, r.repo, "rev-parse", "--verify", tip+"^{tree}")
+	if err != nil {
+		return false
+	}
+	msg, err := gitx.Raw(ctx, r.repo, "log", "-1", "--format=%B", tip)
+	if err != nil {
+		return false
+	}
+	if signed := stamp(msg); signed != "" {
+		return signed == tree
+	}
+	return last == ""
+}
+
+const treeKey = "Tend-Tree"
+
+// stamp is the tree a commit message says tend built the commit with, "" for none.
+func stamp(msg string) string {
+	res := ""
+	for _, l := range strings.Split(msg, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(l), treeKey+":"); ok {
+			res = strings.TrimSpace(v)
+		}
+	}
+	return res
+}
+
+// sign makes HEAD of the worktree carry the tree it holds in a Tend-Tree
+// trailer, so a later run tells tend's commit from one a maintainer amended:
+// an amend keeps the message but not the files. Who made the commit, and
+// when, stay as they were.
+func sign(ctx context.Context, wt *verify.Worktree) error {
+	tree, err := gitx.Run(ctx, wt.Dir, "rev-parse", "--verify", "HEAD^{tree}")
+	if err != nil {
+		return err
+	}
+	msg, err := gitx.Raw(ctx, wt.Dir, "log", "-1", "--format=%B", "HEAD")
+	if err != nil {
+		return err
+	}
+	if stamp(msg) == tree {
+		return nil
+	}
+	signed, err := gitx.Cmd{Dir: wt.Dir, Stdin: msg}.Run(ctx, "interpret-trailers", "--if-exists", "replace", "--trailer", treeKey+": "+tree)
+	if err != nil {
+		return err
+	}
+	who, err := gitx.Run(ctx, wt.Dir, "log", "-1", "--date=raw", "--format=%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd", "HEAD")
+	if err != nil {
+		return err
+	}
+	w := strings.Split(who, "\x00")
+	if len(w) != 6 {
+		return errors.New("deliver: cannot read who made the commit")
+	}
+	env := []string{
+		"GIT_AUTHOR_NAME=" + w[0], "GIT_AUTHOR_EMAIL=" + w[1], "GIT_AUTHOR_DATE=" + w[2],
+		"GIT_COMMITTER_NAME=" + w[3], "GIT_COMMITTER_EMAIL=" + w[4], "GIT_COMMITTER_DATE=" + w[5],
+	}
+	out, err := gitx.Run(ctx, wt.Dir, "rev-list", "--parents", "-n", "1", "HEAD")
+	if err != nil {
+		return err
+	}
 	f := strings.Fields(out)
-	return len(f) == 2 && base != "" && f[1] == base
+	args := []string{"commit-tree", "--no-gpg-sign", tree}
+	for _, p := range f[1:] {
+		args = append(args, "-p", p)
+	}
+	sha, err := gitx.Cmd{Dir: wt.Dir, Env: env, Stdin: signed}.Run(ctx, args...)
+	if err != nil {
+		return err
+	}
+	_, err = gitx.Run(ctx, wt.Dir, "update-ref", "HEAD", strings.TrimSpace(sha), f[0])
+	return err
 }
 
 // foreign says once on the PR that its branch has someone else's commits,

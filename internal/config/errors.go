@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -127,4 +128,52 @@ func distance(a, b string) int {
 		prev, curr = curr, prev
 	}
 	return prev[len(b)]
+}
+
+var badDuration = regexp.MustCompile(`^line (\d+): bad duration `)
+
+// keyed names the key in an error a value's own decoder gave, which knows
+// its line but not its key: "line 3: cooldown: bad duration".
+func keyed(b []byte, err error) error {
+	m := badDuration.FindStringSubmatch(err.Error())
+	if m == nil || strings.Contains(err.Error(), "\n") {
+		return err
+	}
+	var doc yaml.Node
+	if yaml.Unmarshal(b, &doc) != nil {
+		return err
+	}
+	line, _ := strconv.Atoi(m[1])
+	key := keyAt(&doc, line, "")
+	if key == "" {
+		return err
+	}
+	return fmt.Errorf("line %d: %s: %s", line, key, strings.TrimPrefix(err.Error(), fmt.Sprintf("line %d: ", line)))
+}
+
+// keyAt is the dotted path of the key whose scalar value sits on line.
+func keyAt(n *yaml.Node, line int, at string) string {
+	switch n.Kind {
+	case yaml.DocumentNode, yaml.SequenceNode:
+		for _, c := range n.Content {
+			if k := keyAt(c, line, at); k != "" {
+				return k
+			}
+		}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, v := n.Content[i], n.Content[i+1]
+			path := k.Value
+			if at != "" {
+				path = at + "." + k.Value
+			}
+			if v.Kind == yaml.ScalarNode && v.Line == line {
+				return path
+			}
+			if r := keyAt(v, line, path); r != "" {
+				return r
+			}
+		}
+	}
+	return ""
 }

@@ -3,6 +3,9 @@ package deliver
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,13 +43,14 @@ const stripeBranch = "tend/npm-stripe-16.0.1"
 func TestSendCreates(t *testing.T) {
 	r := newRemote(t)
 	wt := r.worktree(t)
-	head := commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
 	f := NewFake("acme", "shop", "trunk")
 
 	pr, err := Send(bg, f, wt, sendInput(r, wt))
 	if err != nil {
 		t.Fatal(err)
 	}
+	head := must(t, wt.Dir, "rev-parse", "HEAD")
 	if pr.Number != 1 || pr.Branch != stripeBranch || pr.Base != "trunk" || pr.Draft {
 		t.Errorf("pr = %+v", pr)
 	}
@@ -101,13 +105,14 @@ func TestSendUpdatesTheOpenPR(t *testing.T) {
 	}
 
 	must(t, wt.Dir, "reset", "--hard", r.base)
-	next := commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
+	commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
 	in := sendInput(r, wt)
 	in.Notes = []string{"lockfile not regenerated: npm not found"}
 	pr, err := Send(bg, f, wt, in)
 	if err != nil {
 		t.Fatal(err)
 	}
+	next := must(t, wt.Dir, "rev-parse", "HEAD")
 	if pr.Number != first.Number || len(f.All()) != 1 {
 		t.Fatalf("a second PR was opened: %+v", f.All())
 	}
@@ -227,11 +232,12 @@ func TestSendAfterAClosedPR(t *testing.T) {
 	noErr(t, f.CloseByHuman(1))
 
 	must(t, wt.Dir, "reset", "--hard", r.base)
-	again := commit(t, wt.Dir, "package.json", `{"v":4}`, "Bump stripe, retried")
+	commit(t, wt.Dir, "package.json", `{"v":4}`, "Bump stripe, retried")
 	pr, err := Send(bg, f, wt, sendInput(r, wt))
 	if err != nil {
 		t.Fatal(err)
 	}
+	again := must(t, wt.Dir, "rev-parse", "HEAD")
 	if pr.Number != 2 {
 		t.Errorf("pr = %+v, want a new PR", pr)
 	}
@@ -275,11 +281,12 @@ func TestSendPushRejected(t *testing.T) {
 func TestSendRefusesToOverwriteWhatItDidNotPush(t *testing.T) {
 	r := newRemote(t)
 	wt := r.worktree(t)
-	pushed := commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
 	f := NewFake("acme", "shop", "main")
 	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
 		t.Fatal(err)
 	}
+	pushed := must(t, wt.Dir, "rev-parse", "HEAD")
 	other := r.elsewhere(t)
 	must(t, other, "checkout", "-q", stripeBranch)
 	theirs := commit(t, other, "notes.txt", "mine\n", "human fix")
@@ -434,11 +441,12 @@ func TestSendForgeErrors(t *testing.T) {
 func TestSendStaleStateIsNotForeign(t *testing.T) {
 	r := newRemote(t)
 	wt := r.worktree(t)
-	first := commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
 	f := NewFake("acme", "shop", "main")
 	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
 		t.Fatal(err)
 	}
+	first := must(t, wt.Dir, "rev-parse", "HEAD")
 	must(t, wt.Dir, "reset", "--hard", r.base)
 	commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
 	in := sendInput(r, wt)
@@ -448,7 +456,7 @@ func TestSendStaleStateIsNotForeign(t *testing.T) {
 	}
 
 	must(t, wt.Dir, "reset", "--hard", r.base)
-	next := commit(t, wt.Dir, "package.json", `{"v":4}`, "Bump stripe, a third time")
+	commit(t, wt.Dir, "package.json", `{"v":4}`, "Bump stripe, a third time")
 	must(t, wt.Dir, "update-ref", "-d", "refs/remotes/origin/"+stripeBranch)
 	in = sendInput(r, wt)
 	in.Last = first
@@ -456,6 +464,7 @@ func TestSendStaleStateIsNotForeign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err = %v, want the PR updated", err)
 	}
+	next := must(t, wt.Dir, "rev-parse", "HEAD")
 	if r.tip(t, stripeBranch) != next || pr.Head != next {
 		t.Errorf("branch at %q, pr head %q, want %q", r.tip(t, stripeBranch), pr.Head, next)
 	}
@@ -480,5 +489,232 @@ func TestSendLeavesAHandMadePR(t *testing.T) {
 	}
 	if r.tip(t, stripeBranch) != theirs {
 		t.Error("the hand-made branch was overwritten")
+	}
+}
+
+func TestSendSignsItsCommit(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	f := NewFake("acme", "shop", "main")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+		t.Fatal(err)
+	}
+	tip := r.tip(t, stripeBranch)
+	tree := must(t, r.bare, "rev-parse", tip+"^{tree}")
+	if msg := must(t, r.bare, "log", "-1", "--format=%B", tip); msg != "Bump stripe\n\nTend-Tree: "+tree {
+		t.Errorf("message = %q", msg)
+	}
+	if who := must(t, r.bare, "log", "-1", "--format=%an <%ae> %cn", tip); who != "Ada <ada@example.test> Ada" {
+		t.Errorf("made by %q", who)
+	}
+	if err := sign(bg, wt); err != nil || must(t, wt.Dir, "rev-parse", "HEAD") != tip {
+		t.Errorf("signing a signed commit changed it: %v", err)
+	}
+}
+
+func TestSignKeepsATrailerBlock(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe\n\nSigned-off-by: Ada <ada@example.test>\nTend-Tree: 0000")
+	if err := sign(bg, wt); err != nil {
+		t.Fatal(err)
+	}
+	tree := must(t, wt.Dir, "rev-parse", "HEAD^{tree}")
+	want := "Bump stripe\n\nSigned-off-by: Ada <ada@example.test>\nTend-Tree: " + tree
+	if msg := must(t, wt.Dir, "log", "-1", "--format=%B"); msg != want {
+		t.Errorf("message = %q, want %q", msg, want)
+	}
+	if must(t, wt.Dir, "rev-parse", "HEAD^") != r.base {
+		t.Error("the signed commit is not on the base")
+	}
+}
+
+// amend rewrites the commit at the tip of the PR's branch from another
+// clone, as a maintainer fixing up tend's PR would, and force-pushes it.
+func amend(t *testing.T, r *remote, file, body string, args ...string) string {
+	t.Helper()
+	other := r.elsewhere(t)
+	must(t, other, "checkout", "-q", stripeBranch)
+	if file != "" {
+		write(t, other, file, body)
+		must(t, other, "add", "-A")
+	}
+	must(t, other, append([]string{"commit", "--amend"}, args...)...)
+	must(t, other, "push", "-q", "-f", "origin", stripeBranch)
+	return must(t, other, "rev-parse", "HEAD")
+}
+
+func TestSendLeavesAnAmendedBranch(t *testing.T) {
+	for _, known := range []bool{true, false} {
+		t.Run(map[bool]string{true: "state knows the last push", false: "state lost"}[known], func(t *testing.T) {
+			r := newRemote(t)
+			wt := r.worktree(t)
+			commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+			f := NewFake("acme", "shop", "main")
+			if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+				t.Fatal(err)
+			}
+			pushed := must(t, wt.Dir, "rev-parse", "HEAD")
+			theirs := amend(t, r, "app.txt", "fixed by hand\n", "--no-edit")
+
+			must(t, wt.Dir, "reset", "--hard", r.base)
+			commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
+			in := sendInput(r, wt)
+			if known {
+				in.Last = pushed
+			}
+			if _, err := Send(bg, f, wt, in); !errors.Is(err, ErrForeign) {
+				t.Fatalf("err = %v, want ErrForeign", err)
+			}
+			if r.tip(t, stripeBranch) != theirs {
+				t.Error("the maintainer's amend was overwritten")
+			}
+		})
+	}
+}
+
+func TestSendTakesARewordedCommitAsItsOwn(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	f := NewFake("acme", "shop", "main")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+		t.Fatal(err)
+	}
+	pushed := must(t, wt.Dir, "rev-parse", "HEAD")
+	msg := must(t, wt.Dir, "log", "-1", "--format=%B")
+	amend(t, r, "", "", "-m", strings.Replace(msg, "Bump stripe", "Bump stripe (reworded)", 1))
+
+	must(t, wt.Dir, "reset", "--hard", r.base)
+	commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
+	in := sendInput(r, wt)
+	in.Last = pushed
+	if _, err := Send(bg, f, wt, in); err != nil {
+		t.Fatalf("err = %v, want the PR updated", err)
+	}
+	if r.tip(t, stripeBranch) != must(t, wt.Dir, "rev-parse", "HEAD") {
+		t.Error("the branch was not updated")
+	}
+}
+
+// A commit tend pushed before it signed its work is still its own, unless
+// state knows tend pushed something else.
+func TestSendUnsignedCommit(t *testing.T) {
+	for _, known := range []bool{false, true} {
+		t.Run(map[bool]string{false: "state lost", true: "state knows another push"}[known], func(t *testing.T) {
+			r := newRemote(t)
+			wt := r.worktree(t)
+			commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+			f := NewFake("acme", "shop", "main")
+			if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+				t.Fatal(err)
+			}
+			pushed := must(t, wt.Dir, "rev-parse", "HEAD")
+			old := amend(t, r, "", "", "-m", "Bump stripe")
+
+			must(t, wt.Dir, "reset", "--hard", r.base)
+			commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
+			in := sendInput(r, wt)
+			if known {
+				in.Last = pushed
+			}
+			_, err := Send(bg, f, wt, in)
+			if known {
+				if !errors.Is(err, ErrForeign) || r.tip(t, stripeBranch) != old {
+					t.Fatalf("err = %v, want ErrForeign and the branch left alone", err)
+				}
+				return
+			}
+			if err != nil || r.tip(t, stripeBranch) != must(t, wt.Dir, "rev-parse", "HEAD") {
+				t.Fatalf("err = %v, want the branch updated", err)
+			}
+		})
+	}
+}
+
+// A remote-tracking ref left from a push long ago does not stop tend from
+// replacing the branch of a closed PR.
+func TestSendAfterAClosedPRWithAStaleTrackingRef(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	f := NewFake("acme", "shop", "main")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+		t.Fatal(err)
+	}
+	amend(t, r, "package.json", `{"v":9}`, "-m", "pushed by another run")
+	noErr(t, f.ClosePR(bg, 1))
+
+	must(t, wt.Dir, "reset", "--hard", r.base)
+	commit(t, wt.Dir, "package.json", `{"v":4}`, "Bump stripe, retried")
+	pr, err := Send(bg, f, wt, sendInput(r, wt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.Number != 2 || r.tip(t, stripeBranch) != must(t, wt.Dir, "rev-parse", "HEAD") {
+		t.Errorf("pr #%d, branch at %s", pr.Number, r.tip(t, stripeBranch))
+	}
+}
+
+// A fetch that fails while tend checks the branch stops the run; it does not
+// push over whatever the branch holds.
+func TestSendStopsWhenItCannotReadTheBranch(t *testing.T) {
+	r := newRemote(t)
+	if runtime.GOOS == "windows" {
+		t.Skip("needs sh")
+	}
+	arm := filepath.Join(t.TempDir(), "arm")
+	script := filepath.Join(t.TempDir(), "upload-pack")
+	write(t, filepath.Dir(script), filepath.Base(script), "#!/bin/sh\nif [ -e '"+arm+"' ]; then rm -f '"+arm+"'; echo flaky >&2; exit 1; fi\nexec git-upload-pack \"$@\"\n")
+	noErr(t, os.Chmod(script, 0o755))
+	must(t, r.clone, "config", "remote.origin.uploadpack", script)
+	r.push = r.remote(t, "origin")
+
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	f := NewFake("acme", "shop", "main")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+		t.Fatal(err)
+	}
+	other := r.elsewhere(t)
+	must(t, other, "checkout", "-q", stripeBranch)
+	theirs := commit(t, other, "notes.txt", "mine\n", "human fix")
+	must(t, other, "push", "-q", "origin", stripeBranch)
+
+	must(t, wt.Dir, "reset", "--hard", r.base)
+	commit(t, wt.Dir, "package.json", `{"v":3}`, "Bump stripe, again")
+	must(t, wt.Dir, "update-ref", "-d", "refs/remotes/origin/"+stripeBranch)
+	write(t, filepath.Dir(arm), filepath.Base(arm), "")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err == nil || !strings.Contains(err.Error(), "flaky") {
+		t.Fatalf("err = %v, want the fetch error", err)
+	}
+	if r.tip(t, stripeBranch) != theirs {
+		t.Error("the human's commit was overwritten")
+	}
+}
+
+func TestSendRetargetsANewBase(t *testing.T) {
+	r := newRemote(t)
+	wt := r.worktree(t)
+	commit(t, wt.Dir, "package.json", `{"v":2}`, "Bump stripe")
+	f := NewFake("acme", "shop", "main")
+	if _, err := Send(bg, f, wt, sendInput(r, wt)); err != nil {
+		t.Fatal(err)
+	}
+	in := sendInput(r, wt)
+	in.BaseRef = "develop"
+	pr, err := Send(bg, f, wt, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.Base != "develop" || f.PR(1).Base != "develop" {
+		t.Errorf("base = %q, stored %q", pr.Base, f.PR(1).Base)
+	}
+	if _, err := Send(bg, f, wt, in); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, rev, _ := ParseMarker(f.PR(1).Body); rev != 2 {
+		t.Errorf("rev = %d, want 2: a re-run on the new base changes nothing", rev)
 	}
 }

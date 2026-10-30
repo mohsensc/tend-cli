@@ -106,7 +106,8 @@
       "Line": 24,
       "Method": "POST",
       "URL": "https://api.example.com/v1/events",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "Faraday.post(\"https://api.example.com/v1/events\") # Stripe.x"
     }
   ]
 }

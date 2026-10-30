@@ -1,6 +1,7 @@
 package eco
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -24,7 +25,7 @@ type python struct{}
 func (python) Name() string { return core.Pip }
 
 func (python) Detect(root string) ([]core.Manifest, error) {
-	all, err := walk(root, "pyproject.toml", "Pipfile", "*.txt", "*.in")
+	all, err := walk(root, "pyproject.toml", "Pipfile", "setup.cfg", "*.txt", "*.in")
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +36,10 @@ func (python) Detect(root string) ([]core.Manifest, error) {
 		case base == "pyproject.toml":
 			if m, ok := pyProjectManifest(root, f); ok {
 				res = append(res, m)
+			}
+		case base == "setup.cfg":
+			if src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); err == nil && len(setupCfgEntries(src)) > 0 {
+				res = append(res, core.Manifest{Ecosystem: core.Pip, Path: f, Tool: "pip"})
 			}
 		case base == "Pipfile":
 			m := core.Manifest{Ecosystem: core.Pip, Path: f, Tool: "pipenv"}
@@ -63,6 +68,7 @@ func (python) Detect(root string) ([]core.Manifest, error) {
 			compiled[out] = true
 		}
 	}
+	var reqMs []core.Manifest
 	for _, f := range queue {
 		if compiled[f] {
 			continue
@@ -71,10 +77,114 @@ func (python) Detect(root string) ([]core.Manifest, error) {
 		if out := strings.TrimSuffix(f, ".in") + ".txt"; compiled[out] {
 			m.Lock = out
 		}
-		res = append(res, m)
+		reqMs = append(reqMs, m)
 	}
+	res = pyAdoptCompiled(root, append(res, reqMs...))
 	slices.SortFunc(res, func(a, b core.Manifest) int { return strings.Compare(a.Path, b.Path) })
 	return res, nil
+}
+
+// pyAdoptCompiled pairs a compiled requirements file that has no .in beside
+// it with the source its header's command names, a pyproject.toml or an .in
+// file with no lock of its own, which then locks with it. A compiled file
+// that names no such source, or shares it with another output, stays a
+// manifest of its own whose pins Deps reads as locked, not required.
+func pyAdoptCompiled(root string, ms []core.Manifest) []core.Manifest {
+	byPath := map[string]int{}
+	for i, m := range ms {
+		byPath[m.Path] = i
+	}
+	added := map[int]bool{}
+	outs := map[int][]int{}
+	for i := range ms {
+		m := ms[i]
+		if m.Lock != "" || path.Ext(m.Path) != ".txt" || pyCompiledBy(root, m.Path) == "" {
+			continue
+		}
+		for _, src := range pyCompiledFrom(root, m.Path) {
+			if path.Base(src) != "pyproject.toml" && path.Ext(src) != ".in" || !pyUnder(path.Dir(src), m.Path) {
+				continue
+			}
+			j, ok := byPath[src]
+			if !ok && path.Ext(src) == ".in" && onDisk(root, src) {
+				j, ok = len(ms), true
+				byPath[src], added[j] = j, true
+				ms = append(ms, core.Manifest{Ecosystem: core.Pip, Path: src, Tool: "pip"})
+			}
+			if ok && ms[j].Lock == "" {
+				outs[j] = append(outs[j], i)
+			}
+			break
+		}
+	}
+	drop := map[int]bool{}
+	for j, is := range outs {
+		if len(is) == 1 {
+			ms[j].Lock = ms[is[0]].Path
+			drop[is[0]] = true
+		}
+	}
+	var res []core.Manifest
+	for i, m := range ms {
+		if !drop[i] && (!added[i] || m.Lock != "") {
+			res = append(res, m)
+		}
+	}
+	return res
+}
+
+// pyUnder reports whether rel sits in dir or under it, so a lock command
+// run in dir can name it.
+func pyUnder(dir, rel string) bool {
+	return dir == "." || strings.HasPrefix(rel, dir+"/")
+}
+
+// pyCompiledFrom lists the sources the command in a compiled file's header
+// compiled it from, relative to the repo root: its arguments that are not
+// options or their values.
+func pyCompiledFrom(root, rel string) []string {
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil
+	}
+	for i, line := range strings.SplitN(string(b), "\n", 11) {
+		if i == 10 || !strings.HasPrefix(line, "#") {
+			break
+		}
+		f := strings.Fields(strings.TrimPrefix(line, "#"))
+		switch {
+		case len(f) > 0 && f[0] == "pip-compile":
+			f = f[1:]
+		case len(f) > 2 && f[0] == "uv" && f[1] == "pip" && f[2] == "compile":
+			f = f[3:]
+		default:
+			continue
+		}
+		var res []string
+		for k := 0; k < len(f); k++ {
+			switch arg := f[k]; {
+			case pyValueOpts[arg]:
+				k++
+			case strings.HasPrefix(arg, "-"):
+			default:
+				res = append(res, path.Join(path.Dir(rel), arg))
+			}
+		}
+		return res
+	}
+	return nil
+}
+
+// pyValueOpts are the pip-compile and uv pip compile options whose value is
+// the next argument.
+var pyValueOpts = map[string]bool{
+	"-o": true, "--output-file": true, "-c": true, "--constraint": true, "--constraints": true,
+	"--override": true, "--overrides": true, "--build-constraint": true, "--build-constraints": true,
+	"-P": true, "--upgrade-package": true, "--extra": true, "--group": true, "-i": true, "--index-url": true,
+	"--extra-index-url": true, "-f": true, "--find-links": true, "-p": true, "--python": true,
+	"--python-version": true, "--python-platform": true, "--resolver": true, "--cache-dir": true,
+	"--pip-args": true, "--annotation-style": true, "--unsafe-package": true, "--no-emit-package": true,
+	"--config": true, "--index": true, "--default-index": true,
 }
 
 // pyReqFile matches requirements.txt, requirements-dev.txt, dev-requirements.in
@@ -123,6 +233,9 @@ func pyIncludes(root, rel string) (reqs, cons []string) {
 	return reqs, cons
 }
 
+// pyProjectManifest reads a pyproject.toml that declares a project, or that
+// is the virtual root of a uv workspace, whose deps live in its lock alone.
+// A uv workspace member shares the lockfile at the workspace root.
 func pyProjectManifest(root, rel string) (core.Manifest, bool) {
 	var doc map[string]any
 	if readTOML(filepath.Join(root, filepath.FromSlash(rel)), &doc) != nil {
@@ -130,7 +243,10 @@ func pyProjectManifest(root, rel string) (core.Manifest, bool) {
 	}
 	tool, _ := doc["tool"].(map[string]any)
 	_, poetry := tool["poetry"]
-	if _, ok := doc["project"]; !ok && !poetry {
+	_, pdm := tool["pdm"]
+	uv, _ := tool["uv"].(map[string]any)
+	_, workspace := uv["workspace"]
+	if _, ok := doc["project"]; !ok && !poetry && !workspace {
 		return core.Manifest{}, false
 	}
 	m := core.Manifest{Ecosystem: core.Pip, Path: rel, Tool: "pip"}
@@ -140,10 +256,51 @@ func pyProjectManifest(root, rel string) (core.Manifest, bool) {
 		m.Lock, m.Tool = path.Join(dir, "uv.lock"), "uv"
 	case onDisk(root, path.Join(dir, "poetry.lock")):
 		m.Lock, m.Tool = path.Join(dir, "poetry.lock"), "poetry"
+	case onDisk(root, path.Join(dir, "pdm.lock")):
+		m.Lock, m.Tool = path.Join(dir, "pdm.lock"), "pdm"
 	case poetry:
 		m.Tool = "poetry"
+	case pdm:
+		m.Tool = "pdm"
+	default:
+		if lock := uvWorkspaceLock(root, dir); lock != "" {
+			m.Lock, m.Tool = lock, "uv"
+		}
 	}
 	return m, true
+}
+
+// uvWorkspaceLock finds the uv.lock of the workspace dir belongs to: the
+// nearest pyproject.toml above it with a [tool.uv.workspace] table, when its
+// members globs, less its exclude globs, take dir.
+func uvWorkspaceLock(root, dir string) string {
+	for d := dir; d != "."; {
+		d = path.Dir(d)
+		var doc struct {
+			Tool struct {
+				UV struct {
+					Workspace *struct {
+						Members []string `toml:"members"`
+						Exclude []string `toml:"exclude"`
+					} `toml:"workspace"`
+				} `toml:"uv"`
+			} `toml:"tool"`
+		}
+		if readTOML(filepath.Join(root, filepath.FromSlash(d), "pyproject.toml"), &doc) != nil {
+			continue
+		}
+		ws := doc.Tool.UV.Workspace
+		if ws == nil {
+			continue
+		}
+		member := memberDir(d, dir)
+		lock := path.Join(d, "uv.lock")
+		if !globsMatch(ws.Members, member) || globsMatch(ws.Exclude, member) || !onDisk(root, lock) {
+			return ""
+		}
+		return lock
+	}
+	return ""
 }
 
 // pyEntry is one requirement as written, with what Bump needs to edit it in
@@ -173,6 +330,8 @@ func pyEntries(root string, m core.Manifest) ([]pyEntry, error) {
 		return pyProjectEntries(m.Path, src)
 	case "Pipfile":
 		return pipfileEntries(m.Path, src)
+	case "setup.cfg":
+		return setupCfgEntries(src), nil
 	}
 	res := pyReqEntries(src)
 	if pyDevFile(m.Path) {
@@ -181,6 +340,54 @@ func pyEntries(root string, m core.Manifest) ([]pyEntry, error) {
 		}
 	}
 	return res, nil
+}
+
+// setupCfgEntries reads the requirements a setuptools setup.cfg declares:
+// [options] install_requires, and each extra of [options.extras_require],
+// one per line, as the value or its indented continuation lines. A file:
+// or attr: indirection names no requirement here.
+func setupCfgEntries(src []byte) []pyEntry {
+	var res []pyEntry
+	section, key := "", ""
+	add := func(text string, n int) {
+		text = pyStripComment(text)
+		t := strings.TrimSpace(text)
+		if t == "" || strings.HasPrefix(t, "file:") || strings.HasPrefix(t, "attr:") {
+			return
+		}
+		r, ok := pyParseReq(t)
+		if !ok {
+			return
+		}
+		r.line, r.raw = n, t
+		if section == "options.extras_require" {
+			r.extra, r.dev = key, pyDevGroups[PyNorm(key)]
+		}
+		res = append(res, r)
+	}
+	for i, l := range strings.Split(string(src), "\n") {
+		line := strings.TrimRight(l, "\r")
+		t := strings.TrimSpace(line)
+		switch {
+		case t == "" || t[0] == '#' || t[0] == ';':
+		case strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]"):
+			section, key = strings.ToLower(strings.TrimSpace(t[1:len(t)-1])), ""
+		case line[0] != ' ' && line[0] != '\t':
+			k, v, ok := strings.Cut(line, "=")
+			if c := strings.IndexByte(line, ':'); c >= 0 && (!ok || c < len(k)) {
+				k, v, ok = line[:c], line[c+1:], true
+			}
+			key = ""
+			k = strings.ToLower(strings.TrimSpace(k))
+			if ok && (section == "options" && k == "install_requires" || section == "options.extras_require") {
+				key = k
+				add(v, i+1)
+			}
+		case key != "":
+			add(line, i+1)
+		}
+	}
+	return res
 }
 
 // pyDevFile reports a requirements file named for development or tests:
@@ -457,6 +664,11 @@ func (python) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 	if err != nil {
 		return nil, err
 	}
+	uv, err := pyReadUV(root, m)
+	if err != nil {
+		return nil, err
+	}
+	pinsOnly := m.Lock == "" && path.Ext(m.Path) == ".txt" && pyCompiledBy(root, m.Path) != ""
 	pyLearnModules(root, path.Dir(m.Path))
 	versions := map[string]string{}
 	for _, l := range locked {
@@ -466,7 +678,7 @@ func (python) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 	direct := map[string]bool{}
 	for _, e := range entries {
 		n := PyNorm(e.name)
-		if direct[n] {
+		if direct[n] || uv.local[n] {
 			continue
 		}
 		direct[n] = true
@@ -478,15 +690,53 @@ func (python) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 			Manifest:  m,
 			Line:      e.line,
 			Dev:       e.dev,
-			Direct:    true,
+			Direct:    !pinsOnly,
 		})
 	}
 	for _, l := range locked {
-		if !direct[l.name] {
+		if !direct[l.name] && !uv.elsewhere(l.name) {
 			res = append(res, core.Dep{Ecosystem: core.Pip, Name: l.name, Version: l.version, Manifest: m, Dev: l.dev || pyDevFile(m.Path)})
 		}
 	}
 	return res, nil
+}
+
+// pyUVView is what a manifest makes of a uv.lock it may share with a
+// workspace: the packages that come from no registry (members, paths, git),
+// which are not registry deps however they are written, and whether each
+// locked package is reported by another manifest. A member reports only its
+// own requirements, and the root leaves out what members require directly.
+type pyUVView struct {
+	local     map[string]bool
+	elsewhere func(string) bool
+}
+
+func pyReadUV(root string, m core.Manifest) (pyUVView, error) {
+	view := pyUVView{elsewhere: func(string) bool { return false }}
+	if path.Base(m.Lock) != "uv.lock" {
+		return view, nil
+	}
+	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(m.Lock)))
+	if err != nil {
+		return view, err
+	}
+	ps, err := uvPackages(src)
+	if err != nil {
+		return view, fmt.Errorf("%s: %w", m.Lock, err)
+	}
+	view.local = map[string]bool{}
+	for _, p := range ps {
+		if _, ok := p.Source["registry"]; !ok {
+			view.local[PyNorm(p.Name)] = true
+		}
+	}
+	if path.Dir(m.Path) != path.Dir(m.Lock) {
+		view.elsewhere = func(string) bool { return true }
+		return view, nil
+	}
+	reqs := uvMemberReqs(ps, ".")
+	view.elsewhere = func(name string) bool { return reqs[name] }
+	return view, nil
 }
 
 // pyPinned is the version an exact == or === pin names, "" for anything looser.
@@ -702,6 +952,9 @@ func (py python) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	if path.Base(m.Path) == "Pipfile" {
 		return nil, fmt.Errorf("%s is read only: %w", m.Path, core.ErrNotSupported)
 	}
+	if err := lockUnsupported(m); err != nil {
+		return nil, err
+	}
 	if toName != "" && !d.Direct {
 		return nil, fmt.Errorf("%s: replacing %s, which only the lockfile names: %w", m.Path, d.Name, core.ErrNotSupported)
 	}
@@ -719,10 +972,7 @@ func (py python) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	}
 	tool := pyLockTool(root, m)
 	if !have(tool) {
-		if !edited {
-			return nil, core.ToolMissing{Tool: tool}
-		}
-		return &core.Bump{Files: snap.changed(root), Note: tool + " not found"}, nil
+		return nil, errors.Join(core.ToolMissing{Tool: tool}, snap.restore(root))
 	}
 	exact := d.Direct && toName == "" && tool == "poetry"
 	targeted := !edited && !exact
@@ -853,6 +1103,8 @@ func pyLockTool(root string, m core.Manifest) string {
 		return "uv"
 	case "poetry.lock":
 		return "poetry"
+	case "pdm.lock":
+		return "pdm"
 	}
 	if pyCompiledBy(root, m.Lock) == "uv" {
 		return "uv"
@@ -897,7 +1149,7 @@ func poetryLock(ctx context.Context, root, dir string) string {
 }
 
 func (python) Commands(root string, m core.Manifest) core.Commands {
-	dir := path.Dir(m.Path)
+	dir := pyProjDir(root, m)
 	install, py := "python3 -m venv .venv && .venv/bin/pip install "+pyPipArgs(root, m), pyRun(m)
 	switch m.Tool {
 	case "uv":
@@ -906,6 +1158,11 @@ func (python) Commands(root string, m core.Manifest) core.Commands {
 		install = "poetry install"
 	case "pipenv":
 		install = "pipenv sync --dev"
+	case "pdm":
+		install = "pdm install"
+		if m.Lock != "" {
+			install = "pdm sync"
+		}
 	}
 	c := core.Commands{Install: []string{inDir(dir, install)}}
 	if t := pyTestLine(root, m); t != "" {
@@ -923,6 +1180,8 @@ func pyRun(m core.Manifest) string {
 		return "poetry run python"
 	case "pipenv":
 		return "pipenv run python"
+	case "pdm":
+		return "pdm run python"
 	}
 	return ".venv/bin/python"
 }
@@ -945,23 +1204,65 @@ func pyPipArgs(root string, m core.Manifest) string {
 		}
 		return "-e " + shArg(".["+strings.Join(extras, ",")+"]")
 	}
+	if path.Base(m.Path) == "setup.cfg" {
+		return "-e ."
+	}
+	proj := pyProjDir(root, m)
 	file := cmp.Or(m.Lock, m.Path)
-	res := "-r " + shArg(memberDir(dir, file))
-	if dev := path.Join(dir, "requirements-dev.txt"); dev != file && onDisk(root, dev) {
+	res := "-r " + shArg(memberDir(proj, file))
+	if dev := path.Join(proj, "requirements-dev.txt"); dev != file && onDisk(root, dev) {
 		res += " -r requirements-dev.txt"
 	}
+	if pyInstallable(root, proj) && (proj != dir || onDisk(root, path.Join(proj, "src"))) {
+		res += " -e ."
+	}
 	return res
+}
+
+// pyProjMarks are what makes a directory a Python project's: its build
+// files, its tests, its pytest configuration.
+var pyProjMarks = []string{"setup.py", "setup.cfg", "pyproject.toml", "tests", "test", "pytest.ini", "tox.ini", "conftest.py"}
+
+// pyProjDir is the directory a requirements file's project runs from: the
+// file's own, or the nearest one above it that holds the project, as for
+// requirements/tests.txt next to setup.py and tests/. Other manifests sit
+// in theirs.
+func pyProjDir(root string, m core.Manifest) string {
+	dir := path.Dir(m.Path)
+	if b := path.Base(m.Path); b == "pyproject.toml" || b == "Pipfile" || b == "setup.cfg" {
+		return dir
+	}
+	for d := dir; ; d = path.Dir(d) {
+		if slices.ContainsFunc(pyProjMarks, func(f string) bool { return onDisk(root, path.Join(d, f)) }) {
+			return d
+		}
+		if d == "." || d == "/" {
+			return dir
+		}
+	}
+}
+
+// pyInstallable says whether dir holds a package pip can install with -e.
+func pyInstallable(root, dir string) bool {
+	if onDisk(root, path.Join(dir, "setup.py")) || onDisk(root, path.Join(dir, "setup.cfg")) {
+		return true
+	}
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path.Join(dir, "pyproject.toml"))))
+	return err == nil && (bytes.Contains(b, []byte("[project]")) || bytes.Contains(b, []byte("[build-system]")))
 }
 
 // pyTestLine picks pytest when the project configures or depends on it, and
 // unittest discovery when there are test files but no pytest.
 func pyTestLine(root string, m core.Manifest) string {
-	dir := filepath.Join(root, filepath.FromSlash(path.Dir(m.Path)))
+	dir := filepath.Join(root, filepath.FromSlash(pyProjDir(root, m)))
 	if pyUsesPytest(root, m, dir) {
 		return "pytest"
 	}
 	if hits, _ := filepath.Glob(filepath.Join(dir, "tests", "*.py")); len(hits) > 0 {
-		return "unittest discover -s tests -t ."
+		if onDisk(dir, filepath.Join("tests", "__init__.py")) {
+			return "unittest discover -s tests -t ."
+		}
+		return "unittest discover -s tests"
 	}
 	if hits, _ := filepath.Glob(filepath.Join(dir, "test*.py")); len(hits) > 0 {
 		return "unittest discover"
@@ -991,7 +1292,7 @@ func pyUsesPytest(root string, m core.Manifest, dir string) bool {
 
 // pyNewSpec rewrites a version specifier so that it admits to, keeping its
 // style: ==1.0 -> ==2.0, >=1,<2 -> >=2.1,<3 (when 2.1 is outside), ~=1.4 ->
-// ~=2.0, and Poetry's ^1.2 -> ^2.0. A specifier that already admits to comes
+// ~=2.0, and Poetry's ^1.2 -> ^2.0 and 2.* -> 3.*. A specifier that already admits to comes
 // back unchanged.
 func pyNewSpec(spec, to string) (string, error) {
 	if _, ok := ver.Parse(to); !ok {
@@ -1036,16 +1337,21 @@ func pyNewClause(op, v, to string) (string, string) {
 	switch op {
 	case "===":
 		return op, to
-	case "==":
+	case "", "==":
 		if prefix, ok := strings.CutSuffix(v, ".*"); ok {
 			return op, pyTrimTo(prefix, to, true) + ".*"
+		}
+		if op == "" {
+			return op, to
 		}
 		return op, pyTrimTo(v, to, false)
 	case ">", ">=":
 		return ">=", pyTrimTo(v, to, false)
 	case "<":
 		return op, pyNextMajor(v, to)
-	case "~=", "^", "~":
+	case "~=":
+		return op, pyCompatible(v, to)
+	case "^", "~":
 		return op, pyTrimTo(v, to, false)
 	case "!=":
 		return op, v
@@ -1083,6 +1389,29 @@ func pyTrimTo(old, to string, prefix bool) string {
 		parts[i] = strconv.Itoa(v.Nums[i])
 	}
 	return strings.Join(parts, ".")
+}
+
+// pyCompatible rewrites a ~= clause without narrowing it: ~=1.4 admits any
+// 1.x from 1.4, so 2.1.3 gives ~=2.1,>=2.1.3, the 2.x series from the fixed
+// release on, and 2.0.0 gives plain ~=2.0.
+func pyCompatible(old, to string) string {
+	k := len(strings.Split(old, "."))
+	v, ok := ver.Parse(to)
+	if !ok || k < 2 || len(v.Nums) <= k {
+		return to
+	}
+	parts := make([]string, k)
+	for i := range parts {
+		parts[i] = strconv.Itoa(v.Nums[i])
+	}
+	head := strings.Join(parts, ".")
+	if h, _ := ver.Parse(head); ver.Compare(h, v) == 0 {
+		return head
+	}
+	if res := head + ",>=" + to; pySatisfies("~="+res, to) {
+		return res
+	}
+	return to
 }
 
 // pyNextMajor is the next major after to, written with as many parts as old.
@@ -1143,7 +1472,7 @@ func pyClause(op, want, version string) bool {
 	if prefix, ok := strings.CutSuffix(want, ".*"); ok {
 		w, _ := ver.Parse(prefix)
 		match := pyPrefix(w.Nums, v.Nums)
-		return op == "==" && match || op == "!=" && !match
+		return (op == "==" || op == "") && match || op == "!=" && !match
 	}
 	w, ok := ver.Parse(want)
 	if !ok {

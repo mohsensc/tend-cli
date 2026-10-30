@@ -116,3 +116,6 @@
   files. Any other host the code names is not reported.
 - Terraform and Helm changes are proven with `terraform validate` and
   `helm lint` only where those tools are installed.
+- Projects locked with `bun.lock`, `bun.lockb` or `pdm.lock` are read and
+  listed, but tend does not bump or remove their dependencies, since it
+  cannot regenerate those lockfiles.

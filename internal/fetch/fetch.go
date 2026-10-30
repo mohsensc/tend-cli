@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mohsensc/tend-cli/internal/core"
@@ -81,8 +84,13 @@ func TTL(d time.Duration) core.FetchOpt { return func(o *core.FetchOpts) { o.TTL
 
 func NoCache() core.FetchOpt { return func(o *core.FetchOpts) { o.NoCache = true } }
 
-// Idempotent marks a Post as safe to send again after a 429 or 5xx. Without
-// it a Post is sent once: the server may have acted on it already.
+// Timeout gives one request d, its body read too, in place of the client's
+// own limit: a release archive takes longer than an API answer.
+func Timeout(d time.Duration) core.FetchOpt { return func(o *core.FetchOpts) { o.Timeout = d } }
+
+// Idempotent marks a Post as safe to send again after a 429, a 5xx or a
+// dropped connection. Without it a Post is sent once: the server may have
+// acted on it already.
 func Idempotent() core.FetchOpt { return func(o *core.FetchOpts) { o.Idempotent = true } }
 
 func (c *Client) Get(ctx context.Context, u string, opts ...core.FetchOpt) (*core.Response, error) {
@@ -163,6 +171,7 @@ func (c *Client) do(ctx context.Context, method, u string, body []byte, h http.H
 	if method != http.MethodGet && !o.Idempotent {
 		limit = 0
 	}
+	timeouts := 0
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
 		if err != nil {
@@ -170,14 +179,19 @@ func (c *Client) do(ctx context.Context, method, u string, body []byte, h http.H
 		}
 		req.Header = h.Clone()
 		start := c.now()
-		res, err := c.client().Do(req)
+		res, b, err := c.send(req, o.Timeout)
 		if err != nil {
-			return nil, fmt.Errorf("%s %s: %w", method, u, err)
-		}
-		b, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
-		res.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("%s %s: %w", method, u, err)
+			if timedOut(err) {
+				timeouts++
+			}
+			if ctx.Err() != nil || !transient(err) || attempt == limit || timeouts > 1 {
+				return nil, attemptsError(method, u, err, attempt)
+			}
+			c.logf("%s %s: %v", method, u, err)
+			if err := c.sleep(ctx, backoff(attempt, "", c.now())); err != nil {
+				return nil, fmt.Errorf("%s %s: %w", method, u, err)
+			}
+			continue
 		}
 		if len(b) > maxBody {
 			return nil, fmt.Errorf("%s %s: body larger than %d bytes", method, u, maxBody)
@@ -194,6 +208,53 @@ func (c *Client) do(ctx context.Context, method, u string, body []byte, h http.H
 			return nil, fmt.Errorf("%s %s: %w", method, u, err)
 		}
 	}
+}
+
+func (c *Client) send(req *http.Request, timeout time.Duration) (*http.Response, []byte, error) {
+	hc := c.client()
+	if timeout > 0 {
+		cp := *hc
+		cp.Timeout = timeout
+		hc = &cp
+	}
+	res, err := hc.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer res.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
+	if err != nil {
+		return nil, nil, err
+	}
+	return res, b, nil
+}
+
+func attemptsError(method, u string, err error, attempt int) error {
+	if attempt == 0 {
+		return fmt.Errorf("%s %s: %w", method, u, err)
+	}
+	return fmt.Errorf("%s %s: %w after %d attempts", method, u, err, attempt+1)
+}
+
+func transient(err error) bool {
+	var cert *tls.CertificateVerificationError
+	var record tls.RecordHeaderError
+	if errors.As(err, &cert) || errors.As(err, &record) {
+		return false
+	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) {
+		return dns.IsTimeout || dns.IsTemporary
+	}
+	var op *net.OpError
+	return timedOut(err) || errors.As(err, &op) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE)
+}
+
+func timedOut(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
 }
 
 // backoff doubles from one second unless the server says how long to wait.

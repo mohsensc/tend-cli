@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func repo(t *testing.T) string {
@@ -125,5 +126,23 @@ func TestFilesListsAConflictOnce(t *testing.T) {
 	slices.Sort(got)
 	if want := []string{"f", "g"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Files = %q, want %q", got, want)
+	}
+}
+
+// A cancel stops the call even while something git started still holds its
+// output, as a push stuck on the network would.
+func TestRunReturnsOnCancel(t *testing.T) {
+	dir := repo(t)
+	if _, err := Run(context.Background(), dir, "config", "alias.hang", "!sleep 5"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := Run(ctx, dir, "hang"); err == nil {
+		t.Fatal("a cancelled call succeeded")
+	}
+	if took := time.Since(start); took > waitDelay+2*time.Second {
+		t.Errorf("Run returned after %s", took)
 	}
 }

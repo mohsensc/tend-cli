@@ -501,7 +501,7 @@ func isUpper(c byte) bool { return 'A' <= c && c <= 'Z' }
 // by convention.
 var testDirs = map[string]bool{"test": true, "tests": true, "__tests__": true, "spec": true, "specs": true, "testdata": true}
 
-var testName = regexp.MustCompile(`(_test\.go|\.(test|spec)\.[cm]?[jt]sx?|^test_.*\.py|_test\.py|^conftest\.py|_(spec|test)\.rb|Tests?\.(java|kt|cs|php)|IT\.java)$`)
+var testName = regexp.MustCompile(`(_test\.go|\.(test|spec)(-d)?\.[cm]?[jt]sx?|^tests?\.([cm]?[jt]sx?|py)|^test_.*\.py|_test\.py|^conftest\.py|_(spec|test)\.rb|Tests?\.(java|kt|cs|php)|IT\.java)$`)
 
 // IsTest reports whether a repo-relative path is test code by its language's
 // conventions: a _test.go file, a .test.js file, anything under tests/, and so on.

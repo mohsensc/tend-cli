@@ -25,7 +25,8 @@ const tfRegistry = "https://registry.terraform.io/v1/"
 var (
 	tfBlock    = regexp.MustCompile(`^\s*(required_providers|module\s+"[^"]+")\s*\{`)
 	tfEntry    = regexp.MustCompile(`^\s*([\w-]+)\s*=\s*\{`)
-	tfAttr     = regexp.MustCompile(`^\s*(source|version)\s*=\s*"([^"]*)"`)
+	tfAttr     = regexp.MustCompile(`(?:^|[\s{,])(source|version)\s*=\s*"([^"]*)"`)
+	tfLegacy   = regexp.MustCompile(`^\s*([\w-]+)\s*=\s*"([^"]*)"`)
 	tfLockHead = regexp.MustCompile(`^provider\s+"(?:registry\.terraform\.io/)?([^"]+)"\s*\{`)
 	tfLockVer  = regexp.MustCompile(`^\s*version\s*=\s*"([^"]+)"`)
 	tfModule   = regexp.MustCompile(`^[\w-]+/[\w-]+/[\w-]+$`)
@@ -77,9 +78,16 @@ func tfPins(b []byte) []tfPin {
 		if in == "required_providers" && depth == 1 {
 			if m := tfEntry.FindStringSubmatch(l); m != nil {
 				cur = &tfPin{name: "hashicorp/" + m[1]}
+			} else if m := tfLegacy.FindStringSubmatch(l); m != nil {
+				res = append(res, tfPin{name: "hashicorp/" + m[1], constraint: m[2], line: i + 1})
 			}
 		}
-		if m := tfAttr.FindStringSubmatch(l); m != nil && cur != nil {
+		for _, x := range tfAttr.FindAllStringSubmatchIndex(l, -1) {
+			at := depth + strings.Count(l[:x[0]], "{") - strings.Count(l[:x[0]], "}")
+			if cur == nil || cur.module && at != 1 || !cur.module && at != 2 {
+				continue
+			}
+			m := []string{l[x[0]:x[1]], l[x[2]:x[3]], l[x[4]:x[5]]}
 			switch m[1] {
 			case "source":
 				cur.name = m[2]
@@ -128,7 +136,7 @@ func (terraform) Deps(root string, m core.Manifest) ([]core.Dep, error) {
 		d := core.Dep{Ecosystem: core.Terraform, Name: strings.ToLower(p.name), Req: p.constraint, Manifest: m, Line: p.line, Direct: true}
 		d.Version = locked[d.Name]
 		if d.Version == "" {
-			d.Version = strings.TrimSpace(strings.TrimLeft(p.constraint, "~>=<! "))
+			d.Version = lowest(p.constraint)
 		}
 		res = append(res, d)
 	}
@@ -192,7 +200,7 @@ func (terraform) Bump(ctx context.Context, root string, d core.Dep, to, toName s
 	if toName != "" {
 		return nil, fmt.Errorf("terraform: %s: %w", d.Name, core.ErrNotSupported)
 	}
-	next, err := fixReq(d.Req, to, false)
+	next, err := fixReq(d.Req, to, anyDialect)
 	if err != nil {
 		return nil, fmt.Errorf("terraform: %s: %w", d.Name, err)
 	}

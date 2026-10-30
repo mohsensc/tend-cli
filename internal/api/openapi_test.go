@@ -4,6 +4,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,8 +56,8 @@ func TestLoad(t *testing.T) {
 			if !get.Deprecated || !get.Sunset.Equal(time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)) {
 				t.Errorf("get deprecated %v sunset %v", get.Deprecated, get.Sunset)
 			}
-			if got := d.Ops["POST /v2/orders/{id}/refund"].Sunset; !got.Equal(time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)) {
-				t.Errorf("x-deprecated-at sunset = %v", got)
+			if refund := d.Ops["POST /v2/orders/{id}/refund"]; !refund.Deprecated || !refund.Sunset.IsZero() {
+				t.Errorf("x-deprecated-at should deprecate without a sunset: %+v", refund)
 			}
 			legacy := d.Ops["GET /v2/orders/legacy"]
 			if !legacy.Sunset.Equal(time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)) || legacy.Summary != "Old listing, kept for one more year." {
@@ -290,5 +291,170 @@ func TestSplit(t *testing.T) {
 		if got := split(tt.seg); !slices.Equal(got, tt.want) {
 			t.Errorf("split(%q) = %+v, want %+v", tt.seg, got, tt.want)
 		}
+	}
+}
+
+func load3(t *testing.T, spec string) *Doc {
+	t.Helper()
+	d, err := Load([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func customerSpec(customer string) string {
+	return `openapi: 3.1.0
+info: {version: "1"}
+paths:
+  /v1/o:
+    get:
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: ` + customer + `
+components:
+  schemas:
+    C:
+      type: object
+      properties:
+        id: {type: string}
+    Untyped:
+      properties:
+        id: {type: string}
+`
+}
+
+func TestUnionType(t *testing.T) {
+	tests := []struct {
+		name, customer, want string
+	}{
+		{"ref", `{$ref: '#/components/schemas/C'}`, "object"},
+		{"nullable ref", `{anyOf: [{type: "null"}, {$ref: '#/components/schemas/C'}]}`, "object"},
+		{"ref then null", `{anyOf: [{$ref: '#/components/schemas/C'}, {type: "null"}]}`, "object"},
+		{"untyped ref and null", `{anyOf: [{type: "null"}, {$ref: '#/components/schemas/Untyped'}]}`, "object"},
+		{"only null", `{oneOf: [{type: "null"}]}`, ""},
+		{"string or object", `{anyOf: [{type: string}, {$ref: '#/components/schemas/C'}]}`, ""},
+		{"object or string", `{anyOf: [{$ref: '#/components/schemas/C'}, {type: string}]}`, ""},
+		{"allOf", `{allOf: [{type: integer}]}`, "integer"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := load3(t, customerSpec(tt.customer))
+			got := d.Ops["GET /v1/o"].Response.Props["customer"]
+			if got == nil || got.Type != tt.want {
+				t.Fatalf("customer = %+v, want type %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUnionTypeDiff(t *testing.T) {
+	ref := `{$ref: '#/components/schemas/C'}`
+	tests := []struct{ old, cur string }{
+		{ref, `{anyOf: [{type: "null"}, {$ref: '#/components/schemas/C'}]}`},
+		{ref, `{anyOf: [{$ref: '#/components/schemas/C'}, {type: "null"}]}`},
+		{`{anyOf: [{type: string}, {$ref: '#/components/schemas/C'}]}`, `{anyOf: [{$ref: '#/components/schemas/C'}, {type: string}]}`},
+		{`{anyOf: [{type: "null"}, {$ref: '#/components/schemas/Untyped'}]}`, ref},
+		{`{type: "null"}`, ref},
+	}
+	used := []Usage{{Method: "GET", Path: "/v1/o"}}
+	for _, tt := range tests {
+		old, cur := load3(t, customerSpec(tt.old)), load3(t, customerSpec(tt.cur))
+		if got := Diff(old, cur, used); len(got) != 0 {
+			t.Errorf("%s -> %s: %v", tt.old, tt.cur, got)
+		}
+		snap := load3(t, string(trimSpec(old, nil)))
+		if got := Diff(snap, cur, used); len(got) != 0 {
+			t.Errorf("snapshot of %s -> %s: %v", tt.old, tt.cur, got)
+		}
+	}
+}
+
+const wildcardSpec = `openapi: 3.0.1
+info: {version: "1"}
+paths:
+  /a:
+    get:
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                type: object
+                properties:
+                  x: {type: string}
+                  y: {type: integer}
+  /b:
+    get:
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema: {properties: {wild: {type: string}}}
+            "Application/JSON ; charset=utf-8":
+              schema: {properties: {json: {type: string}}}
+`
+
+func TestLoadWildcardBody(t *testing.T) {
+	d := load3(t, wildcardSpec)
+	a := d.Find("GET", "/a")
+	if a == nil || a.Response == nil || a.Response.Props["x"] == nil {
+		t.Fatalf("a */* response should have a schema: %+v", a)
+	}
+	if b := d.Find("GET", "/b").Response; b == nil || b.Props["json"] == nil {
+		t.Errorf("JSON should win over */*, whatever its case: %+v", b)
+	}
+	cur := load3(t, strings.Replace(wildcardSpec, "                  x: {type: string}\n", "", 1))
+	got := Diff(d, cur, []Usage{{Method: "GET", Path: "/a"}})
+	if len(got) != 1 || got[0].What != "response field removed" || got[0].Field != "x" {
+		t.Errorf("diff = %v", got)
+	}
+}
+
+func TestLoadUnquotedVersion(t *testing.T) {
+	d := load3(t, "openapi: 3.0.0\ninfo: {title: x, version: 2.10}\npaths: {}\n")
+	if d.Version != "2.10" {
+		t.Errorf("version = %q", d.Version)
+	}
+	d = load3(t, "openapi: 3.0.0\ninfo:\n  version: 2026-09-30\npaths: {}\n")
+	if d.Version != "2026-09-30" {
+		t.Errorf("version = %q", d.Version)
+	}
+}
+
+func TestFindTrailingSlash(t *testing.T) {
+	d := load3(t, `openapi: 3.0.0
+info: {version: "1"}
+servers: [{url: "https://x.test/v1"}]
+paths:
+  /:
+    get: {responses: {}}
+  /users/:
+    get: {responses: {}}
+`)
+	tests := []struct{ path, want string }{
+		{"https://x.test/v1/", "GET /v1/"},
+		{"/v1", "GET /v1/"},
+		{"/v1/users/", "GET /v1/users/"},
+		{"https://x.test/v1/users/?a=1", "GET /v1/users/"},
+		{"/users", "GET /v1/users/"},
+	}
+	for _, tt := range tests {
+		got := ""
+		if op := d.Find("GET", tt.path); op != nil {
+			got = op.Method + " " + op.Path
+		}
+		if got != tt.want {
+			t.Errorf("Find(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+	plain := load3(t, "openapi: 3.0.0\ninfo: {version: \"1\"}\npaths:\n  /users/:\n    get: {responses: {}}\n")
+	if plain.Find("GET", "https://api.x/users/?a=1") == nil || plain.Find("GET", "/users/") == nil {
+		t.Error("a /users/ template should be found")
 	}
 }

@@ -517,10 +517,10 @@ func nugetVersion(req, to string) (string, bool) {
 		return to, true
 	case strings.HasSuffix(req, ".*") && plainVersion.MatchString(strings.TrimSuffix(req, ".*")):
 		t := term{num: req}
-		if t.holds(want, false) {
+		if t.holds(want, anyDialect) {
 			return req, true
 		}
-		return t.move(to, false), true
+		return t.move(to, anyDialect), true
 	}
 	m := nugetRange.FindStringSubmatchIndex(req)
 	if m == nil {

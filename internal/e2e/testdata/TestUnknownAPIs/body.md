@@ -16,7 +16,7 @@ Nothing was changed in the code. No model is configured to move the call site, a
 
 Where the code uses it:
 
-- `src/inventory.js:4` `GET https://api.example-unknown.com/v2/items`
+- `src/inventory.js:4` `const res = await fetch('https://api.example-unknown.com/v2/items')`
 
 ### Proof
 

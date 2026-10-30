@@ -1,6 +1,6 @@
 ## fixture GET /v1/orders
 
-**Why**: breaking · response field removed (total_cents)
+**Why**: breaking · response field removed (total\_cents)
 
 ### What changed upstream
 

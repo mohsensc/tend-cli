@@ -156,6 +156,13 @@ func TestTrack(t *testing.T) {
 	if is := f.Issues(); len(is) != 1 || !is[0].Open || !strings.Contains(is[0].Body, "npm/a@2.0.0") {
 		t.Errorf("after losing state: %+v", is)
 	}
+	// An issue a maintainer deleted or moved is replaced in the same run.
+	f.DeleteIssue(1000)
+	s.st.Fail("npm/d@2.0.0", "npm test failed", "base2", now)
+	s.track(ctx, &plan.Plan{}, "base2")
+	if is := f.Issues(); len(is) != 1 || is[0].Number == 1000 || !is[0].Open || !strings.Contains(is[0].Body, "npm/d@2.0.0") || s.st.Issue.Number != is[0].Number {
+		t.Errorf("after the issue went: %+v, state %+v", is, s.st.Issue)
+	}
 }
 
 // Each part of a catch-up PR is made on top of the baseline the PR adds, so
@@ -200,5 +207,35 @@ func TestRestart(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "test", "tend", "smoke.js")); err != nil || string(b) != "require('node:test')\n" {
 		t.Errorf("the baseline is not there after a run's clean-up: %q, %v", b, err)
+	}
+}
+
+// A change that failed stays on the tracking issue when the base moves,
+// until a run tries it again; a catch-up stage is never called deprecated.
+func TestTrackKeepsFailuresAcrossBases(t *testing.T) {
+	ctx := context.Background()
+	f := deliver.NewFake("acme", "shop", "main")
+	var errs bytes.Buffer
+	s := &session{e: Env{Stderr: &errs}, cfg: config.Default(), st: state.New(), forge: f}
+	now := time.Now()
+	s.st.Fail("npm/chalk@6.0.1", "No model is configured to move the call site.", "base1", now)
+	axios := core.Change{ID: "npm/axios@1.20.0", Kind: core.Breaking, Level: "major", To: "1.20.0", Deps: []core.Dep{{Name: "axios"}}}
+	stage := core.Change{ID: core.StageID(2), Kind: core.First, Batch: &core.Batch{Stage: 2, Changes: []core.Change{axios}}}
+	plan.Refit(&stage)
+	moment := core.Change{ID: "npm/moment@", Kind: core.Deprecation, Deps: []core.Dep{{Name: "moment"}}}
+	chalk := core.Change{ID: "npm/chalk@6.0.1", Kind: core.Breaking, To: "6.0.1", Deps: []core.Dep{{Name: "chalk"}}}
+	p := &plan.Plan{Queue: []core.Change{stage, moment, chalk}}
+	s.track(ctx, p, "base1")
+	s.st.See("npm/chalk@6.0.1", "queued", "", now)
+	s.track(ctx, p, "base2")
+	is := f.Issues()
+	if len(is) != 1 || !is[0].Open {
+		t.Fatalf("issues = %+v; log %s", is, errs.String())
+	}
+	if want := "- `npm/chalk@6.0.1`: could not be made or proven on base1 (the base has moved on since; tend tries it again): no model is configured to move the call site\n"; !strings.Contains(is[0].Body, want) {
+		t.Errorf("the issue lacks %q:\n%s", want, is[0].Body)
+	}
+	if strings.Contains(is[0].Body, "`axios`") || !strings.Contains(is[0].Body, "`moment`") {
+		t.Errorf("deprecations listed:\n%s", is[0].Body)
 	}
 }

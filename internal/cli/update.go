@@ -17,13 +17,19 @@ func update(ctx context.Context, e Env, o opts) int {
 		return fail(e, err)
 	}
 	switch {
-	case info.Tag == "dev":
+	case info.Tag == "dev" && o.check:
 		fmt.Fprintf(e.Stdout, "tend: %s is a development build; self-update needs a release build\n", e.Version)
+	case info.Tag == "dev":
+		fmt.Fprintf(e.Stderr, "tend: %s is a development build; self-update needs a release build\n", e.Version)
+		return exitErr
 	case !info.Newer:
 		fmt.Fprintf(e.Stdout, "tend: %s is the latest release\n", e.Version)
 	case o.check:
 		fmt.Fprintf(e.Stdout, "tend: %s is available (this is %s); run tend update\n", info.Tag, e.Version)
 	default:
+		if !o.quiet {
+			fmt.Fprintf(e.Stderr, "tend: downloading %s\n", info.Tag)
+		}
 		if err := selfupdate.Apply(ctx, fetcher(e), info); err != nil {
 			return fail(e, err)
 		}

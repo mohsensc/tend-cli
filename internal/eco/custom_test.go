@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -174,5 +175,40 @@ func TestCheck(t *testing.T) {
 	err := Check(cfg)
 	if err == nil || !strings.Contains(err.Error(), `ecosystems[2]: unknown ecosystem "yarn"`) || !strings.Contains(err.Error(), `ignore[3]: unknown ecosystem "bower"`) || !strings.Contains(err.Error(), `deps[4]: source wants`) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCustomDetectNamed(t *testing.T) {
+	for _, git := range []bool{true, false} {
+		root := t.TempDir()
+		write(t, root, map[string]string{"bin/install.sh": "VERSION=1.2.3\n"})
+		if git {
+			if _, err := exec.LookPath("git"); err != nil {
+				continue
+			}
+			for _, args := range [][]string{{"init", "-q"}, {"add", "."}} {
+				if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v\n%s", args, err, out)
+				}
+			}
+		}
+		e := Custom([]config.Dep{
+			{Name: "tool", File: "bin/install.sh", Match: `VERSION=(?P<v>\S+)`, Source: "github:a/b"},
+			{Name: "gone", File: "scripts/missing.sh", Match: `V=(?P<v>\S+)`, Source: "github:a/c"},
+		})
+		ms, err := e.Detect(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ms) != 2 || ms[0].Path != "bin/install.sh" || ms[1].Path != "scripts/missing.sh" {
+			t.Fatalf("git %v: manifests = %+v", git, ms)
+		}
+		if deps, err := e.Deps(root, ms[0]); err != nil || len(deps) != 1 || deps[0].Version != "1.2.3" {
+			t.Errorf("git %v: deps = %+v, %v", git, deps, err)
+		}
+		_, err = e.Deps(root, ms[1])
+		if err == nil || !strings.Contains(err.Error(), `no file matches "scripts/missing.sh"`) || !strings.Contains(err.Error(), "gone") || strings.Contains(err.Error(), root) {
+			t.Errorf("git %v: missing file err = %v", git, err)
+		}
 	}
 }

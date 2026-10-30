@@ -42,7 +42,7 @@
       "Lock": "",
       "Tool": "docker"
     },
-    "Line": 8,
+    "Line": 7,
     "Dev": false,
     "Direct": true,
     "Pin": ""
@@ -58,7 +58,7 @@
       "Lock": "",
       "Tool": "docker"
     },
-    "Line": 10,
+    "Line": 9,
     "Dev": false,
     "Direct": true,
     "Pin": ""
@@ -74,7 +74,7 @@
       "Lock": "",
       "Tool": "docker"
     },
-    "Line": 16,
+    "Line": 18,
     "Dev": false,
     "Direct": true,
     "Pin": "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"

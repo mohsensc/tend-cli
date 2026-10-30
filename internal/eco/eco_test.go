@@ -238,3 +238,95 @@ func TestTraits(t *testing.T) {
 		t.Errorf("docker page = %s", p)
 	}
 }
+
+func TestWalkTracked(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	root := t.TempDir()
+	write(t, root, map[string]string{
+		"build/package/Dockerfile":  "FROM node:22",
+		"bin/install.sh":            "curl x",
+		"testdata/Dockerfile":       "FROM node:22",
+		"vendor/x/Dockerfile":       "FROM node:22",
+		"node_modules/a/Dockerfile": "FROM node:22",
+		"api.Dockerfile":            "FROM node:22",
+		"Containerfile":             "FROM node:22",
+		"compose.prod.yaml":         "services: {}",
+		"compose.override.yml":      "services: {}",
+		".dockerignore":             "x",
+		"Dockerfile.dockerignore":   "x",
+		"docs/compose-notes.txt":    "x",
+	})
+	for _, args := range [][]string{{"init", "-q"}, {"add", "."}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write(t, root, map[string]string{"build/package.json": "{}", "build/out/Dockerfile": "FROM node:22"})
+	got, err := (docker{}).Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, m := range got {
+		paths = append(paths, m.Path)
+	}
+	want := []string{"Containerfile", "api.Dockerfile", "build/package/Dockerfile", "compose.override.yml", "compose.prod.yaml"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Errorf("docker Detect = %v\nwant %v", paths, want)
+	}
+	if got, _ := walk(root, "package.json"); len(got) != 0 {
+		t.Errorf("untracked build output = %v", got)
+	}
+	if got, _ := walk(root, "install.sh"); !reflect.DeepEqual(got, []string{"bin/install.sh"}) {
+		t.Errorf("tracked bin script = %v", got)
+	}
+}
+
+func TestIsDockerfile(t *testing.T) {
+	for name, want := range map[string]bool{
+		"Dockerfile": true, "dockerfile": true, "Containerfile": true, "Dockerfile.dev": true,
+		"api.Dockerfile": true, "web.dockerfile": true, "app.containerfile": true, "a/b/Dockerfile.prod": true,
+		".dockerignore": false, "Dockerfile.dockerignore": false, "Dockerfiles": false, "README.md": false,
+	} {
+		if got := isDockerfile(name); got != want {
+			t.Errorf("isDockerfile(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// The tools tend runs to bump and lock never see its token or model key.
+func TestRunScrubsEnv(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "ghs_secret")
+	t.Setenv("TEND_MODEL_KEY", "sk_secret")
+	out, err := Run(context.Background(), t.TempDir(), "env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "ghs_secret") || strings.Contains(out, "sk_secret") {
+		t.Errorf("the environment reached the tool:\n%s", out)
+	}
+}
+
+// Outside git, a directory that is a repository of its own is another
+// project, as git ls-files would see it, and is not listed.
+func TestDirFilesNestedRepo(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"package.json", "a/index.js", "inner/requirements.txt", "inner/.git/HEAD", "wt/go.mod", "wt/.git"} {
+		p := filepath.Join(root, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := dirFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a/index.js", "package.json"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("dirFiles = %q, want %q", got, want)
+	}
+}

@@ -670,18 +670,33 @@ client.charges.create
 func TestReached(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"src/app.js":                       "module.exports = {}\n",
-		"src/lib/index.js":                 "module.exports = {}\n",
-		"src/alone.js":                     "module.exports = {}\n",
-		"test/app.test.js":                 "const app = require('../src/app')\nconst lib = require('../src/lib')\n",
-		"shop/billing.py":                  "def charge(): pass\n",
-		"shop/orders.py":                   "def order(): pass\n",
-		"tests/test_billing.py":            "from shop.billing import charge\n",
-		"pkg/a/a.go":                       "package a\n",
-		"pkg/a/a_test.go":                  "package a\n",
-		"pkg/b/b.go":                       "package b\n",
-		"src/main/java/shop/Cart.java":     "class Cart {}\n",
-		"src/test/java/shop/CartTest.java": "class CartTest {}\n",
+		"src/app.js":                           "module.exports = {}\n",
+		"src/lib/index.js":                     "module.exports = {}\n",
+		"src/alone.js":                         "module.exports = {}\n",
+		"test/app.test.js":                     "const app = require('../src/app')\nconst lib = require('../src/lib')\n",
+		"shop/billing.py":                      "def charge(): pass\n",
+		"shop/orders.py":                       "def order(): pass\n",
+		"tests/test_billing.py":                "from shop.billing import charge\n",
+		"pkg/a/a.go":                           "package a\n",
+		"pkg/a/a_test.go":                      "package a\n",
+		"pkg/b/b.go":                           "package b\n",
+		"src/main/java/shop/Cart.java":         "class Cart {}\n",
+		"src/test/java/shop/CartTest.java":     "class CartTest {}\n",
+		"src/main/java/shop/Db.java":           "class Db {}\n",
+		"src/test/java/shop/FeedbackTest.java": "class FeedbackTest {}\n",
+		"lib/api.rb":                           "class Api; end\n",
+		"lib/cart.rb":                          "class Cart; end\n",
+		"spec/capital_spec.rb":                 "describe 'x' do; end\n",
+		"spec/cart_spec.rb":                    "describe Cart do; end\n",
+		"lib/order.rb":                         "class Order; end\n",
+		"test/test_order.rb":                   "class TestOrder; end\n",
+		"src/Billing.cs":                       "class Billing {}\n",
+		"Shop.Tests/BillingTests.cs":           "class BillingTests {}\n",
+		"src/a.rs":                             "fn a() {}\n",
+		"tests/data_test.rs":                   "fn t() {}\n",
+		"crates/x/src/lib.rs":                  "fn f() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n",
+		"crates/x/src/other.rs":                "fn g() {}\n",
+		"crates/x/src/cli.rs":                  "fn main() {}\n#[test]\nfn t() {}\n",
 	}
 	for name, body := range files {
 		p := filepath.Join(root, filepath.FromSlash(name))
@@ -700,10 +715,55 @@ func TestReached(t *testing.T) {
 		"src/app.js": true, "src/lib/index.js": true, "src/alone.js": false,
 		"shop/billing.py": true, "shop/orders.py": false,
 		"pkg/a/a.go": true, "pkg/b/b.go": false,
-		"src/main/java/shop/Cart.java": true,
+		"src/main/java/shop/Cart.java": true, "src/main/java/shop/Db.java": false,
+		"lib/api.rb": false, "lib/cart.rb": true, "lib/order.rb": true,
+		"src/Billing.cs": true, "src/a.rs": true,
+		"crates/x/src/lib.rs": true, "crates/x/src/cli.rs": true, "crates/x/src/other.rs": false,
 	} {
 		if got := x.Reached(p); got != want {
 			t.Errorf("Reached(%s) = %v, want %v", p, got, want)
 		}
+	}
+}
+
+func TestRegexKeepsLaterCalls(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a.js", "import Stripe from 'stripe';\n"+
+		"const stripe = new Stripe(key);\n"+
+		"const isTick = c => /`/.test(c);\n"+
+		"function isUrl(u) {\n"+
+		"  return /^https?:\\/\\//.test(u) && stripe.refunds.create({});\n"+
+		"}\n"+
+		"stripe.charges.create({});\n"+
+		"const u = 'https://api.stripe.com/v1/charges';\n")
+	x, err := Build(Options{Root: root, Files: []string{"a.js"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := sites(x.Uses([]string{"stripe"}))
+	for _, want := range []string{"a.js:5:36 stripe.refunds.create", "a.js:7:1 stripe.charges.create"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("Uses = %q, want %s among them", got, want)
+		}
+	}
+	urls := x.URLs()
+	if len(urls) != 1 || urls[0].URL != "https://api.stripe.com/v1/charges" {
+		t.Errorf("URLs = %+v", urls)
+	}
+	if len(x.Notes()) != 0 {
+		t.Errorf("notes = %q", x.Notes())
+	}
+}
+
+func TestReaches(t *testing.T) {
+	x := &Index{files: []*file{
+		{FileScan: FileScan{File: "test/a.test.js", Lang: "js"}, lits: []lit{{Text: "../src/a"}}},
+		{FileScan: FileScan{File: "test/b.test.js", Lang: "js"}, lits: []lit{{Text: "../src/b"}}},
+	}}
+	if !x.Reaches("test/a.test.js", "src/a.js") || x.Reaches("test/b.test.js", "src/a.js") || x.Reaches("test/a.test.js", "src/b.js") {
+		t.Error("Reaches does not tell the tests apart")
+	}
+	if !x.Reached("src/a.js") || !x.Reached("src/b.js") || x.Reached("src/c.js") {
+		t.Error("Reached")
 	}
 }

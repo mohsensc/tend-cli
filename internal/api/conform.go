@@ -37,6 +37,11 @@ type Specs struct {
 	Fetch core.Fetcher
 	Dir   string // snapshots, one <provider>.json each
 	Now   func() time.Time
+	// Done reports whether a change has been dealt with: delivered, rejected or
+	// ignored. A field's type change that was is no longer reported, and
+	// Snapshot lets it go, since code fixed for the new type reads the field
+	// just as before. Nil means none was.
+	Done func(id string) bool
 
 	notes []string
 	runs  map[string]*run
@@ -46,7 +51,12 @@ type Specs struct {
 type run struct {
 	cur, old *Doc
 	used     []string
-	pinned   map[string]bool // ops whose breaking changes must survive the next snapshot
+	pinned   map[string][]pin // by op: the breaking changes that must survive the next snapshot
+}
+
+// pin is one breaking change the snapshot keeps the old side of.
+type pin struct {
+	What, Field, Detail, ID string
 }
 
 var _ core.Source = (*Specs)(nil)
@@ -94,13 +104,13 @@ func (s *Specs) Changes(ctx context.Context, inv *core.Inventory) ([]core.Change
 		if n := len(cur.Missing); n > 0 {
 			s.note("%s: %d unresolved $ref in the spec, first %s", p.Name, n, cur.Missing[0])
 		}
-		r := &run{cur: cur, old: s.snapshot(p.Name), pinned: map[string]bool{}}
+		r := &run{cur: cur, old: s.snapshot(p.Name), pinned: map[string][]pin{}}
 		s.runs[p.Name] = r
 		used := s.usages(p, pu, r)
 		for _, u := range used {
 			r.used = append(r.used, u.Method+" "+u.Path)
 		}
-		for _, c := range check(p, inv.Index, used, r) {
+		for _, c := range check(p, inv.Index, used, r, s.Done) {
 			if prev, ok := byID[c.ID]; ok {
 				c = combine(*prev, c)
 			}
@@ -122,24 +132,58 @@ func (s *Specs) spec(ctx context.Context, root string, p *Provider) (*Doc, error
 	if p.Spec == "" {
 		return nil, errors.New("no spec configured")
 	}
-	if !remote(p.Spec) {
-		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(p.Spec)))
+	res, err := s.load(ctx, root, p.Spec, p.Sunset)
+	if err != nil {
+		return nil, err
+	}
+	for _, more := range p.More {
+		d, err := s.load(ctx, root, more, p.Sunset)
+		if err != nil {
+			s.note("%s: %v", p.Name, err)
+			continue
+		}
+		res = join(res, d)
+	}
+	return res, nil
+}
+
+func (s *Specs) load(ctx context.Context, root, spec, sunset string) (*Doc, error) {
+	if !remote(spec) {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(spec)))
 		if err != nil {
 			return nil, err
 		}
-		return load(b, p.Sunset)
+		return load(b, sunset)
 	}
 	if s.Fetch == nil {
 		return nil, errors.New("no fetcher")
 	}
-	res, err := s.Fetch.Get(ctx, p.Spec, fetch.TTL(specTTL))
+	res, err := s.Fetch.Get(ctx, spec, fetch.TTL(specTTL))
 	if err != nil {
 		return nil, err
 	}
 	if res.Status != 200 {
-		return nil, fmt.Errorf("%s: status %d", p.Spec, res.Status)
+		return nil, fmt.Errorf("%s: status %d", spec, res.Status)
 	}
-	return load(res.Body, p.Sunset)
+	return load(res.Body, sunset)
+}
+
+// join adds the operations of another file of the same API to d. Each op is
+// resolved already, so the schemas, which may clash by name across files, stay
+// d's own. A base the files do not share is no base.
+func join(d, more *Doc) *Doc {
+	res := *d
+	res.Ops = maps.Clone(d.Ops)
+	for k, o := range more.Ops {
+		if _, ok := res.Ops[k]; !ok {
+			res.Ops[k] = o
+		}
+	}
+	if res.Base != more.Base {
+		res.Base = ""
+	}
+	res.Missing = slices.Compact(slices.Sorted(slices.Values(append(slices.Clone(d.Missing), more.Missing...))))
+	return &res
 }
 
 func remote(spec string) bool {
@@ -170,9 +214,10 @@ func (s *Specs) snapshot(provider string) *Doc {
 }
 
 // Snapshot records the operations the last Changes saw in use, as doc has them,
-// for the next run to diff against. An operation with an unresolved breaking
-// change keeps its old version, so the change stays visible until the code no
-// longer depends on it. Call it only after a run completed, so a crash never
+// for the next run to diff against. The part of an operation with an unresolved
+// breaking change keeps its old version, so the change stays visible until the
+// code no longer depends on it, or, for a field whose type changed, until Done
+// says it was dealt with. Call it only after a run completed, so a crash never
 // loses the old snapshot.
 func (s *Specs) Snapshot(provider string, doc *Doc) error {
 	r := s.runs[provider]
@@ -186,8 +231,8 @@ func (s *Specs) Snapshot(provider string, doc *Doc) error {
 	snap := &Doc{Version: doc.Version, Base: doc.Base, Ops: map[string]*Op{}, At: now()}
 	for _, k := range r.used {
 		o := doc.Ops[k]
-		if old := op(r.old, k); old != nil && (o == nil || r.pinned[k]) {
-			o = old
+		if old := op(r.old, k); old != nil {
+			o = s.keep(o, old, r.pinned[k])
 		}
 		if o != nil {
 			snap.Ops[k] = o
@@ -205,6 +250,122 @@ func (s *Specs) Snapshot(provider string, doc *Doc) error {
 		return fmt.Errorf("api: %w", err)
 	}
 	return nil
+}
+
+// keep is cur with the old side of each pinned change put back.
+func (s *Specs) keep(cur, old *Op, pins []pin) *Op {
+	if cur == nil {
+		return old
+	}
+	if len(pins) == 0 {
+		return cur
+	}
+	cp := *cur
+	cp.Params = slices.Clone(cur.Params)
+	for _, p := range pins {
+		switch p.What {
+		case "operation removed":
+			return old
+		case "parameter removed":
+			i := slices.IndexFunc(old.Params, func(x Param) bool { return x.Name == p.Field && x.In == p.Detail })
+			if i >= 0 && !slices.ContainsFunc(cp.Params, func(x Param) bool { return x.Name == p.Field && x.In == p.Detail }) {
+				cp.Params = append(cp.Params, old.Params[i])
+			}
+		case "required parameter added":
+			if p.Detail == "body" {
+				if cp.Request != nil && (old.Request == nil || !slices.Contains(old.Request.Required, p.Field)) {
+					req := *cp.Request
+					req.Required = slices.DeleteFunc(slices.Clone(req.Required), func(n string) bool { return n == p.Field })
+					cp.Request = &req
+				}
+				continue
+			}
+			same := func(x Param) bool { return x.Name == p.Field && x.In == p.Detail }
+			cp.Params = slices.DeleteFunc(cp.Params, same)
+			if i := slices.IndexFunc(old.Params, same); i >= 0 {
+				cp.Params = append(cp.Params, old.Params[i])
+			}
+		case "request field removed":
+			cp.Request = graft(cp.Request, old.Request, p.Field)
+		case "response field type changed":
+			if s.Done != nil && s.Done(p.ID) {
+				continue
+			}
+			cp.Response = graft(cp.Response, old.Response, p.Field)
+		case "response field removed":
+			cp.Response = graft(cp.Response, old.Response, p.Field)
+		}
+	}
+	slices.SortFunc(cp.Params, func(a, b Param) int { return strings.Compare(a.In+" "+a.Name, b.In+" "+b.Name) })
+	return &cp
+}
+
+// graft is cur with the field old has under name, found the way walk finds
+// it, put back where old has it. cur is copied, never changed, along the way.
+func graft(cur, old *Schema, name string) *Schema {
+	path, v := locate(old, name)
+	if v == nil {
+		return cur
+	}
+	return put(cur, old, path, v)
+}
+
+// locate is where walk first meets name in s: the property names down to it,
+// "" for an array's items.
+func locate(s *Schema, name string) ([]string, *Schema) {
+	type node struct {
+		s    *Schema
+		path []string
+	}
+	queue := []node{{s, nil}}
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		if curr.s == nil || len(curr.path) >= depth {
+			continue
+		}
+		if curr.s.Items != nil {
+			queue = append(queue, node{curr.s.Items, append(slices.Clone(curr.path), "")})
+		}
+		for _, k := range slices.Sorted(maps.Keys(curr.s.Props)) {
+			path := append(slices.Clone(curr.path), k)
+			if k == name {
+				return path, curr.s.Props[k]
+			}
+			queue = append(queue, node{curr.s.Props[k], path})
+		}
+	}
+	return nil, nil
+}
+
+func put(cur, old *Schema, path []string, v *Schema) *Schema {
+	if len(path) == 0 {
+		return v
+	}
+	var cp Schema
+	if cur != nil {
+		cp = *cur
+	} else if old != nil {
+		cp = Schema{Type: old.Type}
+	}
+	var next *Schema
+	if old != nil {
+		next = old.Items
+		if path[0] != "" {
+			next = old.Props[path[0]]
+		}
+	}
+	if path[0] == "" {
+		cp.Items = put(cp.Items, next, path[1:], v)
+		return &cp
+	}
+	props := maps.Clone(cp.Props)
+	if props == nil {
+		props = map[string]*Schema{}
+	}
+	props[path[0]] = put(props[path[0]], next, path[1:], v)
+	cp.Props = props
+	return &cp
 }
 
 // usages maps every URL literal and SDK call of a provider to an operation in
@@ -236,11 +397,18 @@ func (s *Specs) usages(p *Provider, pu core.ProviderUse, r *run) []Usage {
 		if !site.Call {
 			continue
 		}
-		method, path, ok := p.Operation(site.Chain, scan.Lang(site.File))
+		lang := scan.Lang(site.File)
+		method, path, ok := p.Operation(site.Chain, lang)
 		if !ok {
 			continue
 		}
-		if o := lookup(r, method, path, true); o != nil {
+		o := lookup(r, method, path, true)
+		if o == nil {
+			if method, path, ok = p.Nested(site.Chain, lang); ok {
+				o = lookup(r, method, path, true)
+			}
+		}
+		if o != nil {
 			us := at(o)
 			us.Sites = append(us.Sites, site)
 			us.Files = append(us.Files, site.File)
@@ -296,7 +464,10 @@ func lookup(r *run, method, path string, loose bool) *Op {
 }
 
 // check turns the used operations of one provider into changes.
-func check(p *Provider, idx core.ScanIndex, used []Usage, r *run) []core.Change {
+func check(p *Provider, idx core.ScanIndex, used []Usage, r *run, done func(id string) bool) []core.Change {
+	if done == nil {
+		done = func(string) bool { return false }
+	}
 	reads := func(name string, files []string) []core.Site {
 		if idx == nil {
 			return nil
@@ -316,7 +487,7 @@ func check(p *Provider, idx core.ScanIndex, used []Usage, r *run) []core.Change 
 		add := func(o *Op, kind core.Kind, what, field string, sites []core.Site) {
 			c := change(p, r, u, o, kind, what, field, mine, sites)
 			if kind == core.Breaking {
-				r.pinned[key] = true
+				r.pin(key, what, field, c.ID, mine)
 			}
 			res = append(res, c)
 		}
@@ -351,9 +522,13 @@ func check(p *Provider, idx core.ScanIndex, used []Usage, r *run) []core.Change 
 				if named {
 					add(cur, core.Breaking, l.What, l.Field, hits)
 				}
-			case "response field removed", "response field type changed":
+			case "response field removed":
 				if len(hits) > 0 {
-					add(cur, core.Breaking, "response field removed", l.Field, hits)
+					add(cur, core.Breaking, l.What, l.Field, hits)
+				}
+			case "response field type changed":
+				if len(hits) > 0 && !done(core.ChangeID(&core.Change{API: &core.APIChange{Provider: p.Name, Method: u.Method, Path: u.Path, Field: l.Field}})) {
+					add(cur, core.Breaking, l.What, l.Field, hits)
 				}
 			case "required parameter added":
 				if !named {
@@ -363,6 +538,20 @@ func check(p *Provider, idx core.ScanIndex, used []Usage, r *run) []core.Change 
 		}
 	}
 	return res
+}
+
+// pin keeps the old side of a breaking change, and of every diff line behind it,
+// in the next snapshot.
+func (r *run) pin(key, what, field, id string, lines []Line) {
+	if field == "" {
+		r.pinned[key] = append(r.pinned[key], pin{What: what, ID: id})
+		return
+	}
+	for _, l := range lines {
+		if l.Field == field && l.What == what {
+			r.pinned[key] = append(r.pinned[key], pin{What: l.What, Field: l.Field, Detail: l.Detail, ID: id})
+		}
+	}
 }
 
 // query reports whether a URL literal of u sets the parameter in its query string.
@@ -415,7 +604,7 @@ func change(p *Provider, r *run, u Usage, o *Op, kind core.Kind, what, field str
 func sites(u Usage, extra []core.Site) []core.Site {
 	res := slices.Clone(u.Sites)
 	for _, x := range u.URLs {
-		res = append(res, core.Site{File: x.File, Line: x.Line, Text: strings.TrimSpace(x.Method + " " + x.URL)})
+		res = append(res, core.Site{File: x.File, Line: x.Line, Text: cmp.Or(x.Text, strings.TrimSpace(x.Method+" "+x.URL))})
 	}
 	res = append(res, extra...)
 	slices.SortFunc(res, func(a, b core.Site) int {

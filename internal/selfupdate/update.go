@@ -15,12 +15,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/ver"
@@ -41,11 +43,12 @@ type ReleaseInfo struct {
 	URL     string
 }
 
-var releaseRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
+var releaseRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-(alpha|beta|rc)\.?\d+)?$`)
 
 // Latest asks GitHub for the latest release and compares it with current. A
-// build that is not a release ("", "dev", a git describe string) never has a
-// newer version and costs no request.
+// build that is not a release or a prerelease the release workflow publishes
+// ("", "dev", a git describe string, a pseudo-version, a +dirty build) never
+// has a newer version and costs no request.
 func Latest(ctx context.Context, f core.Fetcher, current string) (*ReleaseInfo, error) {
 	if !releaseRe.MatchString(current) {
 		return &ReleaseInfo{Tag: "dev", Version: "dev"}, nil
@@ -110,12 +113,15 @@ func apply(ctx context.Context, f core.Fetcher, r *ReleaseInfo, exe, goos, goarc
 	if r == nil || r.Tag == "" || r.Version == "" {
 		return errors.New("selfupdate: no release to apply")
 	}
+	if err := writable(exe); err != nil {
+		return err
+	}
 	base := assetsURL + "/" + r.Tag + "/"
-	sums, err := download(ctx, f, base+"checksums.txt")
+	sums, err := download(ctx, f, base+"checksums.txt", 0)
 	if err != nil {
 		return err
 	}
-	sig, err := download(ctx, f, base+"checksums.txt.sig")
+	sig, err := download(ctx, f, base+"checksums.txt.sig", 0)
 	if err != nil {
 		return fmt.Errorf("%w (a release without a signature is refused)", err)
 	}
@@ -130,7 +136,7 @@ func apply(ctx context.Context, f core.Fetcher, r *ReleaseInfo, exe, goos, goarc
 	if err != nil {
 		return err
 	}
-	archive, err := download(ctx, f, base+name)
+	archive, err := download(ctx, f, base+name, archiveTimeout)
 	if err != nil {
 		return err
 	}
@@ -144,8 +150,12 @@ func apply(ctx context.Context, f core.Fetcher, r *ReleaseInfo, exe, goos, goarc
 	return replace(exe, bin, goos == "windows")
 }
 
-func download(ctx context.Context, f core.Fetcher, url string) ([]byte, error) {
-	res, err := f.Get(ctx, url, func(o *core.FetchOpts) { o.NoCache = true })
+// archiveTimeout is how long the release archive, a few megabytes, may take
+// to download on a slow link.
+const archiveTimeout = 10 * time.Minute
+
+func download(ctx context.Context, f core.Fetcher, url string, timeout time.Duration) ([]byte, error) {
+	res, err := f.Get(ctx, url, func(o *core.FetchOpts) { o.NoCache, o.Timeout = true, timeout })
 	if err != nil {
 		return nil, fmt.Errorf("selfupdate: %w", err)
 	}
@@ -198,7 +208,7 @@ func fromTar(archive []byte) ([]byte, error) {
 			return nil, err
 		}
 		if h.Typeflag == tar.TypeReg && path.Base(h.Name) == "tend" {
-			return readLimited(tr)
+			return readLimited(tr, binMax)
 		}
 	}
 }
@@ -217,29 +227,50 @@ func fromZip(archive []byte) ([]byte, error) {
 			return nil, err
 		}
 		defer rc.Close()
-		return readLimited(rc)
+		return readLimited(rc, binMax)
 	}
 	return nil, errors.New("no tend.exe in the archive")
 }
 
-func readLimited(r io.Reader) ([]byte, error) {
-	b, err := io.ReadAll(io.LimitReader(r, binMax+1))
-	if err == nil && len(b) > binMax {
+func readLimited(r io.Reader, limit int) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err == nil && len(b) > limit {
 		err = errors.New("binary is larger than the limit")
 	}
 	return b, err
 }
 
+// writable fails early, before any download, when exe cannot be replaced.
+func writable(exe string) error {
+	f, err := os.CreateTemp(filepath.Dir(exe), ".tend-update-*")
+	if err != nil {
+		return denied(exe, err)
+	}
+	f.Close()
+	return os.Remove(f.Name())
+}
+
+func denied(exe string, err error) error {
+	if errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("selfupdate: cannot write to %s (%w); rerun as a user who can, e.g. sudo tend update, or reinstall tend into a directory you own", filepath.Dir(exe), err)
+	}
+	return fmt.Errorf("selfupdate: %w", err)
+}
+
 // replace swaps exe for bin. The new file is written beside exe so the final
-// rename stays on one filesystem. Windows cannot overwrite a running image
-// but can rename it, so the old one moves to exe.old first.
+// rename stays on one filesystem, and synced so a crash cannot leave a
+// truncated binary behind. Windows cannot overwrite a running image but can
+// rename it, so the old one moves to exe.old first.
 func replace(exe string, bin []byte, windows bool) error {
 	tmp, err := os.CreateTemp(filepath.Dir(exe), ".tend-update-*")
 	if err != nil {
-		return fmt.Errorf("selfupdate: %w", err)
+		return denied(exe, err)
 	}
 	defer os.Remove(tmp.Name())
 	_, err = tmp.Write(bin)
+	if err == nil {
+		err = tmp.Sync()
+	}
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}
@@ -250,23 +281,23 @@ func replace(exe string, bin []byte, windows bool) error {
 		return fmt.Errorf("selfupdate: %w", err)
 	}
 	if !windows {
-		return rename(tmp.Name(), exe)
+		return rename(exe, tmp.Name(), exe)
 	}
 	old := exe + ".old"
 	os.Remove(old)
-	if err := rename(exe, old); err != nil {
+	if err := rename(exe, exe, old); err != nil {
 		return err
 	}
-	if err := rename(tmp.Name(), exe); err != nil {
-		_ = rename(old, exe)
+	if err := rename(exe, tmp.Name(), exe); err != nil {
+		_ = os.Rename(old, exe)
 		return err
 	}
 	return nil
 }
 
-func rename(from, to string) error {
+func rename(exe, from, to string) error {
 	if err := os.Rename(from, to); err != nil {
-		return fmt.Errorf("selfupdate: %w", err)
+		return denied(exe, err)
 	}
 	return nil
 }

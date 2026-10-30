@@ -70,7 +70,12 @@ Context:
 {{- end}}
 {{- if .Retry}}
 
+{{- if .Ran}}
+Your previous diff applied, but the project's commands failed:
+{{.Retry}}
+{{- else}}
 Your previous reply could not be applied: {{.Retry}}
+{{- end}}
 {{- if .Previous}}
 It was:
 {{.Previous}}

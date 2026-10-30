@@ -50,13 +50,31 @@ var (
 )
 
 func NewGitHub(f core.Fetcher, hc *http.Client, token, owner, name string) core.Forge {
-	if hc == nil {
-		hc = &http.Client{}
+	c := &http.Client{}
+	if hc != nil {
+		*c = *hc
 	}
+	if c.CheckRedirect == nil {
+		c.CheckRedirect = writesStay
+	}
+	hc = c
 	return &GitHub{
 		fetch: f, http: hc, token: token, owner: owner, name: name,
 		api: apiBase, warn: os.Stderr, sleep: sleep, now: time.Now,
 	}
+}
+
+// writesStay follows a redirect for a read only. Go would follow a write's
+// as a GET without its body, and report a PATCH to an issue that moved as
+// done when nothing was written.
+func writesStay(req *http.Request, via []*http.Request) error {
+	if via[0].Method != http.MethodGet {
+		return http.ErrUseLastResponse
+	}
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return nil
 }
 
 type pull struct {
@@ -100,10 +118,26 @@ func (g *GitHub) Repo(ctx context.Context) (core.RepoInfo, error) {
 		Default string `json:"default_branch"`
 	}
 	if err := g.do(ctx, "GET", g.repoPath(""), nil, &res); err != nil {
+		if isStatus(err, http.StatusNotFound) {
+			err = &NoRepo{Repo: g.owner + "/" + g.name, err: err}
+		}
 		return core.RepoInfo{}, err
 	}
 	return core.RepoInfo{Owner: g.owner, Name: g.name, Default: res.Default}, nil
 }
+
+// NoRepo is a repo GitHub says is not there: it does not exist, or the
+// token cannot see it, which GitHub does not tell apart.
+type NoRepo struct {
+	Repo string
+	err  error
+}
+
+func (e *NoRepo) Error() string {
+	return "GitHub repo " + e.Repo + " not found, or the token cannot see it"
+}
+
+func (e *NoRepo) Unwrap() error { return e.err }
 
 // FindPR returns the open PR for branch, else the newest one. Sorting by
 // update would let a comment on an old closed PR hide the open one.
@@ -185,9 +219,12 @@ func (g *GitHub) CreatePR(ctx context.Context, in core.PRInput) (*core.PR, error
 	}
 	pr := p.pr()
 	if err := g.label(ctx, pr.Number, in.Labels); err != nil {
-		return &pr, err
+		fmt.Fprintf(g.warn, "tend: could not label #%d: %v\n", pr.Number, err)
 	}
-	return &pr, g.review(ctx, pr.Number, in.Reviewers)
+	if err := g.review(ctx, pr.Number, in.Reviewers); err != nil {
+		fmt.Fprintf(g.warn, "tend: could not request reviewers on #%d: %v\n", pr.Number, err)
+	}
+	return &pr, nil
 }
 
 func (g *GitHub) label(ctx context.Context, number int, names []string) error {
@@ -219,8 +256,6 @@ func isStatus(err error, status int) bool {
 	return errors.As(err, &ae) && ae.Status == status
 }
 
-// review requests reviewers. GitHub answers 422 for a login that cannot
-// review, such as the PR's own author; that is worth a line, not a failure.
 func (g *GitHub) review(ctx context.Context, number int, names []string) error {
 	if len(names) == 0 {
 		return nil
@@ -233,12 +268,7 @@ func (g *GitHub) review(ctx context.Context, number int, names []string) error {
 		}
 		body["reviewers"] = append(body["reviewers"], n)
 	}
-	err := g.do(ctx, "POST", g.repoPath("/pulls/"+strconv.Itoa(number)+"/requested_reviewers"), body, nil)
-	if isStatus(err, http.StatusUnprocessableEntity) {
-		fmt.Fprintf(g.warn, "tend: could not request reviewers on #%d: %v\n", number, err)
-		return nil
-	}
-	return err
+	return g.do(ctx, "POST", g.repoPath("/pulls/"+strconv.Itoa(number)+"/requested_reviewers"), body, nil)
 }
 
 func (g *GitHub) UpdatePR(ctx context.Context, number int, in core.PRInput) error {
@@ -248,6 +278,9 @@ func (g *GitHub) UpdatePR(ctx context.Context, number int, in core.PRInput) erro
 		return err
 	}
 	body := map[string]string{"title": in.Title, "body": in.Body}
+	if in.Base != "" && in.Base != cur.Base.Ref {
+		body["base"] = in.Base
+	}
 	if err := g.do(ctx, "PATCH", path, body, nil); err != nil {
 		return err
 	}
@@ -285,25 +318,27 @@ func (g *GitHub) Comments(ctx context.Context, number int) ([]core.Comment, erro
 	return res, nil
 }
 
-// ClosedBy asks the issue behind the PR who closed it; the pulls endpoint does not say.
-func (g *GitHub) ClosedBy(ctx context.Context, number int) (string, error) {
+// ClosedBy asks the issue behind the PR who closed it and when; the pulls
+// endpoint does not say who.
+func (g *GitHub) ClosedBy(ctx context.Context, number int) (string, time.Time, error) {
 	var res struct {
 		ClosedBy *struct {
 			Login string `json:"login"`
 			Type  string `json:"type"`
 		} `json:"closed_by"`
+		ClosedAt time.Time `json:"closed_at"`
 	}
 	if err := g.do(ctx, "GET", g.repoPath("/issues/"+strconv.Itoa(number)), nil, &res); err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	c := res.ClosedBy
 	if c == nil {
-		return "", nil
+		return "", res.ClosedAt, nil
 	}
 	if strings.EqualFold(c.Type, "Bot") && !strings.HasSuffix(strings.ToLower(c.Login), "[bot]") {
-		return c.Login + "[bot]", nil
+		return c.Login + "[bot]", res.ClosedAt, nil
 	}
-	return c.Login, nil
+	return c.Login, res.ClosedAt, nil
 }
 
 func role(s string) string {
@@ -500,11 +535,17 @@ func limit(res *reply, now time.Time) (time.Duration, bool) {
 	return max(time.Unix(n, 0).Sub(now), 0) + time.Second, true
 }
 
+const detailMax = 300
+
 func message(b []byte) string {
 	var m struct {
-		Message string `json:"message"`
+		Message string            `json:"message"`
+		Errors  []json.RawMessage `json:"errors"`
 	}
 	if json.Unmarshal(b, &m) == nil && m.Message != "" {
+		if d := details(m.Errors); d != "" {
+			return m.Message + ": " + d
+		}
 		return m.Message
 	}
 	s := strings.TrimSpace(string(b))
@@ -512,6 +553,33 @@ func message(b []byte) string {
 		s = s[:200]
 	}
 	return s
+}
+
+// details is what GitHub says in errors[] about a failed request, which it
+// sends as plain strings on some endpoints and as objects on others.
+func details(raw []json.RawMessage) string {
+	var parts []string
+	for _, r := range raw {
+		var s string
+		if json.Unmarshal(r, &s) != nil {
+			var e struct{ Message, Code, Field, Resource string }
+			if json.Unmarshal(r, &e) != nil {
+				continue
+			}
+			s = e.Message
+			if s == "" {
+				s = strings.Join(strings.Fields(e.Resource+" "+e.Field+" "+e.Code), " ")
+			}
+		}
+		if s = strings.TrimSpace(s); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	res := strings.Join(parts, "; ")
+	if len(res) > detailMax {
+		res = strings.ToValidUTF8(res[:detailMax], "") + "…"
+	}
+	return res
 }
 
 func sleep(ctx context.Context, d time.Duration) error {
@@ -525,30 +593,50 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// RepoFromRemote reads owner and name from a github.com remote URL, or from a
-// bare "owner/name" such as GITHUB_REPOSITORY.
+// RepoFromRemote reads owner and name from a github.com remote URL: a URL
+// with a scheme, or git's scp-like host:owner/name. A local path such as
+// /srv/repo, or a bare owner/name, is no GitHub remote.
 func RepoFromRemote(raw string) (owner, name string, ok bool) {
 	raw = strings.TrimSpace(raw)
-	path := ""
-	switch {
-	case strings.Contains(raw, "://"):
+	if strings.Contains(raw, "://") {
 		u, err := url.Parse(raw)
 		if err != nil || !isGitHub(u.Hostname()) {
 			return "", "", false
 		}
-		path = u.Path
-	case strings.Contains(raw, "@"):
-		host, p, found := strings.Cut(raw[strings.LastIndexByte(raw, '@')+1:], ":")
-		if !found || !isGitHub(host) {
-			return "", "", false
-		}
-		path = p
-	default:
-		path = raw
+		return repoPath(u.Path)
 	}
-	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
-	parts := strings.Split(path, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	colon, slash := strings.IndexByte(raw, ':'), strings.IndexByte(raw, '/')
+	if colon < 0 || slash >= 0 && slash < colon || strings.HasPrefix(raw, ".") {
+		return "", "", false
+	}
+	host := raw[:colon]
+	if i := strings.LastIndexByte(host, '@'); i >= 0 {
+		host = host[i+1:]
+	}
+	if len(host) < 2 || !isGitHub(host) {
+		return "", "", false
+	}
+	return repoPath(raw[colon+1:])
+}
+
+// RepoFromSlug reads owner and name from a bare "owner/name", as
+// GITHUB_REPOSITORY gives them.
+func RepoFromSlug(raw string) (owner, name string, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if strings.Contains(raw, ":") || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, ".") {
+		return "", "", false
+	}
+	parts := strings.Split(raw, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[1] == ".." {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func repoPath(p string) (owner, name string, ok bool) {
+	p = strings.TrimSuffix(strings.Trim(p, "/"), ".git")
+	parts := strings.Split(p, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == ".." || parts[1] == ".." {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

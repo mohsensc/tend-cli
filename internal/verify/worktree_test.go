@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mohsensc/tend-cli/internal/core"
+	"github.com/mohsensc/tend-cli/internal/gitx"
 )
 
 // isolate keeps the developer's git config (hooks, signing, identity) out of tests.
@@ -236,5 +237,45 @@ echo changed >> main.go
 	}
 	if _, err := os.Stat(pwned); err == nil {
 		t.Fatal("a command from the rewritten git dir ran")
+	}
+}
+
+// A project whose .gitignore does not list node_modules keeps its install
+// across a clean, and never stages it, while a vendor dir it tracks stays
+// tracked.
+func TestWorktreeKeepsInstalls(t *testing.T) {
+	repo := newRepo(t, map[string]string{"package.json": "{}\n", "vendor/venv/a.txt": "a\n"})
+	ctx := context.Background()
+	wt, err := Checkout(ctx, repo, filepath.Join(t.TempDir(), "wt"), "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = wt.Remove(ctx) }()
+	write(t, wt.Dir, map[string]string{"node_modules/lodash/index.js": "x\n", "src/__pycache__/a.pyc": "x", "vendor/venv/b.txt": "b\n", "built.txt": "x\n"})
+	if _, err := gitx.Run(ctx, wt.Dir, "clean", "--quiet", "--force", "-d"); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"node_modules/lodash/index.js", "src/__pycache__/a.pyc"} {
+		if _, err := os.Stat(filepath.Join(wt.Dir, p)); err != nil {
+			t.Errorf("clean took %s away: %v", p, err)
+		}
+	}
+	for _, p := range []string{"built.txt", "vendor/venv/b.txt"} {
+		if _, err := os.Stat(filepath.Join(wt.Dir, p)); err == nil {
+			t.Errorf("clean left %s", p)
+		}
+	}
+	write(t, wt.Dir, map[string]string{"vendor/venv/b.txt": "b\n"})
+	if _, err := gitx.Run(ctx, wt.Dir, "add", "-A"); err != nil {
+		t.Fatal(err)
+	}
+	staged, _ := gitx.Run(ctx, wt.Dir, "diff", "--cached", "--name-only")
+	if staged != "vendor/venv/b.txt" {
+		t.Errorf("staged %q, want only vendor/venv/b.txt", staged)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".git", "info", "exclude")); err == nil {
+		if data, _ := os.ReadFile(filepath.Join(repo, ".git", "info", "exclude")); strings.Contains(string(data), "node_modules") {
+			t.Error("the user's info/exclude was written")
+		}
 	}
 }

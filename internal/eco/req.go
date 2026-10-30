@@ -12,6 +12,14 @@ import (
 
 type term struct{ op, gap, num string }
 
+type dialect uint8
+
+const (
+	anyDialect dialect = iota
+	cargoDialect
+	helmDialect
+)
+
 var termRe = regexp.MustCompile(`(\^|~>|~|>=|<=|!=|==|>|<|=)?([ \t]*)(v?\d[0-9A-Za-z]*(?:\.[0-9A-Za-z]+)*(?:\.[*xX])?(?:-[0-9A-Za-z.]+)?|[*xX])`)
 
 type termAt struct {
@@ -66,9 +74,9 @@ func bumpAt(nums []int, i int) ver.V {
 	return ver.V{Nums: res}
 }
 
-// holds reports whether v satisfies the term. cargo selects the one dialect
-// that differs: a bare version is a caret range, ~1.2 pins the minor, =1.2 is a prefix.
-func (t term) holds(v ver.V, cargo bool) bool {
+// holds reports whether v satisfies the term as d reads it.
+func (t term) holds(v ver.V, d dialect) bool {
+	cargo := d == cargoDialect
 	if n, wild := t.wild(); wild {
 		base, _ := ver.Parse(t.num[:max(len(t.num)-2, 0)])
 		return n == 0 || prefixOf(v.Nums, base.Nums)
@@ -110,14 +118,14 @@ func (t term) holds(v ver.V, cargo bool) bool {
 	switch {
 	case len(nums) == 1:
 		i = 0
-	case cargo:
+	case cargo, d == helmDialect:
 		i = 1
 	}
 	return c >= 0 && ver.Compare(v, bumpAt(nums, i)) < 0
 }
 
 // move rewrites the term so that it admits to, keeping its operator, spacing and precision.
-func (t term) move(to string, cargo bool) string {
+func (t term) move(to string, d dialect) string {
 	n, wild := t.wild()
 	lead := ""
 	if strings.HasPrefix(t.num, "v") {
@@ -139,7 +147,7 @@ func (t term) move(to string, cargo bool) string {
 	case "<":
 		return "<" + t.gap + lead + nextMajor(to, len(pv.Nums))
 	case "":
-		if !cargo {
+		if d != cargoDialect {
 			return t.gap + lead + whole
 		}
 	}
@@ -186,18 +194,18 @@ func alts(req string) [][2]int {
 	return append(res, [2]int{start, len(req)})
 }
 
-func allHold(ts []termAt, v ver.V, cargo bool) bool {
+func allHold(ts []termAt, v ver.V, d dialect) bool {
 	for _, t := range ts {
-		if !t.t.holds(v, cargo) {
+		if !t.t.holds(v, d) {
 			return false
 		}
 	}
 	return true
 }
 
-func admits(req string, v ver.V, cargo bool) bool {
+func admits(req string, v ver.V, d dialect) bool {
 	for _, a := range alts(req) {
-		if ts, ok := findTerms(req[a[0]:a[1]]); ok && allHold(ts, v, cargo) {
+		if ts, ok := findTerms(req[a[0]:a[1]]); ok && allHold(ts, v, d) {
 			return true
 		}
 	}
@@ -216,7 +224,7 @@ func raises(ts []termAt, want ver.V) bool {
 
 // fixReq returns req changed just enough to admit to. It is req itself when it
 // already does. Of several alternatives the last one is moved.
-func fixReq(req, to string, cargo bool) (string, error) {
+func fixReq(req, to string, d dialect) (string, error) {
 	want, ok := ver.Parse(to)
 	if !ok {
 		return "", fmt.Errorf("version %q does not parse", to)
@@ -228,7 +236,7 @@ func fixReq(req, to string, cargo bool) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("cannot rewrite requirement %q", req)
 		}
-		if allHold(ts, want, cargo) && !raises(ts, want) {
+		if allHold(ts, want, d) && !raises(ts, want) {
 			return req, nil
 		}
 		last, off = ts, a[0]
@@ -236,8 +244,8 @@ func fixReq(req, to string, cargo bool) (string, error) {
 	res := req
 	for i := len(last) - 1; i >= 0; i-- {
 		t := last[i]
-		if !t.t.holds(want, cargo) || raises(last, want) {
-			res = res[:off+t.start] + t.t.move(to, cargo) + res[off+t.end:]
+		if !t.t.holds(want, d) || raises(last, want) {
+			res = res[:off+t.start] + t.t.move(to, d) + res[off+t.end:]
 		}
 	}
 	return res, nil

@@ -140,3 +140,40 @@ func TestCron(t *testing.T) {
 		}
 	}
 }
+
+// A config tend already reads is never put behind a new tend.yml.
+func TestInitExisting(t *testing.T) {
+	dir := repo(t, map[string]string{".github/tend.yml": "onboarding: off\n"})
+	res := tend(t, dir, t.TempDir(), offline{}, "init")
+	if res.code != exitErr || !strings.Contains(res.stderr, ".github/tend.yml exists, and tend reads it") {
+		t.Errorf("init = %d, %q", res.code, res.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tend.yml")); !os.IsNotExist(err) {
+		t.Errorf("init wrote tend.yml in front of .github/tend.yml: %v", err)
+	}
+	res = tend(t, dir, t.TempDir(), offline{}, "init", "--force")
+	if res.code != exitOK || !strings.Contains(res.out, "wrote .github/tend.yml") {
+		t.Errorf("init --force = %d, %q, %q", res.code, res.out, res.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tend.yml")); !os.IsNotExist(err) {
+		t.Errorf("init --force wrote a second config: %v", err)
+	}
+}
+
+// init writes the file --config names, and the run it offers reads it.
+func TestInitConfig(t *testing.T) {
+	dir := repo(t, map[string]string{"README.md": "hi\n"})
+	res := tend(t, dir, t.TempDir(), offline{}, "init", "--config", "sub/custom.yml")
+	if res.code != exitOK || !strings.Contains(res.out, "wrote sub/custom.yml") {
+		t.Fatalf("init = %d, %q, %q", res.code, res.out, res.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tend.yml")); !os.IsNotExist(err) {
+		t.Errorf("init wrote tend.yml too: %v", err)
+	}
+	if res := tend(t, dir, t.TempDir(), offline{}, "check", "--config", "sub/custom.yml"); res.code != exitOK {
+		t.Errorf("check = %d, %q", res.code, res.stderr)
+	}
+	if res := tend(t, dir, t.TempDir(), offline{}, "check", "--config", "nope.yml"); res.code != exitErr || !strings.Contains(res.stderr, "nope.yml: config file not found") {
+		t.Errorf("a missing config = %d, %q", res.code, res.stderr)
+	}
+}

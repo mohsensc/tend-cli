@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,10 +64,10 @@ func TestRunStopsAtFailure(t *testing.T) {
 		t.Error("Pass after a failing step")
 	}
 	want := []core.Step{
-		{Cmd: "true"},
-		{Cmd: "echo broken; exit 3", Exit: 3, Tail: "broken"},
-		{Cmd: "echo never > ran", Skipped: "previous step failed"},
-		{Cmd: "true", Skipped: "previous step failed"},
+		{Cmd: "true", Phase: core.PhaseInstall},
+		{Cmd: "echo broken; exit 3", Phase: core.PhaseBuild, Exit: 3, Tail: "broken"},
+		{Cmd: "echo never > ran", Phase: core.PhaseTest, Skipped: "previous step failed"},
+		{Cmd: "true", Phase: core.PhaseTest, Skipped: "previous step failed"},
 	}
 	for i, st := range res.Steps {
 		st.Took = 0
@@ -209,5 +210,37 @@ func TestLocalPaths(t *testing.T) {
 	want := "at charge (src/billing.js:12:22)\nat test/a.js:1\nkeep /usr/lib/node\n"
 	if got := local(in, dir); got != want {
 		t.Errorf("local =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A step that writes git config in the worktree, as husky install does,
+// leaves the repository's own config as it was.
+func TestRunKeepsGitConfig(t *testing.T) {
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "--quiet", "-b", "main"}, {"commit", "--quiet", "--allow-empty", "-m", "x"}} {
+		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	cfg := filepath.Join(repo, ".git", "config")
+	was, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := Checkout(context.Background(), repo, filepath.Join(t.TempDir(), "wt"), "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), wt, Options{Commands: core.Commands{Install: []string{"git config core.hooksPath .husky && echo $HUSKY"}}})
+	if err != nil || !res.Pass {
+		t.Fatalf("run = %+v, %v", res, err)
+	}
+	if now, _ := os.ReadFile(cfg); string(now) != string(was) {
+		t.Errorf("the repository's config changed:\n%s", now)
+	}
+	if !strings.Contains(res.Steps[0].Tail, "0") {
+		t.Errorf("HUSKY is not 0: %q", res.Steps[0].Tail)
 	}
 }

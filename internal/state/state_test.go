@@ -130,15 +130,64 @@ func TestSaveKeepsOldFileOnFailure(t *testing.T) {
 }
 
 func TestOpenCorrupt(t *testing.T) {
-	home := t.TempDir()
-	p := filepath.Join(Dir(home, "k"), "state.json")
-	write(t, p, "{")
-	if _, _, err := Open(home, "k"); err == nil {
-		t.Fatal("corrupt state loaded")
+	tests := []struct{ name, body, why string }{
+		{"truncated", `{"Version":1,"Seen":{"a":`, "unexpected end of JSON input"},
+		{"zero-filled", "\x00\x00\x00\x00", "invalid character"},
+		{"wrongly typed", `{"Version":1,"Seen":[1,2]}`, "cannot unmarshal array"},
+		{"from a newer tend", `{"Version":7,"Seen":{"a":{"Verdict":"noise"}}}`, "newer tend"},
 	}
-	write(t, p, "")
-	if _, _, err := Open(home, "k"); err != nil {
-		t.Fatalf("empty state: %v", err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			p := filepath.Join(Dir(home, "k"), "state.json")
+			write(t, p, tc.body)
+			write(t, p+".corrupt", "an older one")
+			s, _, err := Open(home, "k")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s.Version != 1 || len(s.Seen) != 0 || s.Seen == nil || s.Parked == nil || s.Open != nil {
+				t.Errorf("state = %+v, want a fresh one", s)
+			}
+			if !strings.Contains(s.Discarded, tc.why) {
+				t.Errorf("Discarded = %q, want it to say %q", s.Discarded, tc.why)
+			}
+			aside := p + ".corrupt"
+			if strings.Contains(tc.body, `"Version":7`) {
+				aside = p + ".v7"
+			}
+			if b, err := os.ReadFile(aside); err != nil || string(b) != tc.body {
+				t.Errorf("%s = %q, %v", filepath.Base(aside), b, err)
+			}
+			if _, err := os.Stat(p); !os.IsNotExist(err) {
+				t.Errorf("state.json is still there: %v", err)
+			}
+			if err := s.Save(); err != nil {
+				t.Fatal(err)
+			}
+			if again, _, err := Open(home, "k"); err != nil || again.Discarded != "" {
+				t.Errorf("the fresh state did not load: %q, %v", again.Discarded, err)
+			}
+		})
+	}
+}
+
+func TestOpenEmpty(t *testing.T) {
+	home := t.TempDir()
+	write(t, filepath.Join(Dir(home, "k"), "state.json"), "")
+	s, _, err := Open(home, "k")
+	if err != nil || s.Discarded != "" {
+		t.Fatalf("empty state: %q, %v", s.Discarded, err)
+	}
+}
+
+func TestOpenUnreadable(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(Dir(home, "k"), "state.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Open(home, "k"); err == nil || !strings.Contains(err.Error(), "--reset") {
+		t.Fatalf("err = %v, want it to point at --reset", err)
 	}
 }
 
@@ -201,59 +250,6 @@ func TestLock(t *testing.T) {
 		t.Fatalf("lock after release: %v", err)
 	}
 	release2()
-}
-
-func TestLockStale(t *testing.T) {
-	dir := t.TempDir()
-	at := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
-	defer func() { now = time.Now }()
-	p := filepath.Join(dir, "lock")
-
-	write(t, p, fmt.Sprintf("4242 %d\n", at.Add(-StaleAfter+time.Minute).Unix()))
-	now = func() time.Time { return at }
-	if _, err := Lock(dir); err == nil {
-		t.Fatal("took a fresh lock")
-	}
-
-	write(t, p, fmt.Sprintf("4242 %d\n", at.Add(-StaleAfter-time.Minute).Unix()))
-	release, err := Lock(dir)
-	if err != nil {
-		t.Fatalf("stale lock not taken over: %v", err)
-	}
-	b, _ := os.ReadFile(p)
-	if !strings.HasPrefix(string(b), fmt.Sprint(os.Getpid())+" ") {
-		t.Errorf("lock holds %q", b)
-	}
-	release()
-
-	// A run that kept the lock past StaleAfter leaves the one that took it over alone.
-	write(t, p, fmt.Sprintf("4242 %d\n", at.Add(-StaleAfter-time.Minute).Unix()))
-	old, err := Lock(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now = func() time.Time { return at.Add(StaleAfter + time.Minute) }
-	release, err = Lock(dir)
-	if err != nil {
-		t.Fatalf("stale lock of this pid not taken over: %v", err)
-	}
-	old()
-	if _, err := os.Stat(p); err != nil {
-		t.Fatalf("the old run's release removed the new lock: %v", err)
-	}
-	release()
-	if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("lock still there after release: %v", err)
-	}
-	now = func() time.Time { return at }
-
-	write(t, p, "")
-	if err := os.Chtimes(p, at, at); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Lock(dir); err == nil {
-		t.Fatal("took a lock that is being written")
-	}
 }
 
 func write(t *testing.T, p, body string) {

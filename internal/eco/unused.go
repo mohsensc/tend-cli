@@ -64,7 +64,7 @@ func Unused(inv *core.Inventory, keep func(core.Dep) bool) ([]core.Dep, []core.A
 
 // usage is what a repository says about the packages it uses besides its
 // imports: the text of every file that is neither documentation nor a
-// lockfile, lowercased, with each line that declares a dependency blanked,
+// lockfile, compiled requirements files included, lowercased, with each line that declares a dependency blanked,
 // so a declaration is never taken for a use.
 type usage struct {
 	root   string
@@ -143,14 +143,18 @@ func (u *usage) load() {
 	}
 	u.text = map[string][]byte{}
 	decl := map[string][]int{}
+	locks := map[string]bool{}
 	for _, d := range u.deps {
 		if d.Line > 0 {
 			decl[d.Manifest.Path] = append(decl[d.Manifest.Path], d.Line)
 		}
+		if d.Manifest.Lock != "" {
+			locks[d.Manifest.Lock] = true
+		}
 	}
 	for _, f := range u.files {
 		md := markdown(f)
-		if prose(f) && !md || lockfile(f) || foreign(f) {
+		if prose(f) && !md || lockfile(f) || locks[f] || foreign(f) {
 			continue
 		}
 		b := readText(filepath.Join(u.root, filepath.FromSlash(f)))

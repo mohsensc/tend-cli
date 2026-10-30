@@ -349,7 +349,7 @@ func composerEdit(root string, d core.Dep, to, toName string) (bool, error) {
 			return false, err
 		}
 		next = "^" + shape(to, 2)
-	} else if next, err = fixReq(d.Req, to, false); err != nil {
+	} else if next, err = fixReq(d.Req, to, anyDialect); err != nil {
 		return false, fmt.Errorf("composer: %s: %w", d.Name, err)
 	}
 	if next == d.Req {

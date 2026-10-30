@@ -61,7 +61,7 @@ func githubMeta(ctx context.Context, f core.Fetcher, repo string) (*core.Meta, m
 		if _, ok := ver.Parse(tag); !ok {
 			continue
 		}
-		r := core.Release{Version: tag, Pre: isPre(tag)}
+		r := core.Release{Version: tag, Pre: isPre(tag) || semverPre(tag)}
 		if i, ok := released[tag]; ok {
 			r.Time, r.Pre = rels[i].Published, r.Pre || rels[i].Pre
 		}

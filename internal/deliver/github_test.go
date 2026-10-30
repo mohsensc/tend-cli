@@ -317,8 +317,21 @@ func TestCreatePRErrors(t *testing.T) {
 		{req: "GET /repos/acme/shop/labels/tend", status: 401, resp: `{"message": "Bad credentials"}`},
 	})
 	pr, err := a.g.CreatePR(context.Background(), in)
-	if err == nil || pr == nil || pr.Number != 12 {
-		t.Fatalf("a failed label call must still return the created PR: %+v, %v", pr, err)
+	if err != nil || pr == nil || pr.Number != 12 {
+		t.Fatalf("a failed label call must not fail the created PR: %+v, %v", pr, err)
+	}
+	if !strings.Contains(a.warn.String(), "could not label #12: github: GET /repos/acme/shop/labels/tend: 401 Bad credentials") {
+		t.Errorf("warning = %q", a.warn)
+	}
+
+	a = newAPI(t, []step{
+		{req: "POST " + pulls, body: `{"title": "t", "head": "b", "base": "main", "body": "", "draft": false}`, status: 201, resp: "pull_draft.json"},
+		{req: "GET /repos/acme/shop/labels/tend", resp: "label.json"},
+		{req: "POST /repos/acme/shop/issues/12/labels", body: `{"labels": ["tend"]}`, status: 502, resp: `{"message": "Server Error"}`},
+	})
+	pr, err = a.g.CreatePR(context.Background(), in)
+	if err != nil || pr == nil || pr.Number != 12 || !strings.Contains(a.warn.String(), "could not label #12") {
+		t.Fatalf("pr = %+v, err = %v, warning = %q", pr, err, a.warn)
 	}
 }
 
@@ -329,8 +342,31 @@ func TestCreatePRReviewerErrors(t *testing.T) {
 		{req: "POST /repos/acme/shop/pulls/12/requested_reviewers", body: "*", status: 404, resp: `{"message": "Not Found"}`},
 	})
 	pr, err := a.g.CreatePR(context.Background(), in)
-	if err == nil || pr == nil || pr.Number != 12 || !strings.Contains(err.Error(), "404") {
+	if err != nil || pr == nil || pr.Number != 12 {
 		t.Fatalf("pr = %+v, err = %v", pr, err)
+	}
+	if !strings.Contains(a.warn.String(), "could not request reviewers on #12: github: POST /repos/acme/shop/pulls/12/requested_reviewers: 404 Not Found") {
+		t.Errorf("warning = %q", a.warn)
+	}
+}
+
+func TestAPIMessage(t *testing.T) {
+	long := strings.Repeat("x", 400)
+	tests := []struct{ name, body, want string }{
+		{"plain", `{"message": "Not Found"}`, "Not Found"},
+		{"object errors", `{"message": "Validation Failed", "errors": [{"resource": "PullRequest", "code": "custom", "message": "A pull request already exists for acme:tend/x."}]}`, "Validation Failed: A pull request already exists for acme:tend/x."},
+		{"string errors", `{"message": "Validation Failed", "errors": ["No commits between main and tend/x", ""]}`, "Validation Failed: No commits between main and tend/x"},
+		{"code only", `{"message": "Validation Failed", "errors": [{"resource": "Label", "code": "already_exists", "field": "name"}]}`, "Validation Failed: Label name already_exists"},
+		{"mixed", `{"message": "Validation Failed", "errors": [{"field": "base", "code": "invalid"}, "Reviews may only be requested from collaborators.", 7]}`, "Validation Failed: base invalid; Reviews may only be requested from collaborators."},
+		{"capped", `{"message": "Validation Failed", "errors": ["` + long + `"]}`, "Validation Failed: " + long[:detailMax] + "…"},
+		{"no message", `oops`, "oops"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := message([]byte(tc.body)); got != tc.want {
+				t.Errorf("message = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -380,6 +416,24 @@ func TestUpdatePR(t *testing.T) {
 		})
 	}
 
+	t.Run("a new base retargets the PR", func(t *testing.T) {
+		a := newAPI(t, []step{get("pull_open.json"), {req: "PATCH " + pulls + "/12", body: `{"title": "New title", "body": "New body", "base": "develop"}`}})
+		in := in
+		in.Base = "develop"
+		if err := a.g.UpdatePR(context.Background(), 12, in); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("the same base is left alone", func(t *testing.T) {
+		a := newAPI(t, []step{get("pull_open.json"), patch})
+		in := in
+		in.Base = "main"
+		if err := a.g.UpdatePR(context.Background(), 12, in); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("graphql errors surface", func(t *testing.T) {
 		a := newAPI(t, []step{get("pull_open.json"), patch, {req: "POST /graphql", body: "*", resp: `{"errors": [{"message": "Could not resolve"}]}`}})
 		in := in
@@ -410,11 +464,19 @@ func TestClosedBy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newAPI(t, []step{{req: "GET /repos/acme/shop/issues/12", resp: tt.resp}})
-			got, err := a.g.ClosedBy(context.Background(), 12)
+			got, _, err := a.g.ClosedBy(context.Background(), 12)
 			if err != nil || got != tt.want {
 				t.Errorf("ClosedBy = %q, %v; want %q", got, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestClosedAt(t *testing.T) {
+	a := newAPI(t, []step{{req: "GET /repos/acme/shop/issues/12", resp: `{"number": 12, "closed_by": {"login": "ada", "type": "User"}, "closed_at": "2026-10-21T12:00:00Z"}`}})
+	who, at, err := a.g.ClosedBy(context.Background(), 12)
+	if err != nil || who != "ada" || !at.Equal(time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)) {
+		t.Errorf("ClosedBy = %q, %v, %v", who, at, err)
 	}
 }
 
@@ -584,9 +646,17 @@ func TestRepoFromRemote(t *testing.T) {
 		{"https://x-access-token:abc@github.com/acme/shop.git", "acme", "shop", true},
 		{"HTTPS://GitHub.com/Acme/Shop.git", "Acme", "Shop", true},
 		{"git://github.com/acme/shop.git", "acme", "shop", true},
-		{"acme/shop", "acme", "shop", true},
-		{"  acme/shop\n", "acme", "shop", true},
-		{"my.repo/with.dots", "my.repo", "with.dots", true},
+		{"github.com:acme/shop", "acme", "shop", true},
+		{"  git@github.com:acme/shop.git\n", "acme", "shop", true},
+		{"acme/shop", "", "", false},
+		{"/srv/repo", "", "", false},
+		{"/tmp/project.git", "", "", false},
+		{"backup/shop", "", "", false},
+		{"../shop", "", "", false},
+		{"./a:b/c", "", "", false},
+		{"C:/repos/acme/shop", "", "", false},
+		{"github-work:acme/shop", "", "", false},
+		{"git@github.com:../shop", "", "", false},
 		{"git@gitlab.com:acme/shop.git", "", "", false},
 		{"https://gitlab.com/acme/shop", "", "", false},
 		{"https://github.com/acme", "", "", false},
@@ -605,6 +675,29 @@ func TestRepoFromRemote(t *testing.T) {
 				t.Errorf("RepoFromRemote(%q) = %q %q %v", tc.in, owner, name, ok)
 			}
 		})
+	}
+}
+
+func TestRepoFromSlug(t *testing.T) {
+	tests := []struct {
+		in, owner, name string
+		ok              bool
+	}{
+		{"acme/shop", "acme", "shop", true},
+		{"  acme/shop\n", "acme", "shop", true},
+		{"my.repo/with.dots", "my.repo", "with.dots", true},
+		{"/srv/repo", "", "", false},
+		{"../shop", "", "", false},
+		{"acme/..", "", "", false},
+		{"github.com:acme/shop", "", "", false},
+		{"a/b/c", "", "", false},
+		{"acme/", "", "", false},
+		{"", "", "", false},
+	}
+	for _, tc := range tests {
+		if owner, name, ok := RepoFromSlug(tc.in); owner != tc.owner || name != tc.name || ok != tc.ok {
+			t.Errorf("RepoFromSlug(%q) = %q %q %v", tc.in, owner, name, ok)
+		}
 	}
 }
 

@@ -11,12 +11,17 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mohsensc/tend-cli/internal/fetch"
@@ -215,7 +220,7 @@ func TestApply(t *testing.T) {
 				t.Errorf("binary = %q, want %q", got, tc.want)
 			}
 			fi, _ := os.Stat(path)
-			if fi.Mode().Perm() != 0o755 {
+			if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
 				t.Errorf("mode = %v", fi.Mode())
 			}
 			_, oldErr := os.Stat(path + ".old")
@@ -255,6 +260,13 @@ func TestLatest(t *testing.T) {
 		{"", "dev", "dev", false},
 		{"dev", "dev", "dev", false},
 		{"v1.3.9-4-gabc1234-dirty", "dev", "dev", false},
+		{"v1.4.0-rc.1", "v1.4.0", "1.4.0", true},
+		{"v1.4.0-beta2", "v1.4.0", "1.4.0", true},
+		{"v1.5.0-rc.1", "v1.4.0", "1.4.0", false},
+		{"v1.2.4-0.20261029120000-abcdef123456", "dev", "dev", false},
+		{"v1.3.0+dirty", "dev", "dev", false},
+		{"v1.3.0-rc.1+dirty", "dev", "dev", false},
+		{"v1.3.0-rc.1-2-gabc1234", "dev", "dev", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.current, func(t *testing.T) {
@@ -270,14 +282,25 @@ func TestLatest(t *testing.T) {
 }
 
 func TestLatestDevMakesNoRequest(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		reply(w, `{"tag_name": "v9.0.0"}`)
+	}))
+	defer srv.Close()
 	old := latestURL
-	latestURL = "http://127.0.0.1:1/never"
+	latestURL = srv.URL
 	defer func() { latestURL = old }()
-	if _, err := Latest(context.Background(), fetch.New("", "test"), "dev"); err != nil {
-		t.Fatal(err)
+	for _, v := range []string{"", "dev", "v1.2.4-0.20261029120000-abcdef123456", "v1.3.0+dirty"} {
+		if _, err := Latest(context.Background(), fetch.New("", "test"), v); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := Latest(context.Background(), fetch.New("", "test"), "1.0.0"); err == nil {
-		t.Fatal("a release build reached nothing and reported no error")
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("development builds made %d requests", n)
+	}
+	if _, err := Latest(context.Background(), fetch.New("", "test"), "1.0.0"); err != nil || hits.Load() != 1 {
+		t.Fatalf("a release build made %d requests: %v", hits.Load(), err)
 	}
 }
 
@@ -343,5 +366,184 @@ func TestKeyMatchesActionPEM(t *testing.T) {
 	}
 	if !bytes.Equal(der, append(prefix, PublicKey...)) {
 		t.Error("action/pubkey.pem and key.go hold different keys")
+	}
+}
+
+func TestReadLimited(t *testing.T) {
+	if b, err := readLimited(bytes.NewReader(make([]byte, 64)), 64); err != nil || len(b) != 64 {
+		t.Errorf("a binary at the limit: %d bytes, %v", len(b), err)
+	}
+	if _, err := readLimited(bytes.NewReader(make([]byte, 65)), 64); err == nil || !strings.Contains(err.Error(), "larger than the limit") {
+		t.Errorf("a binary over the limit: %v", err)
+	}
+}
+
+func TestReplaceInAReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 || runtime.GOOS == "windows" {
+		t.Skip("needs a directory this user cannot write")
+	}
+	dir := filepath.Join(t.TempDir(), "bin")
+	path := filepath.Join(dir, "tend")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("old binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	for name, err := range map[string]error{
+		"replace":  replace(path, []byte("new"), false),
+		"writable": writable(path),
+		"apply":    apply(context.Background(), fetch.New("", "test"), &ReleaseInfo{Tag: "v1.2.0", Version: "1.2.0"}, path, "linux", "amd64"),
+	} {
+		if err == nil || !strings.Contains(err.Error(), "cannot write to "+dir) || !strings.Contains(err.Error(), "sudo tend update") || !errors.Is(err, fs.ErrPermission) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if got := read(t, path); got != "old binary" {
+		t.Errorf("binary = %q", got)
+	}
+}
+
+func TestApplyThroughSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	r := newRelease(t, "v1.2.0", map[string][]byte{
+		"tend_1.2.0_linux_amd64.tar.gz": tarball(t, map[string]string{"tend": "new binary"}),
+	})
+	r.serve(t)
+	dir := t.TempDir()
+	real := filepath.Join(dir, "opt", "tend")
+	link := filepath.Join(dir, "bin", "tend")
+	for _, d := range []string{filepath.Dir(real), filepath.Dir(link)} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(real, []byte("old binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	exe, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := apply(context.Background(), fetch.New("", "test"), &ReleaseInfo{Tag: "v1.2.0", Version: "1.2.0"}, exe, "linux", "amd64"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, real); got != "new binary" {
+		t.Errorf("real file = %q", got)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the symlink was replaced: %v %v", fi, err)
+	}
+	if got := read(t, link); got != "new binary" {
+		t.Errorf("through the symlink = %q", got)
+	}
+}
+
+const childEnv = "TEND_SELFUPDATE_CHILD"
+
+func TestSelfUpdateChild(t *testing.T) {
+	switch os.Getenv(childEnv) {
+	case "apply":
+		latestURL, assetsURL = os.Getenv("TEND_TEST_LATEST"), os.Getenv("TEND_TEST_ASSETS")
+		PublicKey, _ = hex.DecodeString(os.Getenv("TEND_TEST_KEY"))
+		if err := Apply(context.Background(), fetch.New("", "test"), &ReleaseInfo{Tag: "v1.2.0", Version: "1.2.0"}); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(3)
+		}
+		os.Exit(0)
+	case "cleanup":
+		Cleanup()
+		os.Exit(0)
+	}
+}
+
+func runChild(t *testing.T, path, mode string, env ...string) {
+	t.Helper()
+	cmd := exec.Command(path, "-test.run=^TestSelfUpdateChild$")
+	cmd.Env = append(append(os.Environ(), childEnv+"="+mode), env...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%s: %v\n%s", mode, err, out)
+	}
+}
+
+func TestApplyReplacesTheRunningBinary(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := fmt.Sprintf("tend_1.2.0_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	archive := tarball(t, map[string]string{"tend": string(bin)})
+	exeName := "tend"
+	if runtime.GOOS == "windows" {
+		name = strings.TrimSuffix(name, ".tar.gz") + ".zip"
+		archive = zipfile(t, map[string]string{"tend.exe": string(bin)})
+		exeName = "tend.exe"
+	}
+	r := newRelease(t, "v1.2.0", map[string][]byte{name: archive})
+	r.serve(t)
+
+	dir := t.TempDir()
+	real := filepath.Join(dir, "opt", exeName)
+	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(real, bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	start := real
+	if runtime.GOOS != "windows" {
+		start = filepath.Join(dir, "bin", exeName)
+		if err := os.MkdirAll(filepath.Dir(start), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(real, start); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := os.Stat(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.SameFile(before, before)
+
+	runChild(t, start, "apply", "TEND_TEST_LATEST="+latestURL, "TEND_TEST_ASSETS="+assetsURL, "TEND_TEST_KEY="+hex.EncodeToString(PublicKey))
+
+	after, err := os.Stat(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, after) {
+		t.Fatal("the binary was not replaced")
+	}
+	if got, _ := os.ReadFile(real); !bytes.Equal(got, bin) {
+		t.Fatal("the new binary differs from the release")
+	}
+	if start != real {
+		if fi, err := os.Lstat(start); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("the symlink the binary ran from was replaced: %v", err)
+		}
+	}
+	_, oldErr := os.Stat(real + ".old")
+	if (oldErr == nil) != (runtime.GOOS == "windows") {
+		t.Fatalf(".old present = %v on %s", oldErr == nil, runtime.GOOS)
+	}
+
+	runChild(t, start, "cleanup")
+	if _, err := os.Stat(real + ".old"); !os.IsNotExist(err) {
+		t.Errorf("Cleanup left %s.old: %v", exeName, err)
 	}
 }

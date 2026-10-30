@@ -86,7 +86,11 @@ func Apply(ctx context.Context, wt string, ch *core.Change, o Options) (*core.Pa
 		if err != nil {
 			return decide(ctx, wt, fmt.Sprintf("Pinning did not work out (%v); add the snippet under the option by hand.", err))
 		}
-		p := &core.Patch{Applied: []string{fmt.Sprintf("pinned %s at %s, ignoring %s and later (%s)", ch.Deps[0].Name, opt.To, ch.To, file)}}
+		line := fmt.Sprintf("pinned %s at %s, ignoring %s and later (%s)", ch.Deps[0].Name, opt.To, ch.To, file)
+		if ch.To == "" {
+			line = fmt.Sprintf("pinned %s at %s, ignoring every release, and tend stops proposing anything for it (%s)", ch.Deps[0].Name, opt.To, file)
+		}
+		p := &core.Patch{Applied: []string{line}}
 		return finish(ctx, wt, p)
 	}
 
@@ -145,7 +149,11 @@ func Apply(ctx context.Context, wt string, ch *core.Change, o Options) (*core.Pa
 		return finish(ctx, wt, p)
 	}
 	if ch.Kind == core.Security || len(bumped) > 0 && o.Proven && !o.Strict {
-		p.Applied = append(p.Applied, fmt.Sprintf("%s left as written, with no model to move them", sites(len(rest))))
+		them := "them"
+		if core.Lines(rest) == 1 {
+			them = "it"
+		}
+		p.Applied = append(p.Applied, fmt.Sprintf("%s left as written, with no model to move %s", sites(core.Lines(rest)), them))
 		return finish(ctx, wt, p)
 	}
 	why := ""
@@ -155,7 +163,7 @@ func Apply(ctx context.Context, wt string, ch *core.Change, o Options) (*core.Pa
 	case !o.Proven:
 		why = ", and there is no build or test command to prove a plain bump"
 	}
-	return decide(ctx, wt, fmt.Sprintf("No model is configured to move the %s%s.", sites(len(rest)), why))
+	return decide(ctx, wt, fmt.Sprintf("No model is configured to move the %s%s.", sites(core.Lines(rest)), why))
 }
 
 func sites(n int) string {

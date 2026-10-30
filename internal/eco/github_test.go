@@ -113,3 +113,24 @@ func TestGithubReleasesPaging(t *testing.T) {
 		})
 	}
 }
+
+// A bare tag with a hyphen label is a SemVer pre-release, whatever the
+// label says, and never the latest over the release it leads up to.
+func TestGithubMetaHyphenPre(t *testing.T) {
+	const api = "https://api.github.com/repos/acme/tags"
+	m, _, err := githubMeta(context.Background(), replayCanned(t,
+		canned{url: api + "/tags?per_page=100", body: `[{"name": "v3.0.0-test.1", "commit": {"sha": "b"}}, {"name": "v3.0.0", "commit": {"sha": "c"}}, {"name": "v2.9.0", "commit": {"sha": "a"}}]`},
+		canned{url: api + "/releases?per_page=100", body: `[]`},
+		canned{url: api, body: `{}`}), "acme/tags")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range m.Releases {
+		if r.Pre != (r.Version == "v3.0.0-test.1") {
+			t.Errorf("%s: pre = %v", r.Version, r.Pre)
+		}
+	}
+	if m.Latest != "v3.0.0" {
+		t.Errorf("latest = %s", m.Latest)
+	}
+}

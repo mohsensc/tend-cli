@@ -20,6 +20,8 @@ mkdir -p "$RUNNER_TEMP"
 out=$("$here/install.sh" "$@" 2>&1)
 status=$?
 dest="$RUNNER_TEMP/tend/bin"
+bin=tend
+[ "${RUNNER_OS:-}" = Windows ] && bin=tend.exe
 
 fail() {
 	echo "FAIL: $*" >&2
@@ -31,14 +33,14 @@ fail() {
 case "$expect" in
 ok)
 	[ "$status" -eq 0 ] || fail "exit status $status"
-	[ -x "$dest/tend" ] || fail "no executable at $dest/tend"
-	[ "$("$dest/tend")" = "$match" ] || fail "binary printed '$("$dest/tend")', want '$match'"
+	[ -x "$dest/$bin" ] || fail "no executable at $dest/$bin"
+	[ "$("$dest/$bin")" = "$match" ] || fail "binary printed '$("$dest/$bin")', want '$match'"
 	grep -qx "$dest" "$GITHUB_PATH" || fail "GITHUB_PATH does not list $dest"
 	;;
 fail)
 	[ "$status" -ne 0 ] || fail "install.sh succeeded"
 	echo "$out" | grep -qF -- "$match" || fail "output does not mention '$match'"
-	[ ! -e "$dest/tend" ] || fail "a binary was installed anyway"
+	[ ! -e "$dest/$bin" ] || fail "a binary was installed anyway"
 	[ ! -s "$GITHUB_PATH" ] || fail "GITHUB_PATH was written"
 	;;
 *)

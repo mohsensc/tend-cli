@@ -1,6 +1,8 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"strconv"
 	"strings"
@@ -103,6 +105,8 @@ func groupName(c *Change) string {
 }
 
 // Slug makes a branch-safe lowercase token: [a-z0-9.-]+, at most 60 chars.
+// A longer one is cut and ends in a hash of s, so two that share their
+// first 60 chars stay apart.
 func Slug(s string) string {
 	var b strings.Builder
 	var prev byte
@@ -119,10 +123,20 @@ func Slug(s string) string {
 		prev = c
 	}
 	res := strings.Trim(b.String(), "-.")
-	if len(res) > 60 {
-		res = strings.TrimRight(res[:60], "-.")
+	if len(res) > slugMax {
+		res = Cut(res, slugMax, s)
 	}
 	return res
+}
+
+const slugMax = 60
+
+// Cut shortens slug to at most n bytes, the last nine a dash and a hash of
+// whole, which tells apart what the cut would make the same.
+func Cut(slug string, n int, whole string) string {
+	sum := sha256.Sum256([]byte(whole))
+	tag := "-" + hex.EncodeToString(sum[:])[:8]
+	return strings.TrimRight(slug[:max(n-len(tag), 1)], "-.") + tag
 }
 
 // Subject is a change id without its target: the same thing at another

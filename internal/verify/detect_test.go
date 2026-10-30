@@ -39,14 +39,17 @@ func TestDetect(t *testing.T) {
 			"packages/a/package.json": {Install: []string{"npm ci"}, Test: []string{"cd packages/a && npm test"}},
 			"web/package.json":        {Install: []string{"cd web && npm ci"}, Build: []string{"cd web && npm run build"}, Test: []string{"cd web && npm test"}},
 			"site docs/package.json":  {Test: []string{"cd 'site docs' && npm test"}},
+			"docs/package.json":       {Install: []string{"cd docs && npm install"}, Build: []string{"cd docs && npm run build"}},
 		}},
 		core.Go: fakeEco{core.Go, map[string]core.Commands{
 			"go.mod":           goCmds,
 			"tools/gen/go.mod": {Build: []string{"cd tools/gen && go build ./..."}, Test: []string{"cd tools/gen && go vet ./... && go test ./..."}},
 		}},
 		core.Pip: fakeEco{core.Pip, map[string]core.Commands{
-			"requirements.txt":     {Install: []string{"python -m venv .venv && .venv/bin/pip install -r requirements.txt"}, Test: []string{"python -m unittest"}},
-			"requirements-dev.txt": {Install: []string{"python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt"}, Test: []string{"python -m unittest"}},
+			"requirements.txt":      {Install: []string{"python -m venv .venv && .venv/bin/pip install -r requirements.txt"}, Test: []string{"python -m unittest"}},
+			"requirements-dev.txt":  {Install: []string{"python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt"}, Test: []string{"python -m unittest"}},
+			"svc/requirements.txt":  {Install: []string{"cd svc && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"}, Test: []string{"cd svc && .venv/bin/python -m unittest"}},
+			"requirements/base.txt": {Install: []string{"cd requirements && python3 -m venv .venv && .venv/bin/pip install -r base.txt"}},
 		}},
 		core.Docker:  eco.ByName(core.Docker),
 		core.Actions: eco.ByName(core.Actions),
@@ -102,6 +105,37 @@ func TestDetect(t *testing.T) {
 				Install: []string{"npm ci", "cd web && npm ci"},
 				Build:   []string{"npm run build", "cd web && npm run build"},
 				Test:    []string{"npm test", "cd web && npm test"},
+			},
+		},
+		{
+			"nested package without a lock of its own is no workspace member, and installs itself",
+			[]core.Manifest{npmRoot, {Ecosystem: core.Npm, Path: "docs/package.json"}},
+			config.Verify{},
+			core.Commands{
+				Install: []string{"npm ci", "cd docs && npm install"},
+				Build:   []string{"npm run build", "cd docs && npm run build"},
+				Test:    []string{"npm test"},
+			},
+		},
+		{
+			"nested requirements with tests of their own install themselves",
+			[]core.Manifest{{Ecosystem: core.Pip, Path: "requirements.txt"}, {Ecosystem: core.Pip, Path: "svc/requirements.txt"}},
+			config.Verify{},
+			core.Commands{
+				Install: []string{
+					"python -m venv .venv && .venv/bin/pip install -r requirements.txt",
+					"cd svc && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+				},
+				Test: []string{"python -m unittest", "cd svc && .venv/bin/python -m unittest"},
+			},
+		},
+		{
+			"nested requirements with nothing to run there are pulled in by another",
+			[]core.Manifest{{Ecosystem: core.Pip, Path: "requirements.txt"}, {Ecosystem: core.Pip, Path: "requirements/base.txt"}},
+			config.Verify{},
+			core.Commands{
+				Install: []string{"python -m venv .venv && .venv/bin/pip install -r requirements.txt"},
+				Test:    []string{"python -m unittest"},
 			},
 		},
 		{

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/mohsensc/tend-cli/internal/config"
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/fetch"
@@ -91,11 +93,11 @@ var recorded = map[string][]string{
 	"github":       {"GET /repos/{owner}/{repo}", "GET /assignments/{assignment_id}"},
 	"openai":       {"POST /v1/chat/completions"},
 	"twilio":       {"POST /2010-04-01/Accounts/{AccountSid}/Messages.json"},
-	"sendgrid":     {"POST /v3/mail/send"},
+	"sendgrid":     {"POST /v3/mail/send", "GET /v3/marketing/contacts", "GET /v3/templates"},
 	"plaid":        {"POST /transactions/get"},
 	"digitalocean": {"GET /v2/droplets"},
-	"cloudflare":   {"GET /client/v4/zones"},
-	"datadog":      {"GET /api/v1/monitor"},
+	"cloudflare":   {"GET /client/v4/zones", "GET /client/v4/zones/{zone_id}/cache/origin_cloud_regions"},
+	"datadog":      {"GET /api/v1/monitor", "GET /api/v2/logs/events"},
 }
 
 const recordDir = "testdata/recorded"
@@ -109,31 +111,41 @@ func TestRecord(t *testing.T) {
 	c := fetch.New("", "test")
 	for _, p := range Catalog() {
 		ops := recorded[p.Name]
-		res, err := c.Get(context.Background(), p.Spec)
-		if err != nil || res.Status != 200 {
-			t.Errorf("%s: %s: %v %+v", p.Name, p.Spec, err, res)
-			continue
-		}
-		d, err := load(res.Body, p.Sunset)
-		if err != nil {
-			t.Errorf("%s: %v", p.Name, err)
-			continue
-		}
-		for _, k := range ops {
-			if d.Ops[k] == nil {
-				t.Errorf("%s: no %s", p.Name, k)
+		found := map[string]bool{}
+		for _, spec := range p.Specs() {
+			res, err := c.Get(context.Background(), spec)
+			if err != nil || res.Status != 200 {
+				t.Errorf("%s: %s: %v %+v", p.Name, spec, err, res)
+				continue
+			}
+			d, err := load(res.Body, p.Sunset)
+			if err != nil {
+				t.Errorf("%s: %v", p.Name, err)
+				continue
+			}
+			mine := []string{}
+			for _, k := range ops {
+				if d.Ops[k] != nil {
+					found[k] = true
+					mine = append(mine, k)
+				}
+			}
+			rec, _ := json.MarshalIndent(map[string]any{"url": spec, "status": 200, "body": string(trimSpec(d, mine))}, "", "  ")
+			path := filepath.Join(recordDir, fetch.RecordName("GET", spec, nil))
+			if err := os.WriteFile(path, append(rec, '\n'), 0o644); err != nil {
+				t.Fatal(err)
 			}
 		}
-		rec, _ := json.MarshalIndent(map[string]any{"url": p.Spec, "status": 200, "body": string(trimSpec(d, ops))}, "", "  ")
-		path := filepath.Join(recordDir, fetch.RecordName("GET", p.Spec, nil))
-		if err := os.WriteFile(path, append(rec, '\n'), 0o644); err != nil {
-			t.Fatal(err)
+		for _, k := range ops {
+			if !found[k] {
+				t.Errorf("%s: no %s", p.Name, k)
+			}
 		}
 	}
 }
 
 func TestRecorded(t *testing.T) {
-	f := fetch.Replay(recordDir)
+	s := &Specs{Fetch: fetch.Replay(recordDir)}
 	docs := map[string]*Doc{}
 	for _, p := range Catalog() {
 		ops, ok := recorded[p.Name]
@@ -141,21 +153,19 @@ func TestRecorded(t *testing.T) {
 			t.Errorf("%s: not recorded", p.Name)
 			continue
 		}
-		fi, err := os.Stat(filepath.Join(recordDir, fetch.RecordName("GET", p.Spec, nil)))
-		if err != nil {
-			t.Error(err)
-			continue
+		for _, spec := range p.Specs() {
+			fi, err := os.Stat(filepath.Join(recordDir, fetch.RecordName("GET", spec, nil)))
+			if err != nil {
+				t.Error(err)
+				continue
+			}
+			if fi.Size() > 200<<10 {
+				t.Errorf("%s: recording is %d KB", p.Name, fi.Size()>>10)
+			}
 		}
-		if fi.Size() > 200<<10 {
-			t.Errorf("%s: recording is %d KB", p.Name, fi.Size()>>10)
-		}
-		res, err := f.Get(context.Background(), p.Spec)
-		if err != nil {
-			t.Fatal(err)
-		}
-		d, err := load(res.Body, p.Sunset)
-		if err != nil {
-			t.Fatalf("%s: %v", p.Name, err)
+		d, err := s.spec(context.Background(), "", &p)
+		if err != nil || len(s.Notes()) > 0 {
+			t.Fatalf("%s: %v %q", p.Name, err, s.Notes())
 		}
 		if got := slices.Sorted(maps.Keys(d.Ops)); !slices.Equal(got, slices.Sorted(maps.Keys(set(ops)))) {
 			t.Errorf("%s: ops = %q", p.Name, got)
@@ -178,6 +188,9 @@ func TestRecorded(t *testing.T) {
 		{"digitalocean", "GET", "https://api.digitalocean.com/v2/droplets?per_page=10", "GET /v2/droplets", []string{"droplets"}},
 		{"cloudflare", "GET", "https://api.cloudflare.com/client/v4/zones", "GET /client/v4/zones", []string{"result"}},
 		{"datadog", "GET", "https://api.datadoghq.com/api/v1/monitor", "GET /api/v1/monitor", nil},
+		{"datadog", "GET", "https://api.datadoghq.com/api/v2/logs/events?filter[query]=x", "GET /api/v2/logs/events", nil},
+		{"sendgrid", "GET", "https://api.sendgrid.com/v3/templates?generations=dynamic", "GET /v3/templates", nil},
+		{"sendgrid", "GET", "https://api.sendgrid.com/v3/marketing/contacts", "GET /v3/marketing/contacts", nil},
 	}
 	for _, tt := range tests {
 		d := docs[tt.provider]
@@ -202,6 +215,10 @@ func TestRecorded(t *testing.T) {
 	}
 	if op := docs["stripe"].Ops["GET /v1/customers/{customer}/cards"]; !op.Deprecated {
 		t.Error("stripe: customer cards are deprecated")
+	}
+	cf := docs["cloudflare"].Ops["GET /client/v4/zones/{zone_id}/cache/origin_cloud_regions"]
+	if !cf.Deprecated || !cf.Sunset.Equal(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("cloudflare: origin cloud regions deprecated %v sunset %v", cf.Deprecated, cf.Sunset)
 	}
 	gh := docs["github"].Ops["GET /assignments/{assignment_id}"]
 	if !gh.Deprecated || !gh.Sunset.Equal(time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)) {
@@ -256,5 +273,56 @@ func TestChangesRecorded(t *testing.T) {
 	}
 	if used := s.runs["stripe"].used; !slices.Equal(used, []string{"GET /v1/customers/{customer}/cards"}) {
 		t.Errorf("stripe used = %q; payment_intents is not in the recording, so the guess drops out", used)
+	}
+}
+
+func TestCloudflareSunsetKey(t *testing.T) {
+	p := provider(t, "cloudflare")
+	spec := `{"openapi": "3.0.3", "servers": [{"url": "https://api.cloudflare.com/client/v4"}], "paths": {
+"/accounts/{account_id}/access/bookmarks": {"get": {"deprecated": true, "x-cfDeprecation": {"id": "b", "eol": "2023-03-19T00:00:00Z"}}},
+"/zones": {"get": {"x-cfDeprecation": {"id": "z", "description": "no date"}}}}}`
+	d, err := load([]byte(spec), p.Sunset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.Ops["GET /client/v4/accounts/{account_id}/access/bookmarks"].Sunset; !got.Equal(time.Date(2023, 3, 19, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("eol = %v", got)
+	}
+	if got := d.Ops["GET /client/v4/zones"].Sunset; !got.IsZero() {
+		t.Errorf("no eol = %v", got)
+	}
+}
+
+func TestSpecList(t *testing.T) {
+	var ps []Provider
+	err := yaml.Unmarshal([]byte("- {name: a, hosts: [a.test], spec: [https://a.test/1.json, https://a.test/2.json], base: /v1}\n- {name: b, hosts: [b.test], spec: https://b.test/s.json}\n"), &ps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps[0].Spec != "https://a.test/1.json" || !slices.Equal(ps[0].More, []string{"https://a.test/2.json"}) || ps[0].Base != "/v1" || ps[0].Hosts[0] != "a.test" {
+		t.Errorf("a = %+v", ps[0])
+	}
+	if ps[1].Spec != "https://b.test/s.json" || ps[1].More != nil || len(ps[1].Specs()) != 1 {
+		t.Errorf("b = %+v", ps[1])
+	}
+	if got := Merge(ps, []config.API{{Name: "a", Spec: "local.yaml"}}); got[0].Spec != "local.yaml" || got[0].More != nil {
+		t.Errorf("a spec from tend.yml replaces them all: %+v", got[0])
+	}
+
+	one := `{"openapi": "3.0.0", "servers": [{"url": "https://a.test"}], "paths": {"/v1/x": {"get": {}}}}`
+	two := `{"openapi": "3.0.0", "servers": [{"url": "https://a.test"}], "paths": {"/v2/y": {"get": {}}}}`
+	s := &Specs{Cat: ps, Fetch: fetcher{"https://a.test/1.json": one, "https://a.test/2.json": two}}
+	inv := &core.Inventory{Index: &index{urls: []core.URLUse{
+		{File: "a.go", Line: 1, Method: "GET", URL: "https://a.test/v1/x"},
+		{File: "a.go", Line: 2, Method: "GET", URL: "https://a.test/v2/y"},
+	}}}
+	changes(t, s, inv)
+	if used := s.runs["a"].used; !slices.Equal(used, []string{"GET /v1/x", "GET /v2/y"}) || len(s.Notes()) != 0 {
+		t.Errorf("used = %q notes %q", used, s.Notes())
+	}
+	s.Fetch = fetcher{"https://a.test/1.json": one}
+	changes(t, s, inv)
+	if n := s.Notes(); len(n) != 2 || !strings.HasPrefix(n[0], "a: https://a.test/2.json: status 404") {
+		t.Errorf("a missing file is a note, the rest still checked: %q", n)
 	}
 }

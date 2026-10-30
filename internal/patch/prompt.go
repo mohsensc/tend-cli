@@ -43,6 +43,7 @@ type promptData struct {
 	Files    []promptFile
 	Retry    string
 	Previous string
+	Ran      bool
 }
 
 type promptFile struct {
@@ -53,8 +54,9 @@ type promptFile struct {
 }
 
 // prompt renders the system text and the user prompt. retry and previous carry the
-// last failed reply, empty on the first turn.
-func prompt(t *tree, in job, o Options, retry, previous string) (string, string, error) {
+// last failed reply, empty on the first turn; ran says the reply applied, and
+// retry is what the project's commands made of it.
+func prompt(t *tree, in job, o Options, retry, previous string, ran bool) (string, string, error) {
 	d := promptData{
 		Change:   summary(in.ch, in.to, in.toName),
 		Bumped:   len(in.ch.Deps) > 0,
@@ -62,6 +64,7 @@ func prompt(t *tree, in job, o Options, retry, previous string) (string, string,
 		Allowed:  in.allowed,
 		Retry:    retry,
 		Previous: core.Clip(previous, previousMax),
+		Ran:      ran,
 	}
 	for i, ev := range in.ch.Evidence {
 		if i == maxEvidence {

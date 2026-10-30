@@ -677,7 +677,7 @@ func mavenReactor(root, dir string) string {
 // Traits says Maven cannot move a transitive dependency by itself: it has
 // no lockfile, and only a direct declaration overrides what a parent brings.
 func (maven) Traits() core.Traits {
-	return core.Traits{OSV: "Maven", Page: centralPage}
+	return core.Traits{OSV: "Maven", Page: centralPage, KeepSuffix: true}
 }
 
 func centralPage(name string) string {

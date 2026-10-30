@@ -1,4 +1,4 @@
 tend: 2 queued, 0 skipped, no open PR
 
-  1  first        first PR                     move off 1 deprecated · remove 3 unused
+  1  first        catch-up                     1 deprecation · 3 unused dependencies
   2  deprecation  @fixture/pay  1.4.0 → 2.0.0  2 sites

@@ -318,6 +318,27 @@ func (actions) Bump(ctx context.Context, root string, d core.Dep, to, toName str
 	return res, nil
 }
 
+// Settle reads a ref pinned to a bare commit, with no "# v4.2.2" comment to
+// say which release it is, as the most specific tag on that commit.
+func (actions) Settle(d core.Dep, m *core.Meta) (core.Dep, error) {
+	if d.Pin == "" || d.Version != d.Pin {
+		return d, nil
+	}
+	v, _ := actionsShas.Load(d.Name)
+	tags, _ := v.(map[string]string)
+	name, best := "", 0
+	for t, sha := range tags {
+		if pv, ok := ver.Parse(t); ok && sha == d.Pin && (len(pv.Nums) > best || len(pv.Nums) == best && t < name) {
+			name, best = t, len(pv.Nums)
+		}
+	}
+	if name == "" {
+		return d, fmt.Errorf("pinned to untagged commit %s, not tracked", core.Short(d.Pin))
+	}
+	d.Version = name
+	return d, nil
+}
+
 func withTagComment(line, tag string) string {
 	if m := trailingVer.FindStringSubmatchIndex(line); m != nil {
 		return line[:m[2]] + tag + line[m[3]:]

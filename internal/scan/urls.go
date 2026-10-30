@@ -33,7 +33,7 @@ func (f *file) endpoints() []core.URLUse {
 		if h != "" && (host == "" || strings.HasPrefix(h, "api.") && !strings.HasPrefix(host, "api.")) {
 			host = h
 		}
-		res = append(res, core.URLUse{File: f.File, Line: l.Line, URL: u, Host: h})
+		res = append(res, core.URLUse{File: f.File, Line: l.Line, URL: u, Host: h, Text: f.text(l.Line)})
 		cols = append(cols, l.Col)
 	}
 	lines := map[int]bool{}

@@ -223,10 +223,10 @@ func (helm) Bump(ctx context.Context, root string, d core.Dep, to, toName string
 // helmReq is the version range req written for to. One that already admits
 // to stays, and one tend cannot read becomes to itself.
 func helmReq(req, to string) string {
-	if v, ok := ver.Parse(to); ok && admits(req, v, false) {
+	if v, ok := ver.Parse(to); ok && admits(req, v, helmDialect) {
 		return req
 	}
-	next, err := fixReq(req, to, false)
+	next, err := fixReq(req, to, helmDialect)
 	if err != nil {
 		return to
 	}

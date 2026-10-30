@@ -42,7 +42,9 @@ var postWords = map[string]bool{"post": true, "rev": true}
 
 // Parse accepts "v1.2.3", "1.2", "1.2.3-rc.1", "1.0a1", "1.0.post1", "2024.1.2" and
 // docker-style "18-alpine". A suffix that is not a known pre-release word, such as
-// "-alpine" or "-slim", is a variant and does not take part in ordering.
+// "-alpine" or "-slim", is a variant and does not take part in ordering. A PEP 440
+// epoch ("1!2.0") outranks every version without one, so a version with one does
+// not parse.
 func Parse(s string) (V, bool) {
 	v := V{Raw: s}
 	s = strings.TrimSpace(s)
@@ -51,6 +53,9 @@ func Parse(s string) (V, bool) {
 	}
 	if i := strings.IndexByte(s, '+'); i >= 0 {
 		s = s[:i]
+	}
+	if strings.Contains(s, "!") {
+		return V{Raw: v.Raw}, false
 	}
 	for {
 		n := digits(s)
@@ -228,12 +233,14 @@ func Less(a, b string) bool {
 	return Compare(va, vb) < 0
 }
 
-// Level names the size of the step from one version to another: major, minor, patch or same.
+// Level names the size of the step from one version to another: major,
+// minor, patch or same. A step off v's compatibility line is major, as a
+// caret range reads it: 0.1 to 0.2 is, and so is 0.0.1 to 0.0.2.
 func Level(from, to V) string {
 	switch {
 	case Compare(from, to) == 0:
 		return "same"
-	case part(from.Nums, 0) != part(to.Nums, 0):
+	case from.Line() != to.Line():
 		return "major"
 	case part(from.Nums, 1) != part(to.Nums, 1):
 		return "minor"
@@ -254,7 +261,39 @@ func Step(from, to string) string {
 	return ""
 }
 
+// StepIn is Step as ecosystem eco reads a version: a Go module keeps its
+// import path across v0.x minors, which go get takes as routine upgrades,
+// so v0.13 to v0.49 is minor there; everywhere else a caret range rules.
+func StepIn(eco, from, to string) string {
+	if eco != "go" {
+		return Step(from, to)
+	}
+	a, okA := Parse(from)
+	b, okB := Parse(to)
+	switch {
+	case !okA || !okB || Compare(a, b) == 0:
+		return ""
+	case a.Major() != b.Major():
+		return "major"
+	case part(a.Nums, 1) != part(b.Nums, 1):
+		return "minor"
+	}
+	return "patch"
+}
+
 func (v V) Major() int { return part(v.Nums, 0) }
+
+// Line is the compatibility line v is on, what a caret range holds fixed:
+// the major from 1 on, "0.3" for a 0.3.x, "0.0.4" for 0.0.4.
+func (v V) Line() string {
+	switch {
+	case part(v.Nums, 0) > 0:
+		return strconv.Itoa(part(v.Nums, 0))
+	case part(v.Nums, 1) > 0:
+		return "0." + strconv.Itoa(part(v.Nums, 1))
+	}
+	return "0.0." + strconv.Itoa(part(v.Nums, 2))
+}
 
 // GoLess orders Go module versions, which are strict semver with a v prefix.
 func GoLess(a, b string) bool { return semver.Compare(a, b) < 0 }

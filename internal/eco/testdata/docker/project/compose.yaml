@@ -3,13 +3,15 @@ services:
     image: postgres:11
   cache:
     image: "redis:7.2-alpine"   # keep small
-    build: .
   proxy:
     image: ${PROXY_IMAGE:-nginx}:${PROXY_TAG:-1.25}
   tool:
     image: ghcr.io/acme/tool:2.1.0
   app:
     build: .
+  node-app:
+    build: .
+    image: node-app
   other:
     image: ${UNSET_IMAGE}
   pinned:

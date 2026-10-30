@@ -17,17 +17,29 @@
     - {to: luxon, why: "from moment's maintainers; immutable, with time zones built in, but a different API"}
     - {to: date-fns, why: "plain functions over the native Date and tree-shakes well; every call site changes shape"}
 - {eco: npm, name: "@types/*", note: "follows its package"}   # handled in plan grouping, listed for readers
-- {eco: pip, name: pycrypto, to: pycryptodome, url: https://github.com/pycrypto/pycrypto/issues/173}
+- {eco: pip, name: pycrypto, to: pycryptodome, safe: true, url: https://github.com/pycrypto/pycrypto/issues/173}
 - {eco: pip, name: nose, to: pytest, url: https://nose.readthedocs.io/en/latest/#note-to-users}
-- {eco: pip, name: sklearn, to: scikit-learn, url: https://pypi.org/project/sklearn/}
+- {eco: pip, name: sklearn, to: scikit-learn, safe: true, url: https://pypi.org/project/sklearn/}
 - {eco: go, name: github.com/golang/protobuf, to: google.golang.org/protobuf, url: https://go.dev/blog/protobuf-apiv2}
 - {eco: go, name: github.com/dgrijalva/jwt-go, to: github.com/golang-jwt/jwt/v5, url: https://github.com/dgrijalva/jwt-go/issues/462}
 - {eco: go, name: github.com/pkg/errors, to: errors, note: "stdlib errors since Go 1.13; archived", url: https://github.com/pkg/errors}
-- {eco: go, name: golang.org/x/lint, to: honnef.co/go/tools/cmd/staticcheck, url: https://github.com/golang/lint}
+- {eco: go, name: golang.org/x/lint, to: honnef.co/go/tools, note: "run its staticcheck command in place of golint", url: https://github.com/golang/lint}
 - {eco: go, name: github.com/satori/go.uuid, to: github.com/google/uuid, url: https://github.com/satori/go.uuid/issues/73}
 - {eco: actions, name: actions/create-release, to: softprops/action-gh-release, url: https://github.com/actions/create-release}
 - {eco: actions, name: actions/upload-release-asset, to: softprops/action-gh-release, url: https://github.com/actions/upload-release-asset}
-- {eco: actions, name: actions/setup-ruby, to: ruby/setup-ruby, url: https://github.com/actions/setup-ruby}
+- {eco: actions, name: actions/setup-ruby, to: ruby/setup-ruby, safe: true, url: https://github.com/actions/setup-ruby}
 - {eco: rubygems, name: therubyracer, to: mini_racer, url: https://github.com/rubyjs/therubyracer}
-- {eco: composer, name: fzaninotto/faker, to: fakerphp/faker, url: https://github.com/fzaninotto/Faker}
+- {eco: composer, name: fzaninotto/faker, to: fakerphp/faker, safe: true, url: https://github.com/fzaninotto/Faker}
 - {eco: nuget, name: microsoft.aspnet.webapi.client, note: "see alternatePackage from nuget", url: https://www.nuget.org/packages/Microsoft.AspNet.WebApi.Client}
+- {eco: cargo, name: term_size, to: terminal_size, url: https://rustsec.org/advisories/RUSTSEC-2020-0163}
+- {eco: cargo, name: atty, instead: "Use std::io::IsTerminal", note: "in the standard library since Rust 1.70", url: https://rustsec.org/advisories/RUSTSEC-2024-0375}
+- eco: cargo
+  name: ansi_term
+  url: https://rustsec.org/advisories/RUSTSEC-2021-0139
+  options:
+    - {to: nu-ansi-term, why: "a maintained fork with the same API, so most code carries over"}
+    - {to: owo-colors, why: "zero-allocation and no_std, with a different, trait-based API"}
+- {eco: actions, name: actions-rs/toolchain, instead: "Switch to dtolnay/rust-toolchain", note: "pinned by a toolchain ref such as @stable or @1.80; its override, profile and default inputs have no equivalent, while components and targets carry over", url: https://github.com/actions-rs/toolchain}
+- {eco: actions, name: actions-rs/cargo, instead: "Replace it with a plain `run: cargo <command>` step", note: "archived", url: https://github.com/actions-rs/cargo}
+- {eco: actions, name: actions-rs/audit-check, instead: "Switch to rustsec/audit-check", note: "archived; the inputs carry over", url: https://github.com/actions-rs/audit-check}
+- {eco: actions, name: actions-rs/clippy-check, instead: "Run `cargo clippy` in a step", note: "archived", url: https://github.com/actions-rs/clippy-check}

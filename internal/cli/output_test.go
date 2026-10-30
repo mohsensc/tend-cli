@@ -44,14 +44,51 @@ func TestFirstLine(t *testing.T) {
 		want string
 	}{
 		{core.Batch{Unused: []core.Dep{d, d, d}, Changes: []core.Change{{Kind: core.Security}, {Kind: core.Security}, {Kind: core.Deprecation, API: api}, {Kind: core.Deprecation}}, Kept: []core.Aside{{}}},
-			nil, "fix 2 security · 1 API · move off 1 deprecated · remove 3 unused · 1 to look at"},
-		{core.Batch{Next: []core.Later{{}, {}}}, open, "2 in later stages · open PR #1"},
-		{core.Batch{}, nil, "nothing to catch up on; adds tend.yml"},
+			nil, "catch-up||2 security fixes · 1 API change · 1 deprecation · 3 unused dependencies · 1 possibly unused, kept"},
+		{core.Batch{Next: []core.Later{{}, {}}}, open, "set up tend||2 more in later PRs · open PR #1"},
+		{core.Batch{}, nil, "set up tend||nothing to catch up on; adds tend.yml"},
 	}
 	for _, tt := range tests {
 		ch := core.Change{ID: core.FirstID, Kind: core.First, Deps: []core.Dep{d}, Batch: &tt.b}
-		if got := subject(&ch) + "|" + target(&ch) + "|" + detail(&ch, plan.OpenID(tt.open, nil), tt.open); got != "first PR||"+tt.want {
+		if got := subject(&ch) + "|" + target(&ch) + "|" + detail(&ch, plan.OpenID(tt.open, nil), tt.open, time.Time{}); got != tt.want {
 			t.Errorf("line = %q, want %q", got, tt.want)
+		}
+	}
+}
+
+func TestAPIWhat(t *testing.T) {
+	for what, want := range map[string]string{
+		"response field removed":      "field total_cents removed",
+		"response field type changed": "field total_cents changed type",
+	} {
+		if got := apiWhat(&core.APIChange{Field: "total_cents", What: what}); got != want {
+			t.Errorf("apiWhat(%q) = %q, want %q", what, got, want)
+		}
+	}
+}
+
+func TestDetailWords(t *testing.T) {
+	stay := core.Option{Title: "Pin to 1.1.0 and ignore", Stay: true}
+	sec := func(n int) *core.Change {
+		ch := &core.Change{Kind: core.Security, Severity: "high", To: "4.18.1"}
+		for i := range n {
+			ch.Evidence = append(ch.Evidence, core.Evidence{Source: "osv", Title: fmt.Sprintf("GHSA-%d title", i)})
+		}
+		return ch
+	}
+	tests := []struct {
+		ch   *core.Change
+		want string
+	}{
+		{&core.Change{Kind: core.Deprecation, Options: []core.Option{stay}}, "no known replacement"},
+		{&core.Change{Kind: core.Deprecation, Options: []core.Option{{Title: "Move", ToName: "undici", To: "6.0.0"}, stay}}, "1 option: → undici 6.0.0"},
+		{&core.Change{Kind: core.Deprecation, Options: []core.Option{{Title: "A"}, {Title: "B"}, stay}}, "2 options"},
+		{sec(1), "GHSA-0 high"},
+		{sec(6), "GHSA-0 high +5 more"},
+	}
+	for _, tt := range tests {
+		if got := detail(tt.ch, "", nil, time.Time{}); got != tt.want {
+			t.Errorf("detail = %q, want %q", got, tt.want)
 		}
 	}
 }
@@ -200,7 +237,7 @@ func TestLoop(t *testing.T) {
 		waits = append(waits, d)
 		return ctx.Err() == nil
 	}
-	loop(ctx, time.Hour, func(d time.Duration) time.Duration { return d / 10 }, wait, func(rc context.Context) {
+	loop(ctx, context.WithoutCancel(ctx), time.Hour, func(d time.Duration) time.Duration { return d / 10 }, wait, func(rc context.Context) {
 		if runs.Add(1) == 3 {
 			cancel()
 			if rc.Err() != nil {
@@ -215,5 +252,25 @@ func TestLoop(t *testing.T) {
 		if j := jitter(time.Hour); j < 0 || j > 6*time.Minute {
 			t.Fatalf("jitter %s", j)
 		}
+	}
+}
+
+func TestSitesByLine(t *testing.T) {
+	ch := &core.Change{Sites: []core.Site{
+		{File: "src/bin/hexyl.rs", Line: 143, Col: 25, Chain: []string{"atty", "is"}},
+		{File: "src/bin/hexyl.rs", Line: 143, Col: 34, Chain: []string{"Stream", "Stdout"}},
+	}}
+	if got := sites(ch); got != "1 site" {
+		t.Errorf("sites = %q", got)
+	}
+}
+
+func TestWaysUsesTheNotice(t *testing.T) {
+	ch := &core.Change{Kind: core.Deprecation, Evidence: []core.Evidence{{Source: "registry", Title: "left-pad 1.3.0 is deprecated", Text: "use String.prototype.padStart()"}}}
+	if got := ways(ch); got != "deprecated: use String.prototype.padStart()" {
+		t.Errorf("ways = %q", got)
+	}
+	if got := ways(&core.Change{}); got != "no known replacement" {
+		t.Errorf("ways = %q", got)
 	}
 }

@@ -4,7 +4,9 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-*"
+      - "v[0-9]+.[0-9]+.[0-9]+-alpha*"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta*"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc*"
 
 permissions:
   contents: read
@@ -16,8 +18,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
+      # A shape tend update does not accept would ship binaries that call
+      # themselves development builds.
+      - name: tag shape
+        run: |
+          [[ $GITHUB_REF_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.?[0-9]+)?$ ]] ||
+            { echo "tag $GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-(alpha|beta|rc)N" >&2; exit 1; }
       - run: go test ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   build:
     needs: test
@@ -34,7 +44,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
       - name: build and package
         run: |
           tag=$GITHUB_REF_NAME
@@ -44,6 +55,7 @@ jobs:
           go build -trimpath \
             -ldflags "-s -w -X main.version=$tag -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             -o "stage/$bin" ./cmd/tend
+          env -u GOOS -u GOARCH go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -mode binary "stage/$bin"
           name=tend_${tag#v}_${GOOS}_${GOARCH}
           if [ "$GOOS" = windows ]; then
             (cd stage && zip -q "../dist/$name.zip" "$bin")
@@ -68,7 +80,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: dist-*
@@ -80,6 +93,12 @@ jobs:
         run: |
           (cd dist && sha256sum tend_* > checksums.txt)
           go run ./internal/selfupdate/sign -in dist/checksums.txt > dist/checksums.txt.sig
+      # The same check install.sh makes, on the exact files the Action will read.
+      - name: verify signature
+        run: |
+          base64 -d < dist/checksums.txt.sig > "$RUNNER_TEMP/sig.bin"
+          openssl pkeyutl -verify -pubin -inkey action/pubkey.pem -rawin \
+            -in dist/checksums.txt -sigfile "$RUNNER_TEMP/sig.bin"
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -105,6 +105,12 @@ func TestLessSorts(t *testing.T) {
 	}
 }
 
+func TestParseEpoch(t *testing.T) {
+	if v, ok := Parse("1!2.0"); ok {
+		t.Errorf("Parse(1!2.0) = %v", v)
+	}
+}
+
 func TestLevel(t *testing.T) {
 	tests := []struct{ from, to, want string }{
 		{"1.2.3", "2.0.0", "major"},
@@ -114,7 +120,12 @@ func TestLevel(t *testing.T) {
 		{"1.0.0-rc.1", "1.0.0", "patch"},
 		{"1.0", "1.0.post1", "patch"},
 		{"16-alpine", "22-alpine", "major"},
-		{"0.1.0", "0.2.0", "minor"},
+		{"0.1.0", "0.2.0", "major"},
+		{"0.11.27", "0.12.0", "major"},
+		{"0.1.0", "0.1.5", "patch"},
+		{"0.0.1", "0.0.2", "major"},
+		{"0.9.3", "1.0.0", "major"},
+		{"1.2", "1.3", "minor"},
 	}
 	for _, tt := range tests {
 		a, _ := Parse(tt.from)
@@ -134,6 +145,22 @@ func TestStep(t *testing.T) {
 	for _, tt := range tests {
 		if got := Step(tt.from, tt.to); got != tt.want {
 			t.Errorf("Step(%q, %q) = %q, want %q", tt.from, tt.to, got, tt.want)
+		}
+	}
+}
+
+func TestStepIn(t *testing.T) {
+	tests := []struct{ eco, from, to, want string }{
+		{"go", "v0.13.0", "v0.49.0", "minor"},
+		{"go", "v0.0.0-20191026070338-33540a1f6037", "v0.49.0", "minor"},
+		{"go", "v1.2.0", "v2.0.0", "major"},
+		{"go", "v0.13.0", "v0.13.1", "patch"},
+		{"cargo", "0.1.0", "0.2.0", "major"},
+		{"npm", "0.13.0", "0.49.0", "major"},
+	}
+	for _, tt := range tests {
+		if got := StepIn(tt.eco, tt.from, tt.to); got != tt.want {
+			t.Errorf("StepIn(%s, %q, %q) = %q, want %q", tt.eco, tt.from, tt.to, got, tt.want)
 		}
 	}
 }

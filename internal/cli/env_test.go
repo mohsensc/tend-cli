@@ -57,6 +57,28 @@ func TestSplit(t *testing.T) {
 	}
 }
 
+// Every flag that takes a value, in both spellings, may come before the
+// command without its value being read as the command.
+func TestSplitValued(t *testing.T) {
+	names := map[string]bool{"C": true, "config": true, "home": true}
+	for _, c := range commands {
+		fs := flag.NewFlagSet("", flag.ContinueOnError)
+		c.flags(fs, &opts{})
+		fs.VisitAll(func(f *flag.Flag) {
+			if b, ok := f.Value.(interface{ IsBoolFlag() bool }); !ok || !b.IsBoolFlag() {
+				names[f.Name] = true
+			}
+		})
+	}
+	for name := range names {
+		for _, a := range []string{"-" + name, "--" + name} {
+			if cmd, rest := split([]string{a, "x", "check"}); cmd != "check" || !slices.Equal(rest, []string{a, "x"}) {
+				t.Errorf("split(%s x check) = %q, %q", a, cmd, rest)
+			}
+		}
+	}
+}
+
 func TestMainUsage(t *testing.T) {
 	tests := []struct {
 		args []string
@@ -68,6 +90,9 @@ func TestMainUsage(t *testing.T) {
 		{[]string{"check", "--nope"}, exitUsage, "flag provided but not defined: -nope"},
 		{[]string{"check", "extra"}, exitUsage, `unexpected argument "extra"`},
 		{[]string{"check", "--fail-on", "minor"}, exitUsage, "--fail-on wants"},
+		{[]string{"--config"}, exitUsage, "tend: flag needs an argument: --config\n"},
+		{[]string{"-v"}, exitUsage, "tend: missing command\n"},
+		{[]string{"help", "frobnicate"}, exitUsage, `unknown command "frobnicate"`},
 	}
 	for _, tt := range tests {
 		var out, errs bytes.Buffer
@@ -88,8 +113,10 @@ func TestMainHelp(t *testing.T) {
 		{[]string{"help"}, []string{"one proven PR at a time", "tend run --dry-run"}, "unknown command"},
 		{[]string{"--help"}, []string{"usage: tend <command>"}, ""},
 		{[]string{"-h"}, []string{"usage: tend <command>"}, ""},
-		{[]string{"run", "-h"}, []string{"usage: tend run [flags]", "fix the top change", "-dry-run", "global flags: see tend --help"}, "-home"},
-		{[]string{"version", "--help"}, []string{"print the version", "-check"}, "-config"},
+		{[]string{"run", "-h"}, []string{"usage: tend run [flags]", "fix the top change", "  --dry-run  ", "global flags:\n", "  -C dir ", "  --home dir "}, " -dry-run"},
+		{[]string{"version", "--help"}, []string{"print the version", "  --check  "}, "usage: tend <command>"},
+		{[]string{"help", "check"}, []string{"usage: tend check [flags]", "  --fail-on kind  "}, "usage: tend <command>"},
+		{[]string{"-C", "x", "help", "run"}, []string{"usage: tend run [flags]"}, ""},
 	}
 	for _, tt := range tests {
 		var out, errs bytes.Buffer
@@ -124,6 +151,17 @@ func TestVersion(t *testing.T) {
 		e.Stdout, e.Version, e.Commit, e.Date = &out, tt.ver, tt.commit, tt.date
 		if code := Main([]string{"version"}, e); code != 0 || out.String() != tt.want {
 			t.Errorf("version %q = %d, %q; want %q", tt.ver, code, out.String(), tt.want)
+		}
+	}
+}
+
+func TestMainVersionFlag(t *testing.T) {
+	for _, args := range [][]string{{"--version"}, {"-version"}} {
+		var out, errs bytes.Buffer
+		e := DefaultEnv()
+		e.Stdout, e.Stderr, e.Version = &out, &errs, "1.2.3"
+		if code := Main(args, e); code != exitOK || !strings.HasPrefix(out.String(), "tend 1.2.3") || errs.Len() > 0 {
+			t.Errorf("Main(%q) = %d, %q, %q", args, code, out.String(), errs.String())
 		}
 	}
 }

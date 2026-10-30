@@ -196,7 +196,8 @@
       "Line": 12,
       "Method": "GET",
       "URL": "https://api.example.com/v1/items",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "let res = client.get(\"https://api.example.com/v1/items\").headers(h).send().await?;"
     }
   ]
 }

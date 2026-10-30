@@ -1,1 +1,1 @@
-Handle removed field total_cents on GET /v1/orders
+Handle removed field total_cents on fixture GET /v1/orders

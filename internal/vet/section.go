@@ -8,9 +8,10 @@ import (
 )
 
 // Verdict is reject when symbols, fields or scope found something left
-// unresolved and the patched proof fails; draft when symbols, fields,
-// leftovers, lockfile or commands left a flag, or the baseline already
-// fails; else pass.
+// unresolved and the patched proof fails where the base does not; draft when symbols, fields, scope,
+// leftovers, lockfile, commands or tests left a flag, or the baseline
+// already fails; else pass. Flags from dead, debug and question are
+// advisory: the PR lists them for the reviewer without holding it back.
 // Call it again after re-running the proof on a worktree that vetting changed.
 func Verdict(v *core.Vetting, proof *core.Proof) string {
 	hard, soft := false, false
@@ -23,13 +24,13 @@ func Verdict(v *core.Vetting, proof *core.Proof) string {
 			hard = true
 		}
 		switch f.Check {
-		case "symbols", "fields", "leftovers", "lockfile", "commands":
+		case "symbols", "fields", "scope", "leftovers", "lockfile", "commands", "tests":
 			soft = true
 		}
 	}
 	failing := func(r *core.Run) bool { return r != nil && !r.Pass }
 	switch {
-	case hard && proof != nil && failing(proof.Patched):
+	case hard && proof != nil && failing(proof.Patched) && (!failing(proof.Base) || !proof.Proven()):
 		return "reject"
 	case soft || proof != nil && failing(proof.Base):
 		return "draft"
@@ -47,6 +48,7 @@ var clean = map[string]string{
 	"dead":      "nothing left unreferenced",
 	"scope":     "every changed file is explained by this change",
 	"question":  "nothing to note",
+	"tests":     "no test weakened",
 }
 
 // Section renders the list under the PR body's Vetting heading: one line per

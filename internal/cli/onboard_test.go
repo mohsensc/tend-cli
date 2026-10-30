@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -379,5 +380,37 @@ func TestUnwanted(t *testing.T) {
 				t.Errorf("unwanted = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestWhyFailed(t *testing.T) {
+	tests := []struct{ err, want string }{
+		{"poetry update --lock certifi: exit status 1\nUpdating dependencies\nResolving dependencies...\n\nPackage codecov (2.1.8) not found.\n", "poetry update --lock certifi: exit status 1: Package codecov (2.1.8) not found."},
+		{"npm install: exit status 1\nsomething odd\nlast words\n", "npm install: exit status 1: last words"},
+		{"plain failure", "plain failure"},
+	}
+	for _, tt := range tests {
+		if got := whyFailed(errors.New(tt.err)); got != tt.want {
+			t.Errorf("whyFailed(%q) = %q, want %q", tt.err, got, tt.want)
+		}
+	}
+}
+
+func TestClimbGuards(t *testing.T) {
+	sec := &core.Change{Kind: core.Security, To: "10.1.4"}
+	if !shortOfFix(sec, []string{"8.0.7", "9.1.1"}) || shortOfFix(sec, []string{"9.1.1", "10.1.4"}) || shortOfFix(sec, nil) {
+		t.Error("shortOfFix")
+	}
+	if shortOfFix(&core.Change{Kind: core.Breaking, To: "10.1.4"}, []string{"9.1.1"}) {
+		t.Error("a plain major climb that stops short is short of nothing")
+	}
+	install := core.Step{Cmd: "yarn install --frozen-lockfile", Phase: core.PhaseInstall, Exit: 127}
+	dead := &core.Proof{Base: &core.Run{Steps: []core.Step{install, {Cmd: "yarn test", Phase: core.PhaseTest, Skipped: "previous step failed"}}}}
+	if got := untestable(dead); got != "the base fails at `yarn install --frozen-lockfile` before its tests run, so no step can be proven" {
+		t.Errorf("untestable = %q", got)
+	}
+	red := &core.Proof{Base: &core.Run{Steps: []core.Step{{Cmd: "yarn install", Phase: core.PhaseInstall}, {Cmd: "yarn test", Phase: core.PhaseTest, Exit: 1}}}}
+	if got := untestable(red); got != "" {
+		t.Errorf("a base whose tests fail can still prove a step: %q", got)
 	}
 }

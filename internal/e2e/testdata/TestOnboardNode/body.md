@@ -4,7 +4,7 @@ Part of this pull request was written by a model. The vetting section below cove
 
 ### Deprecated
 
-- `@fixture/pay` 1.4.0 → 2.0.0: 1.x is deprecated, use 2.x: charges.* was replaced by paymentIntents.*
+- `@fixture/pay` 1.4.0 → 2.0.0: 1.x is deprecated, use 2.x: charges.\* was replaced by paymentIntents.\*
   - `src/billing.js:12` `return pay.charges.create({ amount, currency: 'usd', customer })` → `return pay.paymentIntents.create({ amount, currency: 'usd', customer })`
   - `src/billing.js:20` `return pay.charges.retrieve(id)` → `return pay.paymentIntents.retrieve(id)`
 

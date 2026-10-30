@@ -1,6 +1,6 @@
 ## fixture GET /v1/orders
 
-**Why**: breaking · response field removed (total_cents) · published 2026-10-21
+**Why**: breaking · response field removed (total\_cents) · published 2026-10-21
 
 ### What changed upstream
 
@@ -12,7 +12,7 @@
 
 ### Touched in this repo
 
-- `app/orders.py:9` `/v1/orders`
+- `app/orders.py:9` `with urllib.request.urlopen(BASE + "/v1/orders") as res:`
 - `app/orders.py:17` `cents += order["total_cents"]` → `cents += order["total"]["amount"]`
 
 Part of this change was written by a model. The vetting section below covers it.

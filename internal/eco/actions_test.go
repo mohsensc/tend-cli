@@ -408,3 +408,25 @@ func TestActionsBumpKeepsOtherLines(t *testing.T) {
 		t.Errorf("file changed beyond the one line:\n%s", after)
 	}
 }
+
+// A step pinned to a bare commit, with no comment naming its release, is at
+// the most specific tag on that commit; one no tag points at is said, not
+// read as a version.
+func TestActionsSettle(t *testing.T) {
+	sha := "11bd71901bbe5b1630ceea73d27597364c9af683"
+	actionsShas.Store("acme/settle", map[string]string{"v4": sha, "v4.2": sha, "v4.2.2": sha, "v4.2.1": "aaaa71901bbe5b1630ceea73d27597364c9af683"})
+	d := core.Dep{Ecosystem: core.Actions, Name: "acme/settle", Version: sha, Req: sha, Pin: sha}
+	got, err := actions{}.Settle(d, &core.Meta{})
+	if err != nil || got.Version != "v4.2.2" || got.Pin != sha {
+		t.Errorf("Settle = %+v, %v", got, err)
+	}
+	commented := d
+	commented.Version = "v4.2.1"
+	if got, err := (actions{}).Settle(commented, &core.Meta{}); err != nil || got.Version != "v4.2.1" {
+		t.Errorf("a commented pin = %+v, %v", got, err)
+	}
+	d.Version, d.Pin = "cdca7365b2dadb8aad0a33bc7601856ffabcc48e", "cdca7365b2dadb8aad0a33bc7601856ffabcc48e"
+	if _, err := (actions{}).Settle(d, &core.Meta{}); err == nil || !strings.Contains(err.Error(), "untagged commit cdca736") {
+		t.Errorf("an untagged pin = %v", err)
+	}
+}

@@ -26,6 +26,7 @@ import (
 
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/gitx"
+	"github.com/mohsensc/tend-cli/internal/proc"
 	"github.com/mohsensc/tend-cli/internal/ver"
 )
 
@@ -63,25 +64,39 @@ func ByName(name string) core.Ecosystem {
 	return nil
 }
 
-// skipDirs hold other people's code, build output, or, like the go tool's
-// testdata, fixtures that are not the project's own manifests.
-var skipDirs = map[string]bool{
-	"node_modules": true, "vendor": true, ".git": true, "target": true, "dist": true,
-	"build": true, ".venv": true, "venv": true, "__pycache__": true, "bin": true, "obj": true,
-	"testdata": true,
+// thirdParty holds other people's code or, like the go tool's testdata,
+// fixtures that are not the project's own manifests, tracked or not.
+var thirdParty = map[string]bool{
+	"node_modules": true, "vendor": true, ".git": true, ".venv": true, "venv": true,
+	"__pycache__": true, "testdata": true,
 }
+
+var buildOutput = map[string]bool{"build": true, "bin": true, "dist": true, "obj": true, "target": true}
 
 // walk returns the repo-relative, slash-separated paths of files under root that
 // match one of the glob patterns, sorted. A pattern with a slash matches the whole
-// path, one without matches the base name. Git-ignored files are left out.
+// path, one without matches the base name. Git-ignored files, other people's
+// code and untracked build output are left out.
 func walk(root string, names ...string) ([]string, error) {
-	files, err := Files(root)
+	return walkFunc(root, func(rel string) bool { return matches(rel, names) })
+}
+
+func walkFunc(root string, match func(rel string) bool) ([]string, error) {
+	return walkFiles(root, true, match, nil)
+}
+
+func walkNamed(root string, names ...string) ([]string, error) {
+	return walkFiles(root, false, func(rel string) bool { return matches(rel, names) }, names)
+}
+
+func walkFiles(root string, skip bool, match func(rel string) bool, names []string) ([]string, error) {
+	t, err := listTree(root)
 	if err != nil {
 		return nil, err
 	}
 	var res []string
-	for _, f := range files {
-		if skipped(f) || !matches(f, names) {
+	for _, f := range t.files {
+		if skip && t.skipped(f) || !match(f) {
 			continue
 		}
 		if fi, err := os.Lstat(filepath.Join(root, f)); err != nil || !fi.Mode().IsRegular() {
@@ -89,44 +104,89 @@ func walk(root string, names ...string) ([]string, error) {
 		}
 		res = append(res, f)
 	}
+	if !skip && !t.git {
+		for _, n := range names {
+			if !strings.ContainsAny(n, `*?[\`) && onDisk(root, n) {
+				res = append(res, path.Clean(n))
+			}
+		}
+	}
 	slices.Sort(res)
 	return slices.Compact(res), nil
 }
 
+type fileTree struct {
+	files     []string
+	untracked map[string]bool
+	git       bool
+}
+
+func (t *fileTree) skipped(rel string) bool {
+	for _, part := range strings.Split(path.Dir(rel), "/") {
+		if thirdParty[part] || buildOutput[part] && (!t.git || t.untracked[rel]) {
+			return true
+		}
+	}
+	return false
+}
+
 var listed struct {
 	sync.Mutex
-	m map[string][]string
+	m map[string]*fileTree
 }
 
 // Files lists the files under root: what git tracks or would track, or every
 // file when git is not there. Within Keep it lists each root once.
 func Files(root string) ([]string, error) {
+	t, err := listTree(root)
+	if err != nil {
+		return nil, err
+	}
+	return t.files, nil
+}
+
+func listTree(root string) (*fileTree, error) {
 	listed.Lock()
-	files, ok := listed.m[root]
+	t, ok := listed.m[root]
 	listed.Unlock()
 	if ok {
-		return files, nil
+		return t, nil
 	}
-	files, err := gitx.Files(context.Background(), root)
+	ctx := context.Background()
+	files, err := gitx.Files(ctx, root)
 	if err != nil {
-		return dirFiles(root)
+		files, err := dirFiles(root)
+		if err != nil {
+			return nil, err
+		}
+		return &fileTree{files: files}, nil
 	}
-	return files, nil
+	t = &fileTree{files: files, untracked: map[string]bool{}, git: true}
+	out, err := gitx.Raw(ctx, root, "ls-files", "-z", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range strings.Split(out, "\x00") {
+		if f != "" {
+			t.untracked[f] = true
+		}
+	}
+	return t, nil
 }
 
 // Keep has Files list root once until the returned func is called: one
 // inventory reads one tree, and every ecosystem looks at the same list.
 func Keep(root string) (done func(), err error) {
-	files, err := Files(root)
+	t, err := listTree(root)
 	if err != nil {
 		return nil, err
 	}
 	listed.Lock()
 	defer listed.Unlock()
 	if listed.m == nil {
-		listed.m = map[string][]string{}
+		listed.m = map[string]*fileTree{}
 	}
-	listed.m[root] = files
+	listed.m[root] = t
 	return func() {
 		listed.Lock()
 		delete(listed.m, root)
@@ -141,7 +201,7 @@ func dirFiles(root string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if p != root && skipDirs[d.Name()] {
+			if p != root && (thirdParty[d.Name()] || buildOutput[d.Name()] || core.NestedRepo(p)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -154,15 +214,6 @@ func dirFiles(root string) ([]string, error) {
 		return nil
 	})
 	return res, err
-}
-
-func skipped(rel string) bool {
-	for _, part := range strings.Split(path.Dir(rel), "/") {
-		if skipDirs[part] {
-			return true
-		}
-	}
-	return false
 }
 
 func matches(rel string, names []string) bool {
@@ -192,13 +243,21 @@ var runTimeout = 10 * time.Minute
 
 // run executes line with sh -c in root and returns its combined output. env is
 // added to the process environment.
+// Run runs line with sh in dir, as the lock and bump tools run: with tend's
+// environment scrubbed of its tokens, in a process group of its own, and
+// for no longer than a lock tool needs.
+func Run(ctx context.Context, dir, line string) (string, error) {
+	return run(ctx, dir, []string{"CI=1"}, line)
+}
+
 func run(ctx context.Context, root string, env []string, line string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", line)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = core.Environ(env...)
 	cmd.WaitDelay = time.Second
+	proc.Group(cmd)
 	out, err := cmd.CombinedOutput()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return string(out), fmt.Errorf("%s: timed out after %s", line, runTimeout)
@@ -251,11 +310,17 @@ func readJSON(p string, v any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(b, v); err != nil {
+	if err := json.Unmarshal(stripBOM(b), v); err != nil {
 		return fmt.Errorf("%s: %w", p, err)
 	}
 	return nil
 }
+
+var utf8BOM = []byte("\xef\xbb\xbf")
+
+// stripBOM drops the byte order mark Windows editors put before JSON, which
+// npm and Node skip but encoding/json refuses.
+func stripBOM(b []byte) []byte { return bytes.TrimPrefix(b, utf8BOM) }
 
 func readYAML(p string, v any) error {
 	b, err := os.ReadFile(p)

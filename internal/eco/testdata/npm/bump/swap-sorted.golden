@@ -1,6 +1,6 @@
 files: [package.json]
-locked: false
-note: npm not found
+locked: true
+note: 
 --- package.json
 11: -    "compare-alias": "npm:@isaacs/string-locale-compare@^1.0.0",
 11: +    "@sindresorhus/is": "^2.1.0",

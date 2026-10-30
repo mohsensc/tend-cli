@@ -452,7 +452,7 @@ func TestPrompt(t *testing.T) {
 		allowed: []string{"package.json", "src/billing.js"},
 	}
 	o := Options{Ecos: map[string]core.Ecosystem{core.Npm: &fakeEco{name: core.Npm, imports: []string{"@fixture/pay"}}}}
-	sys, user, err := prompt(&tree{wt: dir}, in, o, "", "")
+	sys, user, err := prompt(&tree{wt: dir}, in, o, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,5 +494,56 @@ func TestApplyReusesIndex(t *testing.T) {
 				t.Errorf("applied = %q", p.Applied)
 			}
 		})
+	}
+}
+
+func TestApplyStay(t *testing.T) {
+	for _, tt := range []struct {
+		to   string
+		want string
+	}{
+		{"2.0.0", "pinned @fixture/pay at 1.4.0, ignoring 2.0.0 and later (tend.yml)"},
+		{"", "pinned @fixture/pay at 1.4.0, ignoring every release, and tend stops proposing anything for it (tend.yml)"},
+	} {
+		f := newFixture(t)
+		f.ch.Kind, f.ch.To = core.Deprecation, tt.to
+		f.ch.Options = []core.Option{{Title: "Pin to 1.4.0 and ignore", To: "1.4.0", Stay: true}}
+		o := f.opts(nil)
+		o.Option = 1
+		p, err := Apply(context.Background(), f.dir, f.ch, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(p.Applied, []string{tt.want}) {
+			t.Errorf("to %q: applied %q, want %q", tt.to, p.Applied, tt.want)
+		}
+	}
+}
+
+// A model without tools whose diff applies but fails the project's tests
+// gets their output back, from the tree as it was before that diff.
+func TestApplyModelFeedback(t *testing.T) {
+	f := newFixture(t)
+	half := f.edit(t, "  return pay?.charges?.retrieve(res.id);", "  return pay?.charges?.retrieve(res.id); // half")
+	m := &model.Script{Replies: []string{"```diff\n" + half + "```", "```diff\n" + f.edit(t, unmigrated, migrated) + "```"}}
+	pr := &prover{dir: f.dir, pass: []bool{false}}
+	o := f.opts(m)
+	o.Commands, o.Prove = core.Commands{Test: []string{"npm test"}}, pr.prove
+	p, err := Apply(context.Background(), f.dir, f.ch, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Decision || !p.Model || len(m.Calls) != 2 || len(pr.saw) != 1 {
+		t.Fatalf("decision=%v model=%v calls=%d proofs=%d note=%q", p.Decision, p.Model, len(m.Calls), len(pr.saw), p.Note)
+	}
+	if !strings.Contains(pr.saw[0], "// half") {
+		t.Errorf("the proof did not see the first diff:\n%s", pr.saw[0])
+	}
+	retry := m.Calls[1].Prompt
+	if !strings.Contains(retry, "Your previous diff applied, but the project's commands failed:\nnpm test exited 1\nTypeError") || strings.Contains(retry, "could not be applied") {
+		t.Errorf("second prompt:\n%s", retry)
+	}
+	if strings.Contains(p.Diff, "// half") || !strings.Contains(p.Diff, "paymentIntents?.retrieve") {
+		t.Errorf("diff:\n%s", p.Diff)
 	}
 }

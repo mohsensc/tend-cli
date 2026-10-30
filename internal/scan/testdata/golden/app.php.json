@@ -161,14 +161,16 @@
       "Line": 17,
       "Method": "",
       "URL": "https://api.example.com",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "$this-\u003ehttp = new Http(['base_uri' =\u003e 'https://api.example.com']);"
     },
     {
       "File": "app.php",
       "Line": 29,
       "Method": "DELETE",
       "URL": "/v1/orders/1",
-      "Host": "api.example.com"
+      "Host": "api.example.com",
+      "Text": "$this-\u003ehttp-\u003erequest('DELETE', '/v1/orders/1');"
     }
   ]
 }

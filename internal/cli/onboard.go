@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/mohsensc/tend-cli/internal/core"
 	"github.com/mohsensc/tend-cli/internal/deliver"
 	"github.com/mohsensc/tend-cli/internal/gitx"
+	"github.com/mohsensc/tend-cli/internal/model"
 	"github.com/mohsensc/tend-cli/internal/patch"
 	"github.com/mohsensc/tend-cli/internal/plan"
 	"github.com/mohsensc/tend-cli/internal/state"
@@ -60,7 +62,6 @@ func (s *session) onboarding(ctx context.Context, inv *core.Inventory, p *plan.P
 	}
 	commit := s.cfg.Deliver.Mode == "commit"
 	if commit && st.Open != nil && st.Open.PR != 0 {
-		// The first PR was opened before tend.yml asked for commits.
 		st.Onboard = "commit"
 		return nil, nil
 	}
@@ -128,7 +129,7 @@ func (s *session) onboarding(ctx context.Context, inv *core.Inventory, p *plan.P
 
 // staged is the catch-up PR for the next stage once the first PR has
 // merged, nil when there is none: the catch-up is over, or tend had begun
-// here before it had stages. A run that finds no stage left ends it.
+// here before it had stages. Finding no stage left ends it; run says so.
 func (s *session) staged(p *plan.Plan) *core.Change {
 	st := s.st
 	if st.Stage == 0 || st.Stage >= plan.Last {
@@ -137,7 +138,6 @@ func (s *session) staged(p *plan.Plan) *core.Change {
 	ch := plan.Next(p, st.Stage)
 	if ch == nil {
 		st.Stage = plan.Last
-		s.logf("the catch-up is done; from here on tend works one change at a time")
 	}
 	return ch
 }
@@ -252,6 +252,15 @@ func (r *runner) batch(ctx context.Context, ch *core.Change, preempt *core.PR) (
 	if !nothing {
 		proof.Base = r.baseline(ctx, cmds)
 	}
+	if proof.Base != nil && missing(proof.Base) {
+		st := proof.Base.Last()
+		detail := fmt.Sprintf("`%s` cannot run on the base (exit %d), so nothing can be proven here; install what it needs and run again", st.Cmd, st.Exit)
+		if l := lastLine(st.Tail); l != "" {
+			detail += "\n" + l
+		}
+		first, _, _ := strings.Cut(detail, "\n")
+		return &outcome{Action: "unproven", Change: ch, Worktree: wt.Dir, Summary: "could not prove " + ch.ID + ": " + first, Detail: detail, code: exitUnproven}, nil
+	}
 	runs := max(proofMax, 2*(len(ch.Batch.Changes)+len(ch.Batch.Unused)))
 	t := &trial{r: r, cmds: cmds, proof: proof, runs: map[string]*core.Run{}, left: runs, budget: runs}
 	t.check = t.try
@@ -265,6 +274,7 @@ func (r *runner) batch(ctx context.Context, ch *core.Change, preempt *core.PR) (
 		if x != nil {
 			fixed, b.Baseline, r.floor = []*part{x}, x.base, x.code
 		}
+		b.Thin = t.thin
 	}
 	nothing, r.cmds = proof.Nothing, t.cmds
 	next := plan.After(ch.Batch)
@@ -276,10 +286,14 @@ func (r *runner) batch(ctx context.Context, ch *core.Change, preempt *core.PR) (
 	// tracking issue, and comes back one change at a time.
 	leave := func(c core.Change, why string) {
 		s.logf("left %s out of %s: %s", name(&part{ch: &c}), where, why)
-		if next == 0 && c.Kind != core.Security {
+		at := next
+		if strings.HasPrefix(why, "No model is configured") {
+			at = ch.Batch.Stage
+		}
+		if at <= ch.Batch.Stage && c.Kind != core.Security {
 			s.st.Fail(c.ID, why, wt.Base, s.e.Now())
 		}
-		b.Next = append(b.Next, core.Later{Change: c, Why: why, Stage: next})
+		b.Next = append(b.Next, core.Later{Change: c, Why: why, Stage: at})
 	}
 	var parts []*part
 	for i := range ch.Batch.Changes {
@@ -334,10 +348,18 @@ func (r *runner) batch(ctx context.Context, ch *core.Change, preempt *core.PR) (
 		return nil, err
 	}
 	if len(pt.Files) == 0 {
-		if ch.ID == core.FirstID {
+		settled := nothing || proof.Base != nil && proof.Base.Pass
+		if ch.ID == core.FirstID && settled {
 			s.st.Onboard = "clean"
 		}
-		return &outcome{Action: "nothing", line: "nothing to catch up on: no change or removal passed its proof, and tend.yml is there already"}, nil
+		why := "nothing to catch up on: no change or removal passed its proof"
+		switch {
+		case !settled:
+			why += ", and the base does not pass, so tend tries again on the next run"
+		case s.configured(wt.Dir):
+			why += ", and tend.yml is there already"
+		}
+		return &outcome{Action: "nothing", Summary: why}, nil
 	}
 	vt, err := r.vet(ctx, &out, pt, proof)
 	if err != nil {
@@ -394,10 +416,50 @@ func (r *runner) once(ctx context.Context, ch *core.Change, t *trial) (*part, st
 		why = cmp.Or(stop, why)
 	}
 	c, pt, err := r.decide(ctx, ch, t.cmds, t.proof, &t.left)
-	if err != nil || c == nil {
+	if err != nil {
 		return nil, why, err
 	}
+	if c == nil {
+		if u := untestable(t.proof); u != "" {
+			return nil, cmp.Or(why, u), nil
+		}
+		if x != nil || len(ch.Steps) > 0 || !strings.HasPrefix(why, "No model is configured") {
+			return nil, why, nil
+		}
+		y, plain, err := r.plain(ctx, ch, t)
+		return y, cmp.Or(plain, why), err
+	}
 	y, err := r.piece(ctx, c, pt, t)
+	return y, "", err
+}
+
+// plain makes ch as a plain bump, its call sites left as written, and keeps
+// it when its proof passes on its own: what a catch-up does with a major
+// bump that no model can move the code for, as a climb does with each of
+// its steps. why names the step that failed when it does not pass.
+func (r *runner) plain(ctx context.Context, ch *core.Change, t *trial) (*part, string, error) {
+	if r.model != nil || t.proof.Nothing || t.left <= 0 || ch.To == "" || ch.API != nil || ch.ToName != "" {
+		return nil, "", nil
+	}
+	if err := r.restart(ctx); err != nil {
+		return nil, "", err
+	}
+	proof := *t.proof
+	r.s.logf("trying %s as a plain bump, its call sites as written", name(&part{ch: ch}))
+	pt, err := r.attempt(ctx, ch, t.cmds, &proof)
+	switch {
+	case err != nil && ctx.Err() != nil:
+		return nil, "", ctx.Err()
+	case err != nil:
+		return nil, whyFailed(err), r.restart(ctx)
+	case pt.Decision || len(pt.Files) == 0:
+		return nil, "", r.restart(ctx)
+	}
+	t.left--
+	if !plan.Proven(&proof) {
+		return nil, "on its own, " + broke(proof.Patched), r.restart(ctx)
+	}
+	y, err := r.piece(ctx, ch, pt, t)
 	return y, "", err
 }
 
@@ -408,6 +470,9 @@ func (r *runner) made(ctx context.Context, ch *core.Change, t *trial) (*part, st
 	}
 	o := r.options(ch, t.cmds, t.proof)
 	o.Strict = true
+	if _, ok := r.model.(model.Agent); !ok {
+		o.Prove = nil
+	}
 	bumped := ""
 	o.Bumped = func(ctx context.Context) error {
 		if bumped = r.tree(ctx); bumped == "" {
@@ -421,8 +486,7 @@ func (r *runner) made(ctx context.Context, ch *core.Change, t *trial) (*part, st
 	case err != nil && ctx.Err() != nil:
 		return nil, "", ctx.Err()
 	case err != nil:
-		why, _, _ := strings.Cut(err.Error(), "\n")
-		return nil, why, nil
+		return nil, whyFailed(err), nil
 	case pt.Decision:
 		return nil, pt.Note, nil
 	case len(pt.Files) == 0:
@@ -480,6 +544,8 @@ type trial struct {
 	left    int                                           // proofs it may still run
 	budget  int                                           // proofs it could run at the start
 	check   func(context.Context, []*part) (*drop, error) // try, or a test's stand-in
+	built   bool                                          // a set was built once, its steps logged
+	thin    string                                        // why the tests cannot prove the catch-up, when no baseline helps
 }
 
 // drop is a part the first PR leaves out: the run that failed with it, why
@@ -579,12 +645,15 @@ func (t *trial) settle(ctx context.Context, set []*part) (*drop, error) {
 // try builds set and proves it. It returns how the set failed, or nil when
 // it passes.
 func (t *trial) try(ctx context.Context, set []*part) (*drop, error) {
+	quiet := t.built
 	if _, x, err := t.build(ctx, set); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		first, _, _ := strings.Cut(err.Error(), "\n")
-		return &drop{x: x, build: first}, nil
+		return &drop{x: x, build: whyFailed(err)}, nil
+	}
+	if quiet {
+		t.r.s.logf("proving %d parts together", len(set))
 	}
 	run, err := t.r.prove(ctx, t.cmds, "patched")
 	if err != nil {
@@ -608,11 +677,10 @@ func (t *trial) build(ctx context.Context, set []*part) (pt *core.Patch, x *part
 		return nil, nil, err
 	}
 	o := r.options(nil, t.cmds, t.proof)
-	if t.runs[key(set)] != nil {
-		// A set already proven is built again only to stage it; its steps
-		// were logged the first time.
+	if t.built {
 		o.Log = nil
 	}
+	t.built = true
 	p := &core.Patch{}
 	var gone []*part
 	var notes []string
@@ -677,17 +745,20 @@ func (t *trial) final(ctx context.Context, set []*part, starter bool) (*core.Pat
 	if err != nil {
 		return nil, err
 	}
-	if len(set) == 0 && starter {
+	for i := 0; i < 2; i++ {
+		if _, err := gitx.Run(ctx, wt.Dir, "add", "-A"); err != nil {
+			return nil, err
+		}
+		if pt.Diff, pt.Files, err = patch.Diff(ctx, wt.Dir, wt.Base); err != nil {
+			return nil, err
+		}
+		if len(pt.Files) > 0 || !starter || i > 0 {
+			break
+		}
 		if err := os.WriteFile(filepath.Join(wt.Dir, "tend.yml"), config.Starter, 0o644); err != nil {
 			return nil, err
 		}
 		pt.Applied = append(pt.Applied, "added tend.yml with every key commented out (tend.yml)")
-	}
-	if _, err := gitx.Run(ctx, wt.Dir, "add", "-A"); err != nil {
-		return nil, err
-	}
-	if pt.Diff, pt.Files, err = patch.Diff(ctx, wt.Dir, wt.Base); err != nil {
-		return nil, err
 	}
 	slices.Sort(pt.Edited)
 	pt.Edited = slices.Compact(pt.Edited)
@@ -715,7 +786,41 @@ func name(x *part) string {
 	return x.ch.Deps[0].Name
 }
 
+// telling picks the line of a tool's output that says why it failed.
+var telling = regexp.MustCompile(`(?i)error|not found|failed|cannot|could not|unable|conflict`)
+
+// whyFailed is the first line of err, the command and how it exited, and the
+// line of the tool's output after it that best says why.
+func whyFailed(err error) string {
+	first, rest, _ := strings.Cut(err.Error(), "\n")
+	lines := strings.Split(rest, "\n")
+	pick := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := strings.TrimSpace(lines[i])
+		if l == "" {
+			continue
+		}
+		if pick == "" {
+			pick = l
+		}
+		if telling.MatchString(l) {
+			pick = l
+			break
+		}
+	}
+	if pick == "" || strings.Contains(first, pick) {
+		return first
+	}
+	return first + ": " + core.Clip(pick, 200)
+}
+
 // broke says how a run failed, in a few words: "`npm test` fails (exit 1)".
+// lastLine is the last line of s with text on it.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
+}
+
 func broke(run *core.Run) string {
 	st := run.Last()
 	switch {

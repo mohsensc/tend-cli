@@ -39,27 +39,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 0}
       - uses: mohsensc/tend-cli@v1
         with: {model-key: "${{ secrets.TEND_MODEL_KEY }}"}
 `
 
 func initRepo(ctx context.Context, e Env, o opts) int {
-	cfg, root, _, err := settings(ctx, e, o)
-	if err != nil && o.ci {
-		return fail(e, err)
-	}
-	name, body := "tend.yml", config.Sample
+	var p string
+	var body []byte
 	if o.ci {
-		name, body = filepath.Join(".github", "workflows", "tend.yml"), fmt.Appendf(nil, workflow, branch(ctx, root, cfg), cron(time.Duration(cfg.Schedule)))
-	}
-	p := filepath.Join(root, name)
-	_, err = os.Stat(p)
-	if err == nil && !o.force {
-		return fail(e, fmt.Errorf("%s exists; --force overwrites it", name))
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fail(e, err)
+		cfg, root, _, err := settings(ctx, e, o)
+		if err != nil {
+			return fail(e, err)
+		}
+		p, body = filepath.Join(root, ".github", "workflows", "tend.yml"), fmt.Appendf(nil, workflow, branch(ctx, root, cfg), cron(time.Duration(cfg.Schedule)))
+		if err := fresh(p, root, o.force); err != nil {
+			return fail(e, err)
+		}
+	} else {
+		var err error
+		if p, err = configTarget(ctx, e, o); err != nil {
+			return fail(e, err)
+		}
+		body = config.Sample
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return fail(e, err)
@@ -68,12 +70,50 @@ func initRepo(ctx context.Context, e Env, o opts) int {
 		return fail(e, err)
 	}
 	if !o.quiet {
-		fmt.Fprintf(e.Stdout, "tend: wrote %s\n", name)
+		root, _ := top(ctx, o.dir)
+		fmt.Fprintf(e.Stdout, "tend: wrote %s\n", config.Shown(root, p))
 	}
 	if o.now || !o.quiet && ask(e, "Run tend now? Its first pull request tidies up what it finds. [y/N] ") {
-		return run(ctx, e, opts{dir: o.dir, config: o.config, verbose: o.verbose, quiet: o.quiet})
+		return run(ctx, e, opts{dir: o.dir, config: o.config, home: o.home, verbose: o.verbose, quiet: o.quiet})
 	}
 	return exitOK
+}
+
+// configTarget is where init writes tend.yml: the file --config or TEND_CONFIG
+// names, else the one tend reads. A config already there is overwritten
+// only with --force, so a sample never sits in front of the real one.
+func configTarget(ctx context.Context, e Env, o opts) (string, error) {
+	root, _ := top(ctx, o.dir)
+	if p := configPath(e, o, root); p != "" {
+		return p, fresh(p, root, o.force)
+	}
+	for _, name := range config.Files {
+		p := filepath.Join(root, name)
+		_, err := os.Stat(p)
+		switch {
+		case err == nil && o.force:
+			return p, nil
+		case err == nil && name == config.Files[0]:
+			return "", fmt.Errorf("%s exists; --force overwrites it", name)
+		case err == nil:
+			return "", fmt.Errorf("%s exists, and tend reads it; --force overwrites it", name)
+		case !errors.Is(err, os.ErrNotExist):
+			return "", err
+		}
+	}
+	return filepath.Join(root, config.Files[0]), nil
+}
+
+// fresh says whether init may write p: when nothing is there, or --force.
+func fresh(p, root string, force bool) error {
+	_, err := os.Stat(p)
+	if err == nil && !force {
+		return fmt.Errorf("%s exists; --force overwrites it", config.Shown(root, p))
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // ask puts a yes or no question to a person at a terminal. Anything but yes

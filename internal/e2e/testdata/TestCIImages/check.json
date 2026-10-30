@@ -180,6 +180,30 @@
           "text": "## What's Changed\r\n* Port v6 cleanup to v5 by @ericsciple in https://github.com/actions/checkout/pull/2301\r\n\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v5...v5.0.1",
           "title": "v5.0.1",
           "url": "https://github.com/actions/checkout/releases/tag/v5.0.1"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Update actions checkout to use node 24 by @salmanmkc in https://github.com/actions/checkout/pull/2226\r\n* Prepare v5.0.0 release by @salmanmkc in https://github.com/actions/checkout/pull/2238\r\n\r\n## ⚠️ Minimum Compatible Runner Version\r\n\r\n**v2.327.1**  \r\n[Release Notes](https://github.com/actions/runner/releases/tag/v2.327.1)\r\n\r\nMake sure your runner is updated to this version or newer to use this release.\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v4...v5.0.0",
+          "title": "v5.0.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v5.0.0"
+        },
+        {
+          "source": "releases",
+          "text": "## What's Changed\r\n* Update default runtime to node20 by @takost in https://github.com/actions/checkout/pull/1436\r\n* Support fetching without the --progress option by @simonbaird in https://github.com/actions/checkout/pull/1067\r\n* Release 4.0.0 by @takost in https://github.com/actions/checkout/pull/1447\r\n\r\n## New Contributors\r\n* @takost made their first contribution in https://github.com/actions/checkout/pull/1436\r\n* @simonbaird made their first contribution in https://github.com/actions/checkout/pull/1067\r\n\r\n**Full Changelog**: https://github.com/actions/checkout/compare/v3...v4.0.0",
+          "title": "v4.0.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v4.0.0"
+        },
+        {
+          "source": "releases",
+          "text": "- Updated to the node16 runtime by default\r\n  - This requires a minimum [Actions Runner](https://github.com/actions/runner/releases/tag/v2.285.0) version of v2.285.0 to run, which is by default available in GHES 3.4 or later.",
+          "title": "v3.0.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v3.0.0"
+        },
+        {
+          "source": "releases",
+          "text": "- [Group output](https://github.com/actions/checkout/pull/191)\r\n- [Changes to support GHES alpha release](https://github.com/actions/checkout/pull/199)\r\n- [Persist core.sshCommand for submodules](https://github.com/actions/checkout/pull/184)\r\n- [Add support ssh](https://github.com/actions/checkout/pull/163)\r\n- [Convert submodule SSH URL to HTTPS, when not using SSH](https://github.com/actions/checkout/pull/179)\r\n- [Add submodule support](https://github.com/actions/checkout/pull/157)\r\n- [Follow proxy settings](https://github.com/actions/checkout/pull/144)\r\n- [Fix ref for pr closed event when a pr is merged](https://github.com/actions/checkout/pull/141)\r\n- [Fix issue checking detached when git less than 2.22](https://github.com/actions/checkout/pull/128)",
+          "title": "v2.1.0",
+          "url": "https://github.com/actions/checkout/releases/tag/v2.1.0"
         }
       ],
       "id": "actions/actions/checkout@v7",
@@ -269,6 +293,6 @@
       "to": "26-alpine"
     }
   ],
-  "repo": "acme/ci-images",
+  "repo": "$TMP/work",
   "untracked": []
 }

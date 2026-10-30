@@ -1,6 +1,10 @@
 package vet
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestBlank(t *testing.T) {
 	tests := []struct {
@@ -31,6 +35,23 @@ func TestBlank(t *testing.T) {
 				t.Errorf("length changed: %d -> %d", len(tt.src), len(got))
 			}
 		})
+	}
+}
+
+func TestBlankLinear(t *testing.T) {
+	for _, tt := range []struct{ lang, line, want string }{
+		{"js", "/*a*/x;\n", "     x;\n"},
+		{"python", "\"\"\"a\"\"\"\n", "\"\"\" \"\"\"\n"},
+	} {
+		src := []byte(strings.Repeat(tt.line, 2<<20/len(tt.line)))
+		start := time.Now()
+		got := blank(tt.lang, src)
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("%s: blank took %s on %d bytes", tt.lang, d, len(src))
+		}
+		if want := strings.Repeat(tt.want, len(src)/len(tt.line)); string(got) != want {
+			t.Errorf("%s: blank changed the output", tt.lang)
+		}
 	}
 }
 

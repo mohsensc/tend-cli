@@ -1,6 +1,7 @@
 package vet
 
 import (
+	"bytes"
 	"path"
 	"strings"
 )
@@ -42,7 +43,7 @@ func blockComments(lang string) bool {
 // numbers still hold. It is a lexer for this purpose only: regex literals and
 // heredocs are not understood.
 func blank(lang string, src []byte) []byte {
-	res := []byte(string(src))
+	res := bytes.Clone(src)
 	starts := lineComments(lang)
 	block := blockComments(lang)
 	wipe := func(from, to int) {
@@ -55,8 +56,8 @@ func blank(lang string, src []byte) []byte {
 	for i := 0; i < len(src); {
 		c := src[i]
 		switch {
-		case block && strings.HasPrefix(string(src[i:min(i+2, len(src))]), "/*"):
-			end := strings.Index(string(src[i+2:]), "*/")
+		case block && bytes.HasPrefix(src[i:], []byte("/*")):
+			end := bytes.Index(src[i+2:], []byte("*/"))
 			if end < 0 {
 				end = len(src)
 			} else {
@@ -71,9 +72,9 @@ func blank(lang string, src []byte) []byte {
 			}
 			wipe(i, end)
 			i = end
-		case lang == "python" && (strings.HasPrefix(string(src[i:min(i+3, len(src))]), `"""`) || strings.HasPrefix(string(src[i:min(i+3, len(src))]), `'''`)):
-			q := string(src[i : i+3])
-			end := strings.Index(string(src[i+3:]), q)
+		case lang == "python" && (bytes.HasPrefix(src[i:], []byte(`"""`)) || bytes.HasPrefix(src[i:], []byte(`'''`))):
+			q := src[i : i+3]
+			end := bytes.Index(src[i+3:], q)
 			if end < 0 {
 				end = len(src)
 			} else {
@@ -112,7 +113,7 @@ func blank(lang string, src []byte) []byte {
 
 func hasAny(b []byte, prefixes []string) bool {
 	for _, p := range prefixes {
-		if strings.HasPrefix(string(b[:min(len(p), len(b))]), p) {
+		if bytes.HasPrefix(b, []byte(p)) {
 			return true
 		}
 	}

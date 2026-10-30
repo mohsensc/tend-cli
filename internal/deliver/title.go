@@ -43,7 +43,7 @@ func decide(ch *core.Change) string {
 	}
 	d := ch.Deps[0]
 	if v, ok := ver.Parse(d.Version); ok && len(v.Nums) > 0 && ch.To != "" {
-		return fmt.Sprintf("Decide: migrate off %s %d.x", depName(d), v.Major())
+		return fmt.Sprintf("Decide: migrate off %s %s.x", depName(d), v.Line())
 	}
 	return "Decide: migrate off " + depName(d)
 }
@@ -98,7 +98,7 @@ func title(ch *core.Change) string {
 		return "Bump " + name + " to " + ch.To
 	case ch.Kind == core.Deprecation:
 		if v, ok := ver.Parse(d.Version); ok && len(v.Nums) > 0 {
-			return fmt.Sprintf("Migrate off deprecated %s %d.x", name, v.Major())
+			return fmt.Sprintf("Migrate off deprecated %s %s.x", name, v.Line())
 		}
 		return "Migrate off deprecated " + name
 	}
@@ -110,6 +110,9 @@ func apiTitle(a *core.APIChange) string {
 	noun := "field"
 	if strings.Contains(a.What, "parameter") {
 		noun = "parameter"
+	}
+	if op != "" {
+		op = api.Title(a.Provider) + " " + op
 	}
 	subject := op
 	switch {
@@ -126,6 +129,8 @@ func apiTitle(a *core.APIChange) string {
 			return "Handle new required parameter on " + op
 		}
 		return "Handle new required " + subject
+	case strings.HasSuffix(a.What, "type changed"):
+		return "Handle changed type of " + subject
 	}
 	return "Handle removed " + subject
 }
@@ -141,6 +146,9 @@ func fixes(ch *core.Change) string {
 	}
 	return res + ")"
 }
+
+// Advisories are the advisory ids ch's evidence cites, each once.
+func Advisories(ch *core.Change) []string { return advisories(ch) }
 
 func advisories(ch *core.Change) []string {
 	var res []string
@@ -159,15 +167,13 @@ func advisories(ch *core.Change) []string {
 	return res
 }
 
-func depName(d core.Dep) string {
-	return strings.TrimPrefix(d.Name, "library/")
-}
+func depName(d core.Dep) string { return d.Display() }
 
 func groupName(ch *core.Change) string {
 	id := core.ChangeID(ch)
 	_, rest, ok := strings.Cut(id, "/group:")
 	if !ok {
-		return ch.Deps[0].Name
+		return ch.Deps[0].Display()
 	}
 	if i := strings.LastIndexByte(rest, '@'); i > 0 {
 		rest = rest[:i]
@@ -211,10 +217,13 @@ func Branch(ch *core.Change) string {
 	return fit("tend/"+eco+"-", core.Slug(ch.Deps[0].Name), to)
 }
 
+// fit is head+mid+tail, with mid cut to keep the branch within branchMax
+// and a hash of the whole name in its place, so the cut never makes two
+// changes share a branch.
 func fit(head, mid, tail string) string {
 	room := branchMax - len(head) - len(tail)
 	if len(mid) > room {
-		mid = strings.TrimRight(mid[:max(room, 1)], "-.")
+		mid = core.Cut(mid, max(room, 10), head+mid+tail)
 	}
 	return head + mid + tail
 }

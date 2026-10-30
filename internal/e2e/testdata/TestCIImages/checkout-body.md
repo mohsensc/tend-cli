@@ -1,7 +1,7 @@
 ## actions/checkout v2 → v7
 
 **Why**: deprecation · runs on node12, removed from GitHub runners
-**Level**: major (2 → 7); release notes below mention breaking changes in 2 of 8 releases
+**Level**: major (2 → 7); release notes below mention breaking changes in 2 of 12 releases
 
 ### What changed upstream
 
@@ -46,7 +46,7 @@
   https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/ for more details about this breaking change
   **Full Changelog**: https://github.com/actions/checkout/compare/v5.0.1...v5.1.0
   ```
-- 4 more releases, not quoted
+- 8 more releases, not quoted
 
 ### Touched in this repo
 

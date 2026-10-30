@@ -2,7 +2,9 @@
 
 tend works with no configuration. Everything below goes in one optional file,
 `tend.yml` at the repo root. tend looks for `tend.yml`, then `.github/tend.yml`.
-`--config <path>` (or `TEND_CONFIG`) names a file explicitly.
+`--config <path>` (or `TEND_CONFIG`) names a file explicitly. A relative
+`--config` is read from the directory tend runs in, after `-C`; a relative
+`TEND_CONFIG` from the repository's top level.
 
 Every key is optional. An empty file is the same as no file. Unknown keys are
 errors, so a typo cannot quietly turn something off. `tend init` writes a file
@@ -26,7 +28,8 @@ Durations use Go syntax (`20m`, `1h30m`) plus whole days (`3d`).
 ### base
 
 String, default `""`. The branch PRs are opened against and worktrees are cut
-from. Empty means the repository's default branch.
+from: a branch name, such as `develop`, not `origin/develop`. Empty means the
+repository's default branch.
 
 ```yaml
 base: develop
@@ -250,7 +253,8 @@ a decision PR when a change needs real code edits. With one, it also writes the
 migration for call sites no codemod covers, and the tests a catch-up's
 baseline needs. [how-it-works.md](how-it-works.md#what-leaves-the-machine) says what is sent.
 
-The whole entry can be one line naming the provider and the model it serves:
+The whole entry can be one line naming the provider and the model it serves,
+or `none` for no model:
 
 ```yaml
 model: groq/openai/gpt-oss-120b
@@ -263,7 +267,7 @@ model: groq/openai/gpt-oss-120b
 | `base_url` | string | `""` | for `openai`: any server that speaks the chat completions API. Empty means the provider's own. A key goes only over https, or over http to this machine |
 | `key_env` | string | `""` | name of the env var holding the API key. Empty tries `TEND_MODEL_KEY`, then the provider's usual variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`). `ollama` needs none, and sends `TEND_MODEL_KEY` when it is set. `GITHUB_TOKEN`, `GH_TOKEN` and tend's own `TEND_*` variables are refused |
 | `command` | string | `""` | for `provider: command`: a shell line that reads the prompt on stdin and writes the reply on stdout. It runs without tokens and keys in its environment; name the one it needs in `key_env` |
-| `attempts` | int | `2` | tries at a usable diff, for the `command` provider |
+| `attempts` | int | `2` | tries at a diff that applies and passes the project's commands, for the `command` provider |
 | `turns` | int | `30` | tool calls a model with tool calling may make on one change, once more for every 10 call sites the change moves, up to five times |
 | `tokens` | int | `400000` | tokens it may spend on one change, prompts and replies together, scaled as `turns` is. `0` means no limit |
 
@@ -276,8 +280,10 @@ large or old project is a lot of migration; a stronger model than the
 example's gets further with it.
 
 The `command` provider writes one diff instead; a reply that holds no diff, or
-one that does not apply, is sent back with the reason, up to `attempts` times.
-The proof then decides.
+one that does not apply, is sent back with the reason, and one that applies
+but fails the project's commands is taken back and sent back with their
+output, up to `attempts` times. The last try's diff stays for the proof to
+decide.
 
 ```yaml
 model:
@@ -300,7 +306,7 @@ test, and stops at the first failure.
 | `test` | list of strings | `[]` | replaces the detected test lines |
 | `timeout` | duration | `20m` | for the whole run |
 | `container` | string | `""` | image name. When set, each command runs through `docker run` with the worktree mounted. A missing docker is an error, never a silent fallback to the host |
-| `env` | list of strings | `[]` | names of env vars to pass through, for what the project's tests genuinely need. Anything that looks like a secret is removed otherwise: names containing token, secret, password, api key, private or credential, and names ending in `_KEY`, `_TOKEN`, `_SECRET`, `_PAT` or `_CREDENTIALS`. `GITHUB_TOKEN`, `GH_TOKEN` and `TEND_*` are tend's own and are refused here |
+| `env` | list of strings | `[]` | names of env vars to pass through, for what the project's tests genuinely need. Anything that looks like a secret is removed otherwise: names containing token, secret, password, api key, private or credential, and names ending in `_KEY` or `_PAT`. `GITHUB_TOKEN`, `GH_TOKEN` and `TEND_*` are tend's own and are refused here. The same rule, with the same names kept, holds for the lock and bump tools tend runs itself, so a private registry's token listed here reaches them too |
 
 ```yaml
 verify:
@@ -317,7 +323,7 @@ How the result leaves your machine.
 | key | type | default | meaning |
 |---|---|---|---|
 | `mode` | `pr`, `commit` | `pr` | `commit` pushes straight to `branch`, only what passed its proof, and reverts it when the repository's CI fails on it. Opt in only; it skips review |
-| `branch` | string | `""` | commit mode: the branch to push to. Empty means `base` |
+| `branch` | string | `""` | commit mode: the branch to push to, a branch name. Empty means `base` |
 | `labels` | list of strings | `[tend]` | added to every PR. Missing labels are created with color `0e8a16` |
 | `draft` | bool | `false` | open every PR as a draft. A PR is a draft anyway when vetting flags something or the tests already fail on the base |
 | `automerge` | `none`, `patch`, `minor`, `security` | `none` | turn on GitHub auto-merge for covered changes, see below |
@@ -371,9 +377,9 @@ Nothing but these.
 | variable | use |
 |---|---|
 | `GITHUB_TOKEN`, `GH_TOKEN` | token for the GitHub API and for pushing. Without either, tend runs `gh auth token` if `gh` is installed |
-| `GITHUB_REPOSITORY` | `owner/name`, used when no git remote says |
-| `TEND_CONFIG` | path to the config file |
-| `TEND_HOME` | state directory. Default is `tend` under the user cache dir |
+| `GITHUB_REPOSITORY` | `owner/name`, used when the repo has no origin remote |
+| `TEND_CONFIG` | path to the config file. A relative one is read from the repository's top level; `--config` is read from the directory tend runs in, after `-C`, as `git -C` does |
+| `TEND_HOME` | state directory. Default is `tend` under the user cache dir. A relative path, here or in `--home`, is read from the directory tend runs in, after `-C` |
 | `TEND_LOG` | `debug` logs HTTP requests with tokens removed |
 | `TEND_MODEL_KEY` | API key for the model provider, after `model.key_env` |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY` | the providers' usual key variables, read when neither of the above is set |

@@ -1,1 +1,1 @@
-Migrate off deprecated GET /v2/items
+Migrate off deprecated api.example-unknown.com GET /v2/items

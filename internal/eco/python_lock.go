@@ -30,6 +30,8 @@ func pyReadLock(root string, m core.Manifest) ([]lockPkg, error) {
 		res, err = poetryLocked(src)
 	case "Pipfile.lock":
 		res, err = pipfileLock(src)
+	case "pdm.lock":
+		return nil, nil
 	default:
 		for _, e := range pyReqEntries(src) {
 			if v := pyPinned(e.spec); v != "" {
@@ -44,46 +46,81 @@ func pyReadLock(root string, m core.Manifest) ([]lockPkg, error) {
 	return res, nil
 }
 
-// uvLock keeps registry packages only; the project itself and path or git
-// sources have no registry releases.
-func uvLock(src []byte) ([]lockPkg, error) {
-	type dep struct{ Name string }
+type uvDep struct{ Name string }
+
+type uvPackage struct {
+	Name         string
+	Version      string
+	Source       map[string]any
+	Dependencies []uvDep
+	Optional     map[string][]uvDep `toml:"optional-dependencies"`
+	Dev          map[string][]uvDep `toml:"dev-dependencies"`
+}
+
+func (p uvPackage) requires() []string {
+	all := p.Dependencies
+	for _, ds := range p.Optional {
+		all = append(all, ds...)
+	}
+	for _, ds := range p.Dev {
+		all = append(all, ds...)
+	}
+	var res []string
+	for _, d := range all {
+		res = append(res, PyNorm(d.Name))
+	}
+	return res
+}
+
+func uvPackages(src []byte) ([]uvPackage, error) {
 	var lf struct {
-		Package []struct {
-			Name         string
-			Version      string
-			Source       map[string]any
-			Dependencies []dep
-			Optional     map[string][]dep `toml:"optional-dependencies"`
-			Dev          map[string][]dep `toml:"dev-dependencies"`
-		} `toml:"package"`
+		Package []uvPackage `toml:"package"`
 	}
 	if err := tomlDecode(src, &lf); err != nil {
 		return nil, err
 	}
+	return lf.Package, nil
+}
+
+// uvLock keeps registry packages only; the project itself and path or git
+// sources have no registry releases.
+func uvLock(src []byte) ([]lockPkg, error) {
+	ps, err := uvPackages(src)
+	if err != nil {
+		return nil, err
+	}
 	var res []lockPkg
-	for _, p := range lf.Package {
+	for _, p := range ps {
 		if _, ok := p.Source["registry"]; !ok || p.Version == "" {
 			continue
 		}
-		all := p.Dependencies
-		for _, ds := range p.Optional {
-			all = append(all, ds...)
-		}
-		for _, ds := range p.Dev {
-			all = append(all, ds...)
-		}
-		var reqs []string
-		for _, d := range all {
-			reqs = append(reqs, PyNorm(d.Name))
-		}
-		res = append(res, lockPkg{name: PyNorm(p.Name), version: p.Version, requires: reqs})
+		res = append(res, lockPkg{name: PyNorm(p.Name), version: p.Version, requires: p.requires()})
 	}
 	return res, nil
 }
 
+// uvMemberReqs lists what the workspace members a uv.lock records, other
+// than the project at dir relative to the lockfile, require directly.
+func uvMemberReqs(ps []uvPackage, dir string) map[string]bool {
+	res := map[string]bool{}
+	for _, p := range ps {
+		at, ok := p.Source["editable"].(string)
+		if !ok {
+			at, ok = p.Source["virtual"].(string)
+		}
+		if !ok || path.Clean(at) == path.Clean(dir) {
+			continue
+		}
+		for _, r := range p.requires() {
+			res[r] = true
+		}
+	}
+	return res
+}
+
 // poetryLocked reads poetry.lock: category = "dev" before Poetry 1.5, a
-// groups list after it.
+// groups list after it. Git, path and URL sources have no index releases;
+// packages from a configured index, PyPI mirrors among them, stay.
 func poetryLocked(src []byte) ([]lockPkg, error) {
 	var lf struct {
 		Package []struct {
@@ -92,6 +129,7 @@ func poetryLocked(src []byte) ([]lockPkg, error) {
 			Category     string
 			Groups       []string
 			Dependencies map[string]any
+			Source       struct{ Type string }
 		} `toml:"package"`
 	}
 	if err := tomlDecode(src, &lf); err != nil {
@@ -99,6 +137,13 @@ func poetryLocked(src []byte) ([]lockPkg, error) {
 	}
 	var res []lockPkg
 	for _, p := range lf.Package {
+		switch p.Source.Type {
+		case "git", "directory", "file", "url":
+			continue
+		}
+		if p.Version == "" {
+			continue
+		}
 		dev := p.Category == "dev" || len(p.Groups) > 0 && !slices.Contains(p.Groups, "main")
 		var reqs []string
 		for _, d := range keys(p.Dependencies) {
@@ -114,15 +159,17 @@ func pipfileLock(src []byte) ([]lockPkg, error) {
 		Default map[string]struct{ Version string } `json:"default"`
 		Develop map[string]struct{ Version string } `json:"develop"`
 	}
-	if err := json.Unmarshal(src, &lf); err != nil {
+	if err := json.Unmarshal(stripBOM(src), &lf); err != nil {
 		return nil, err
 	}
 	var res []lockPkg
 	for name, p := range lf.Default {
-		res = append(res, lockPkg{name: PyNorm(name), version: strings.TrimPrefix(p.Version, "==")})
+		if p.Version != "" {
+			res = append(res, lockPkg{name: PyNorm(name), version: strings.TrimPrefix(p.Version, "==")})
+		}
 	}
 	for name, p := range lf.Develop {
-		if _, ok := lf.Default[name]; !ok {
+		if _, ok := lf.Default[name]; !ok && p.Version != "" {
 			res = append(res, lockPkg{name: PyNorm(name), version: strings.TrimPrefix(p.Version, "=="), dev: true})
 		}
 	}

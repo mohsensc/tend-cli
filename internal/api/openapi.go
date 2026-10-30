@@ -27,9 +27,9 @@ type Doc struct {
 
 type Op struct {
 	Method, Path string
-	Summary      string // the summary and the description, at most 600 bytes
-	Deprecated   bool
-	Sunset       time.Time // from x-sunset, the catalog's sunset key, or x-deprecated-at
+	Summary      string    // the summary and the description, at most 600 bytes
+	Deprecated   bool      // also set by x-deprecated-at, which dates the deprecation, not the removal
+	Sunset       time.Time // from x-sunset or the catalog's sunset key
 	Params       []Param   // path, query and header
 	Request      *Schema   // first JSON (else form) request body schema, resolved
 	Response     *Schema   // first 2xx JSON response schema, resolved
@@ -158,16 +158,34 @@ func load(b []byte, sunset string) (*Doc, error) {
 }
 
 // toJSON converts YAML to JSON so one decoder serves both. JSON passes through,
-// which keeps the big specs (GitHub, Cloudflare) off the slower YAML path.
+// which keeps the big specs (GitHub, Cloudflare) off the slower YAML path. An
+// unquoted info.version keeps its text: 2.10 stays "2.10", not the float 2.1.
 func toJSON(b []byte) ([]byte, error) {
 	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '{' {
 		return b, nil
 	}
-	var v any
-	if err := yaml.Unmarshal(b, &v); err != nil {
+	var node yaml.Node
+	if err := yaml.Unmarshal(b, &node); err != nil {
 		return nil, fmt.Errorf("openapi: %w", err)
 	}
-	res, err := json.Marshal(plain(v))
+	var v any
+	if err := node.Decode(&v); err != nil {
+		return nil, fmt.Errorf("openapi: %w", err)
+	}
+	v = plain(v)
+	var head struct {
+		Info struct {
+			Version string `yaml:"version"`
+		} `yaml:"info"`
+	}
+	if node.Decode(&head) == nil && head.Info.Version != "" {
+		if m, ok := v.(map[string]any); ok {
+			if info, ok := m["info"].(map[string]any); ok {
+				info["version"] = head.Info.Version
+			}
+		}
+	}
+	res, err := json.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("openapi: %w", err)
 	}
@@ -249,8 +267,8 @@ func (l *loader) op(raw json.RawMessage, shared []json.RawMessage) *Op {
 	if op.Sunset.IsZero() && l.sunset != nil {
 		op.Sunset = date(dig(m, l.sunset))
 	}
-	if op.Sunset.IsZero() {
-		op.Sunset = date(m["x-deprecated-at"])
+	if !date(m["x-deprecated-at"]).IsZero() {
+		op.Deprecated = true
 	}
 
 	var own []json.RawMessage
@@ -296,7 +314,8 @@ func (l *loader) param(raw json.RawMessage) (Param, bool) {
 }
 
 // body picks the schema of a request body or a response: JSON first, then forms,
-// because some providers (Stripe, Twilio) only take form-encoded requests.
+// because some providers (Stripe, Twilio) only take form-encoded requests, then
+// a wildcard.
 func (l *loader) body(raw json.RawMessage, kind string) *Schema {
 	var b rawBody
 	decode(raw, &b)
@@ -320,16 +339,21 @@ func (l *loader) body(raw json.RawMessage, kind string) *Schema {
 	return l.schema(b.Content[best].Schema)
 }
 
+// rank orders the media types a body may come in. A wildcard, which springdoc
+// writes for every response by default, counts only when nothing better is there.
 func rank(mt string) int {
 	mt, _, _ = strings.Cut(mt, ";")
+	mt = strings.ToLower(strings.TrimSpace(mt))
 	switch {
 	case mt == "application/json":
+		return 5
+	case strings.HasSuffix(mt, "+json"), mt == "text/json":
 		return 4
-	case strings.HasSuffix(mt, "+json"):
-		return 3
 	case mt == "application/x-www-form-urlencoded":
-		return 2
+		return 3
 	case mt == "multipart/form-data":
+		return 2
+	case mt == "*/*", mt == "application/*":
 		return 1
 	}
 	return 0
@@ -404,8 +428,23 @@ func (l *loader) schema(raw json.RawMessage) *Schema {
 	for _, part := range r.AllOf {
 		s.merge(l.schema(part), true)
 	}
+	var kinds []string
 	for _, part := range append(r.OneOf, r.AnyOf...) {
-		s.merge(l.schema(part), false)
+		p := l.schema(part)
+		if p == nil {
+			continue
+		}
+		s.merge(p, false)
+		t := p.Type
+		if t == "" && len(p.Props) > 0 {
+			t = "object"
+		}
+		if t != "" && t != "null" && !slices.Contains(kinds, t) {
+			kinds = append(kinds, t)
+		}
+	}
+	if s.Type == "" && len(kinds) == 1 {
+		s.Type = kinds[0]
 	}
 	return s
 }
@@ -417,8 +456,9 @@ func (s *Schema) prop(name string, p *Schema) {
 	s.Props[name] = p
 }
 
-// merge folds part into s. allOf parts all apply, so their required fields do
-// too; oneOf and anyOf only contribute the fields that may appear.
+// merge folds part into s. allOf parts all apply, so their required fields and
+// type do too; oneOf and anyOf only contribute the fields that may appear, and
+// schema works out their type from all the members at once.
 func (s *Schema) merge(part *Schema, all bool) {
 	if part == nil {
 		return
@@ -434,9 +474,9 @@ func (s *Schema) merge(part *Schema, all bool) {
 				s.Required = append(s.Required, r)
 			}
 		}
-	}
-	if s.Type == "" {
-		s.Type = part.Type
+		if s.Type == "" {
+			s.Type = part.Type
+		}
 	}
 	if s.Items == nil {
 		s.Items = part.Items
@@ -490,7 +530,9 @@ func date(raw json.RawMessage) time.Time {
 func (d *Doc) Find(method, path string) *Op { return d.find(method, path, false) }
 
 // find with loose compares literal segments without case, "_" and "-", for
-// SDK packages named like "paymentintent".
+// SDK packages named like "paymentintent". A loose path is a guess, so its
+// {placeholders} stand only for template params, and a param never takes one of
+// its literal segments: customers/sources is not customers/{customer}.
 func (d *Doc) find(method, path string, loose bool) *Op {
 	if d == nil {
 		return nil
@@ -530,7 +572,11 @@ func (d *Doc) match(method, path string, loose bool) *Op {
 		if method != "" && op.Method != method {
 			continue
 		}
-		score, ok := fit(strings.Split(op.Path, "/"), segs, loose)
+		tp := op.Path
+		if len(tp) > 1 {
+			tp = strings.TrimRight(tp, "/")
+		}
+		score, ok := fit(strings.Split(tp, "/"), segs, loose)
 		if !ok {
 			continue
 		}
@@ -560,6 +606,14 @@ func fit(tmpl, segs []string, loose bool) (int, bool) {
 		parts := split(t)
 		s := segs[i]
 		if loose {
+			hasParam := slices.ContainsFunc(parts, func(p part) bool { return p.param })
+			placeholder := strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")
+			if hasParam != placeholder {
+				return 0, false
+			}
+			if placeholder {
+				continue
+			}
 			for j := range parts {
 				parts[j].lit = fold(parts[j].lit)
 			}
